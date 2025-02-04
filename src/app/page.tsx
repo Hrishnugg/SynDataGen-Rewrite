@@ -4,6 +4,7 @@ import WaitlistForm from '../components/WaitlistForm';
 import ChatDemo from '../components/ChatDemo';
 import EnterpriseDemo from '../components/EnterpriseDemo';
 import SectionTransition from '../components/SectionTransition';
+import DecagonModel from '../components/DecagonModel';
 
 export default function Home() {
   return (
@@ -45,6 +46,12 @@ export default function Home() {
           <WaitlistForm />
         </div>
       </SectionTransition>
+
+      <div className="container mx-auto px-4">
+        <div className="py-20">
+          <DecagonModel />
+        </div>
+      </div>
     </main>
   );
 } 
