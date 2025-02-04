@@ -1,0 +1,16 @@
+<<<<<<< HEAD
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+=======
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+>>>>>>> 131d95b2 (first commit)
+} 
