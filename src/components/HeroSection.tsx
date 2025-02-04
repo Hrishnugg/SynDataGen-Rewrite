@@ -12,7 +12,6 @@ const HeroSection = () => {
     subtitle: useRef<HTMLSpanElement>(null),
     description: useRef<HTMLParagraphElement>(null),
     cta: useRef<HTMLDivElement>(null),
-    companies: useRef<HTMLDivElement>(null),
   };
 
   useEffect(() => {
@@ -33,16 +32,6 @@ const HeroSection = () => {
       }
     });
   }, []);
-
-  // Company logos for the trust section
-  const companies = [
-    'TechCorp',
-    'DataFirm',
-    'AIVentures',
-    'ML Systems',
-    'DataTech',
-    'AILabs'
-  ];
 
   return (
     <section className="relative bg-white dark:bg-dark-primary overflow-hidden">
@@ -74,12 +63,12 @@ const HeroSection = () => {
             ref={textRefs.description}
             className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 max-w-3xl mx-auto"
           >
-            Generate high-quality, privacy-compliant synthetic data to accelerate your AI and machine learning projects. Trusted by leading enterprises.
+            Generate high-quality, privacy-compliant synthetic data to accelerate your AI and machine learning projects. Powered by our novel ML model combining Gemini and DeepSeek architecture, backed by Carnegie Mellon professors.
           </p>
           
           <div
             ref={textRefs.cta}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+            className="flex justify-center"
           >
             <Link
               href="#waitlist"
@@ -88,30 +77,6 @@ const HeroSection = () => {
               Join Waitlist
               <FiArrowRight className="w-5 h-5" />
             </Link>
-            <button
-              className="flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 min-w-[200px] hover:scale-105"
-            >
-              Watch Demo
-            </button>
-          </div>
-        </div>
-
-        {/* Trust badges */}
-        <div ref={textRefs.companies} className="mt-20">
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center mb-6">
-            TRUSTED BY LEADING COMPANIES
-          </p>
-          <div className="flex flex-wrap justify-center items-center gap-8">
-            {companies.map((company, index) => (
-              <div
-                key={company}
-                className="h-8 relative overflow-hidden group"
-              >
-                <span className="text-gray-400 dark:text-gray-500 font-semibold text-lg transition-all duration-300 group-hover:text-gray-600 dark:group-hover:text-gray-300">
-                  {company}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
       </div>

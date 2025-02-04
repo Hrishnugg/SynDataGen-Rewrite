@@ -73,7 +73,7 @@ export default function FeaturesSection() {
             Complete Solution for the AI Era
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Generate high-quality synthetic data while maintaining privacy, security, and statistical accuracy.
+            Generate high-quality synthetic data while maintaining privacy, security, and statistical accuracy. Powered by our novel ML model combining Gemini and DeepSeek architecture, backed by Carnegie Mellon professors.
           </p>
         </motion.div>
 

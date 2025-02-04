@@ -11,6 +11,7 @@ interface FormData {
   email: string;
   company: string;
   industry: string;
+  otherIndustry?: string;
   dataSize: DataSize;
   useCase: string;
 }
@@ -39,14 +40,22 @@ export default function WaitlistForm() {
     email: '',
     company: '',
     industry: '',
+    otherIndustry: '',
     dataSize: 'medium',
     useCase: '',
   });
+  const [showOtherIndustryDialog, setShowOtherIndustryDialog] = useState(false);
   const [formStatus, setFormStatus] = useState<FormStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (formData.industry === 'Other' && !formData.otherIndustry) {
+      setErrorMessage('Please specify your industry');
+      return;
+    }
+    
     setFormStatus('loading');
     setErrorMessage('');
 
@@ -60,6 +69,7 @@ export default function WaitlistForm() {
       email: '',
       company: '',
       industry: '',
+      otherIndustry: '',
       dataSize: 'medium',
       useCase: '',
     });
@@ -67,6 +77,11 @@ export default function WaitlistForm() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'industry' && value === 'Other') {
+      setShowOtherIndustryDialog(true);
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -137,19 +152,26 @@ export default function WaitlistForm() {
                 <label htmlFor="industry" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Industry
                 </label>
-                <select
-                  id="industry"
-                  name="industry"
-                  value={formData.industry}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors"
-                  required
-                >
-                  <option value="">Select Industry</option>
-                  {industries.map(industry => (
-                    <option key={industry} value={industry}>{industry}</option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    id="industry"
+                    name="industry"
+                    value={formData.industry}
+                    onChange={handleChange}
+                    className="w-full px-4 pr-10 py-3 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors appearance-none"
+                    required
+                  >
+                    <option value="">Select Industry</option>
+                    {industries.map(industry => (
+                      <option key={industry} value={industry}>{industry}</option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 dark:text-gray-400">
+                    <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -238,6 +260,51 @@ export default function WaitlistForm() {
             </p>
           </form>
         </div>
+
+        {showOtherIndustryDialog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-dark-secondary rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+                Please Specify Your Industry
+              </h3>
+              <input
+                type="text"
+                name="otherIndustry"
+                value={formData.otherIndustry}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors mb-4"
+                placeholder="Enter your industry"
+                autoFocus
+              />
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, industry: '' }));
+                    setShowOtherIndustryDialog(false);
+                  }}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!formData.otherIndustry) {
+                      setErrorMessage('Please specify your industry');
+                      return;
+                    }
+                    setShowOtherIndustryDialog(false);
+                    setErrorMessage('');
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
