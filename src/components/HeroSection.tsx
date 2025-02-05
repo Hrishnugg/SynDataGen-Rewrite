@@ -9,17 +9,14 @@ import AnimatedBackground from './AnimatedBackground';
 export default function HeroSection() {
   return (
     <div className="relative">
-      {/* 3D Model Section */}
+      {/* 3D Model Section - Temporarily removed
       <div className="relative min-h-[90vh] flex items-center justify-center rounded-[2rem] overflow-hidden mt-[-5rem]">
-        {/* Radial gradient background */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.15)_0%,rgb(255,255,255)_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.15)_0%,rgb(17,24,39)_70%)] pointer-events-none" />
         
-        {/* Background 3D Model */}
         <div className="absolute inset-0 flex items-center justify-center">
           <DecagonModel />
         </div>
 
-        {/* Content Overlay */}
         <div className="relative z-10 text-center max-w-5xl mx-auto px-4 translate-y-[-2rem]">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -35,16 +32,16 @@ export default function HeroSection() {
           </motion.div>
         </div>
 
-        {/* Gradient Overlay for transition */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-[rgb(17,24,39)] pointer-events-none z-[1]" />
       </div>
+      */}
 
       {/* Original Hero Section */}
-      <section className="relative overflow-hidden bg-white dark:bg-dark-primary rounded-[2rem] -mt-[6rem]">
+      <section className="relative overflow-hidden bg-white dark:bg-dark-primary rounded-[2rem]">
         <AnimatedBackground />
 
         {/* Content */}
-        <div className="relative z-10 container mx-auto px-6 pt-36 pb-24 max-w-6xl">
+        <div className="relative z-10 container mx-auto px-6 pt-24 pb-24 max-w-6xl">
           <div className="text-center mb-8">
             <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-6 py-2 rounded-full text-sm font-medium mb-6">
               🎉 Now in Public Beta
