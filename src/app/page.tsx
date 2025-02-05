@@ -7,7 +7,7 @@ import SectionTransition from '../components/SectionTransition';
 
 export default function Home() {
   return (
-    <main className="min-h-screen pt-20">
+    <main className="min-h-screen pt-16">
       <SectionTransition>
         <HeroSection />
       </SectionTransition>
@@ -30,7 +30,7 @@ export default function Home() {
       </SectionTransition> */}
 
       <SectionTransition delay={0.3}>
-        <div className="bg-white dark:bg-dark-primary rounded-[2rem] my-4">
+        <div className="bg-white dark:bg-dark-primary rounded-[2rem] my-2">
           <FeaturesSection />
         </div>
       </SectionTransition>
@@ -43,7 +43,7 @@ export default function Home() {
       </SectionTransition> */}
 
       <SectionTransition delay={0.5}>
-        <div className="bg-white dark:bg-dark-primary py-12 rounded-[2rem] my-4">
+        <div className="bg-white dark:bg-dark-primary py-8 rounded-[2rem] my-2">
           <WaitlistForm />
         </div>
       </SectionTransition>

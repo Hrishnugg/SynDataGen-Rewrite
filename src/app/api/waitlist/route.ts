@@ -1,14 +1,41 @@
 import { NextResponse } from 'next/server';
+import { headers } from 'next/headers';
+import clientPromise from '@/lib/mongodb';
+import { getRateLimitConfig, updateRateLimit } from '@/lib/rate-limit';
+import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/email';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { companyName, name, email, useCase, dataSize, industry } = body;
-
-    // Validate the input
-    if (!companyName || !name || !email || !useCase || !dataSize || !industry) {
+    // Get IP address for rate limiting
+    const forwardedFor = headers().get('x-forwarded-for');
+    const ip = forwardedFor ? forwardedFor.split(',')[0] : 'unknown';
+    
+    // Check rate limit
+    const rateLimitConfig = getRateLimitConfig(ip);
+    if (rateLimitConfig.isRateLimited) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { 
+          error: "Too many requests. Please try again later.",
+          resetTime: rateLimitConfig.resetTime,
+          remainingRequests: rateLimitConfig.remainingRequests
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': String(5),
+            'X-RateLimit-Remaining': String(rateLimitConfig.remainingRequests),
+            'X-RateLimit-Reset': rateLimitConfig.resetTime.toISOString()
+          }
+        }
+      );
+    }
+
+    const { email, name, company, industry, dataSize, useCase } = await request.json();
+
+    // Validate required fields
+    if (!email || !name || !company || !industry || !dataSize || !useCase) {
+      return NextResponse.json(
+        { error: "All fields are required" },
         { status: 400 }
       );
     }
@@ -17,35 +44,71 @@ export async function POST(request: Request) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json(
-        { error: 'Invalid email format' },
+        { error: "Invalid email format" },
         { status: 400 }
       );
     }
 
-    // Here you would typically:
-    // 1. Store the data in a database
-    // 2. Send a notification email
-    // 3. Add to your CRM/mailing list
+    const client = await clientPromise;
+    const db = client.db("waitlist-serverless");
     
-    // For now, we'll just log it (you should implement proper storage)
-    console.log('New waitlist submission:', {
-      companyName,
-      name,
+    // Check if email already exists
+    const existingUser = await db.collection("waitlist").findOne({ email });
+    if (existingUser) {
+      return NextResponse.json(
+        { error: "You're already on the waitlist!" },
+        { status: 400 }
+      );
+    }
+
+    // Update rate limit counter
+    updateRateLimit(ip);
+
+    // Add new entry with timestamp
+    const result = await db.collection("waitlist").insertOne({
       email,
-      useCase,
-      dataSize,
+      name,
+      company,
       industry,
-      timestamp: new Date().toISOString()
+      dataSize,
+      useCase,
+      createdAt: new Date(),
+      status: 'pending',
+      ipAddress: ip // Store IP for audit purposes
     });
 
-    return NextResponse.json(
-      { message: 'Successfully joined waitlist' },
-      { status: 200 }
-    );
+    // Send emails in parallel
+    await Promise.all([
+      // Send admin notification
+      sendWaitlistNotification({
+        email,
+        name,
+        company,
+        industry,
+        dataSize,
+        useCase
+      }),
+      // Send user confirmation
+      sendWaitlistConfirmation({
+        email,
+        name,
+        company,
+        industry,
+        dataSize,
+        useCase
+      })
+    ]);
+
+    return NextResponse.json({ 
+      message: "Successfully joined the waitlist!",
+      success: true,
+      remainingRequests: rateLimitConfig.remainingRequests - 1
+    });
+
   } catch (error) {
     console.error('Waitlist submission error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: "Failed to join waitlist. Please try again." },
       { status: 500 }
     );
   }

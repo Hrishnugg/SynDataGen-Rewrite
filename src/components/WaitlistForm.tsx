@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FiArrowRight, FiCheck, FiLoader } from 'react-icons/fi';
+import { motion } from 'framer-motion';
 
 type FormStatus = 'idle' | 'loading' | 'success' | 'error';
 type DataSize = 'small' | 'medium' | 'large' | 'enterprise';
@@ -34,6 +35,25 @@ const dataSizes: { value: DataSize; label: string }[] = [
   { value: 'enterprise', label: '10M+ records' }
 ];
 
+const ProgressBar = ({ progress }: { progress: number }) => {
+  return (
+    <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+      <motion.div
+        className="h-full bg-blue-600 dark:bg-blue-500"
+        initial={{ width: 0 }}
+        animate={{ width: `${progress}%` }}
+        transition={{
+          duration: 0.5,
+          ease: "easeInOut",
+          type: "spring",
+          stiffness: 50,
+          damping: 15
+        }}
+      />
+    </div>
+  );
+};
+
 export default function WaitlistForm() {
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -59,20 +79,52 @@ export default function WaitlistForm() {
     setFormStatus('loading');
     setErrorMessage('');
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setFormStatus('success');
+    try {
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          company: formData.company,
+          industry: formData.industry === 'Other' ? formData.otherIndustry : formData.industry,
+          dataSize: formData.dataSize,
+          useCase: formData.useCase,
+        }),
+      });
 
-    // Reset form after success
-    setFormData({
-      name: '',
-      email: '',
-      company: '',
-      industry: '',
-      otherIndustry: '',
-      dataSize: 'medium',
-      useCase: '',
-    });
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Special handling for already registered emails
+        if (response.status === 400 && data.error.includes('already on the waitlist')) {
+          setErrorMessage('This email is already registered on our waitlist. Please use a different email address or contact support if you need to update your information.');
+        } else {
+          setErrorMessage(data.error || 'Failed to submit. Please try again.');
+        }
+        setFormStatus('error');
+        return;
+      }
+
+      setFormStatus('success');
+      
+      // Reset form after success
+      setFormData({
+        name: '',
+        email: '',
+        company: '',
+        industry: '',
+        otherIndustry: '',
+        dataSize: 'medium',
+        useCase: '',
+      });
+    } catch (error) {
+      console.error('Submission error:', error);
+      setErrorMessage('Network error. Please check your connection and try again.');
+      setFormStatus('error');
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -89,9 +141,9 @@ export default function WaitlistForm() {
   };
 
   return (
-    <section className="py-24" id="waitlist">
+    <section className="py-16" id="waitlist">
       <div className="container mx-auto px-6 max-w-4xl">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h2 className="text-4xl font-bold mb-4 text-gray-900 dark:text-white">
             Join the Waitlist
           </h2>
@@ -100,7 +152,7 @@ export default function WaitlistForm() {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-dark-secondary rounded-2xl shadow-lg p-8 md:p-12">
+        <div className="bg-white dark:bg-dark-secondary rounded-2xl shadow-lg p-6 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -249,9 +301,15 @@ export default function WaitlistForm() {
             </div>
 
             {errorMessage && (
-              <p className="text-red-500 dark:text-red-400 text-center mt-4">
-                {errorMessage}
-              </p>
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4 mt-4"
+              >
+                <p className="text-red-600 dark:text-red-400 text-center">
+                  {errorMessage}
+                </p>
+              </motion.div>
             )}
 
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-6">
