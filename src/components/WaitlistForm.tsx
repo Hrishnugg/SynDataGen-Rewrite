@@ -39,17 +39,42 @@ const ProgressBar = ({ progress }: { progress: number }) => {
   return (
     <div className="w-full h-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
       <motion.div
-        className="h-full bg-blue-600 dark:bg-blue-500"
+        className="h-full bg-blue-600 dark:bg-blue-500 relative"
+        style={{ 
+          width: `${progress}%`,
+          boxShadow: `
+            0 0 2px rgba(59, 130, 246, 0.7),
+            0 0 4px rgba(59, 130, 246, 0.6),
+            0 0 8px rgba(59, 130, 246, 0.5),
+            0 0 16px rgba(59, 130, 246, 0.4)
+          `,
+          filter: 'brightness(1.1)'
+        }}
         initial={{ width: 0 }}
         animate={{ width: `${progress}%` }}
         transition={{
-          duration: 0.5,
-          ease: "easeInOut",
-          type: "spring",
-          stiffness: 50,
-          damping: 15
+          duration: 0.1,
+          ease: "linear"
         }}
-      />
+      >
+        {/* Animated gradient overlay for extra shine */}
+        <div 
+          className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-40"
+          style={{
+            animation: 'shine 1.5s linear infinite'
+          }}
+        />
+      </motion.div>
+      <style jsx>{`
+        @keyframes shine {
+          from {
+            transform: translateX(-200%);
+          }
+          to {
+            transform: translateX(200%);
+          }
+        }
+      `}</style>
     </div>
   );
 };
