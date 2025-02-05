@@ -10,36 +10,42 @@ const features = [
     title: 'High-Quality Synthetic Data',
     description: 'Generate synthetic data that preserves statistical properties and relationships of your original dataset.',
     color: 'from-blue-500 to-blue-600 dark:from-blue-400 dark:to-blue-500',
+    glowColor: 'rgba(59, 130, 246, 0.5)',
   },
   {
     icon: FiShield,
     title: 'Privacy by Design',
     description: 'Built-in privacy guarantees ensure your synthetic data is fully anonymized and compliant with regulations.',
     color: 'from-indigo-500 to-indigo-600 dark:from-indigo-400 dark:to-indigo-500',
+    glowColor: 'rgba(99, 102, 241, 0.5)',
   },
   {
     icon: FiTrendingUp,
     title: 'Statistical Accuracy',
     description: 'Advanced algorithms maintain correlations and patterns while ensuring data utility.',
     color: 'from-purple-500 to-purple-600 dark:from-purple-400 dark:to-purple-500',
+    glowColor: 'rgba(168, 85, 247, 0.5)',
   },
   {
     icon: FiCpu,
     title: 'Enterprise Scale',
     description: 'Handle millions of records with high performance distributed processing capabilities.',
     color: 'from-pink-500 to-pink-600 dark:from-pink-400 dark:to-pink-500',
+    glowColor: 'rgba(236, 72, 153, 0.5)',
   },
   {
     icon: FiLock,
     title: 'Secure Infrastructure',
     description: 'End-to-end encryption and secure deployment options for sensitive data environments.',
     color: 'from-red-500 to-red-600 dark:from-red-400 dark:to-red-500',
+    glowColor: 'rgba(239, 68, 68, 0.5)',
   },
   {
     icon: FiZap,
     title: 'Fast Integration',
     description: 'Quick setup with your existing data infrastructure through our flexible APIs and connectors.',
     color: 'from-orange-500 to-orange-600 dark:from-orange-400 dark:to-orange-500',
+    glowColor: 'rgba(249, 115, 22, 0.5)',
   },
 ];
 
@@ -86,7 +92,7 @@ export default function FeaturesSection() {
         >
           {features.map((feature, index) => (
             <motion.div key={feature.title} variants={item}>
-              <Card gradient className="p-8 h-full">
+              <Card gradient className="p-8 h-full" glowColor={feature.glowColor}>
                 <div className={`w-14 h-14 rounded-2xl bg-gradient-to-r ${feature.color} p-4 mb-6 shadow-lg`}>
                   <feature.icon className="w-full h-full text-white" />
                 </div>

@@ -4,7 +4,6 @@ import WaitlistForm from '../components/WaitlistForm';
 import ChatDemo from '../components/ChatDemo';
 import EnterpriseDemo from '../components/EnterpriseDemo';
 import SectionTransition from '../components/SectionTransition';
-import DecagonModel from '../components/DecagonModel';
 
 export default function Home() {
   return (
@@ -31,7 +30,7 @@ export default function Home() {
       </SectionTransition> */}
 
       <SectionTransition delay={0.3}>
-        <div className="bg-white dark:bg-dark-primary">
+        <div className="bg-white dark:bg-dark-primary rounded-[2rem] my-4">
           <FeaturesSection />
         </div>
       </SectionTransition>
@@ -44,16 +43,10 @@ export default function Home() {
       </SectionTransition> */}
 
       <SectionTransition delay={0.5}>
-        <div className="bg-white dark:bg-dark-primary py-12">
+        <div className="bg-white dark:bg-dark-primary py-12 rounded-[2rem] my-4">
           <WaitlistForm />
         </div>
       </SectionTransition>
-
-      <div className="container mx-auto px-4">
-        <div className="py-12">
-          <DecagonModel />
-        </div>
-      </div>
     </main>
   );
 } 
