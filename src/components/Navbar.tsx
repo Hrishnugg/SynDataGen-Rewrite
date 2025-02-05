@@ -21,8 +21,6 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '#features', label: 'Features' },
-    { href: '#demo', label: 'Demo' },
-    { href: '#enterprise', label: 'Enterprise' },
     { href: '#waitlist', label: 'Join Waitlist' },
   ];
 
