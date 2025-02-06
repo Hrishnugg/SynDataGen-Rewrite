@@ -21,8 +21,8 @@ export async function sendWaitlistNotification(submission: WaitlistSubmission) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'nGrams.ai <waitlist@ngrams.ai>',
-        to: ['admin@ngrams.ai'], // Replace with your admin email
+        from: 'Synoptic <waitlist@synoptic.dev>',
+        to: ['admin@synoptic.dev'], // Replace with your admin email
         subject: 'New Waitlist Submission',
         html: `
           <h2>New Waitlist Submission</h2>
@@ -61,9 +61,9 @@ export async function sendWaitlistConfirmation(submission: WaitlistSubmission) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'nGrams.ai <waitlist@ngrams.ai>',
+        from: 'Synoptic <waitlist@synoptic.dev>',
         to: [submission.email],
-        subject: 'Welcome to the nGrams.ai Waitlist!',
+        subject: 'Welcome to the Synoptic Waitlist!',
         html: `
           <!DOCTYPE html>
           <html>
@@ -74,18 +74,19 @@ export async function sendWaitlistConfirmation(submission: WaitlistSubmission) {
                 .header { text-align: center; margin-bottom: 30px; }
                 .content { background: #f9fafb; padding: 30px; border-radius: 10px; }
                 .footer { text-align: center; margin-top: 30px; font-size: 0.9em; color: #666; }
+                .address { margin-top: 20px; font-size: 0.8em; color: #888; }
                 .button { display: inline-block; padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
               </style>
             </head>
             <body>
               <div class="container">
                 <div class="header">
-                  <h1 style="color: #2563eb;">Welcome to nGrams.ai!</h1>
+                  <h1 style="color: #2563eb;">Welcome to Synoptic!</h1>
                 </div>
                 <div class="content">
                   <p>Hi ${submission.name},</p>
                   
-                  <p>Thank you for joining the nGrams.ai waitlist! We're excited to have you on board and can't wait to show you how our synthetic data generation platform can transform your AI and machine learning projects.</p>
+                  <p>Thank you for joining the Synoptic waitlist! We're excited to have you on board and can't wait to show you how our synthetic data generation platform can transform your AI and machine learning projects.</p>
                   
                   <p>Here's what happens next:</p>
                   <ul>
@@ -103,10 +104,15 @@ export async function sendWaitlistConfirmation(submission: WaitlistSubmission) {
                   <p>If you have any questions in the meantime, feel free to reply to this email. We'd love to hear more about your synthetic data needs!</p>
                 </div>
                 <div class="footer">
-                  <p>Best regards,<br>The nGrams.ai Team</p>
+                  <p>Best regards,<br>The Synoptic Team</p>
                   <p style="font-size: 0.8em; color: #888;">
-                    This email was sent to ${submission.email} because you signed up for the nGrams.ai waitlist.
+                    This email was sent to ${submission.email} because you signed up for the Synoptic waitlist.
                   </p>
+                  <div class="address">
+                    <p>Synoptic</p>
+                    <p>1111B S Governors Ave STE 26703</p>
+                    <p>Dover, DE 19904</p>
+                  </div>
                 </div>
               </div>
             </body>

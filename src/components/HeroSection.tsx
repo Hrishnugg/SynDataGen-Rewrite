@@ -37,24 +37,26 @@ export default function HeroSection() {
       */}
 
       {/* Original Hero Section */}
-      <section className="relative overflow-hidden bg-white dark:bg-dark-primary rounded-[2rem]">
+      <section className="relative overflow-hidden bg-white dark:bg-dark-primary rounded-[2rem] pt-12">
         <AnimatedBackground />
 
         {/* Content */}
         <div className="relative z-10 container mx-auto px-6 pt-24 pb-24 max-w-6xl">
-          <div className="text-center mb-8">
-            <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-6 py-2 rounded-full text-sm font-medium mb-6">
+          <div className="text-center">
+            <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-6 py-2 rounded-full text-sm font-medium mb-12">
               🎉 Now in Public Beta
             </div>
 
-            <h2 className="text-5xl md:text-7xl font-bold mb-8">
-              <span className="inline-block bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 animate-gradient">
-                Synthetic Data Generation
-              </span>
-              <span className="block text-3xl md:text-4xl mt-4 text-gray-900 dark:text-white">
-                for the AI Era
-              </span>
-            </h2>
+            <div className="mb-12">
+              <h2 className="text-4xl sm:text-5xl md:text-7xl font-bold leading-[1.4] tracking-tight">
+                <span className="inline-block bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 animate-gradient py-4">
+                  Synthetic Data Generation
+                </span>
+                <span className="block text-3xl md:text-4xl mt-6 text-gray-900 dark:text-white">
+                  for the AI Era
+                </span>
+              </h2>
+            </div>
             
             <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-12 max-w-3xl mx-auto">
               Generate high-quality, privacy-compliant synthetic data to accelerate your AI and machine learning projects. 

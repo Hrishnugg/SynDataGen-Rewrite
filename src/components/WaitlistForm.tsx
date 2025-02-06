@@ -235,12 +235,12 @@ export default function WaitlistForm() {
                     name="industry"
                     value={formData.industry}
                     onChange={handleChange}
-                    className="w-full px-4 pr-10 py-3 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors appearance-none"
+                    className="w-full px-4 pr-10 py-3 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors appearance-none text-gray-900 dark:text-white"
                     required
                   >
-                    <option value="">Select Industry</option>
+                    <option value="" className="text-gray-500 dark:text-gray-400">Select Industry</option>
                     {industries.map(industry => (
-                      <option key={industry} value={industry}>{industry}</option>
+                      <option key={industry} value={industry} className="text-gray-900 dark:text-white">{industry}</option>
                     ))}
                   </select>
                   <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 dark:text-gray-400">
@@ -338,7 +338,7 @@ export default function WaitlistForm() {
             )}
 
             <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-6">
-              By joining the waitlist, you agree to receive updates about nGrams.ai.
+              By joining the waitlist, you agree to receive updates about Synoptic.
               We respect your privacy and will never share your information.
             </p>
           </form>

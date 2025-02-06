@@ -1,19 +1,15 @@
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
-import Navbar from '@/components/Navbar';
 import { ThemeProvider } from '@/context/ThemeContext';
-import ScrollProgressBar from '@/components/ScrollProgressBar';
+import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
-const plusJakarta = Plus_Jakarta_Sans({ 
-  subsets: ['latin'],
-  variable: '--font-plus-jakarta',
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'nGrams.ai - Enterprise Synthetic Data Generation',
-  description: 'Generate high-quality synthetic data while maintaining privacy, security, and statistical accuracy.',
+  title: 'Synoptic - Synthetic Data Generation for the AI Era',
+  description: 'Generate high-quality, privacy-compliant synthetic data to accelerate your AI and machine learning projects.',
 };
 
 export default function RootLayout({
@@ -23,15 +19,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className={`${plusJakarta.variable} font-sans bg-white dark:bg-dark-primary text-gray-900 dark:text-white antialiased`}>
+      <body className={`${inter.className} bg-gray-50 dark:bg-dark-primary`}>
         <ThemeProvider>
-          <ScrollProgressBar />
           <Navbar />
-          <main className="flex flex-col items-center">
-            <div className="w-full max-w-7xl">
-              {children}
-            </div>
-          </main>
+          {children}
           <Footer />
         </ThemeProvider>
       </body>

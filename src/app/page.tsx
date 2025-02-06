@@ -1,8 +1,6 @@
 import HeroSection from '../components/HeroSection';
 import FeaturesSection from '../components/FeaturesSection';
 import WaitlistForm from '../components/WaitlistForm';
-import ChatDemo from '../components/ChatDemo';
-import EnterpriseDemo from '../components/EnterpriseDemo';
 import SectionTransition from '../components/SectionTransition';
 
 export default function Home() {
