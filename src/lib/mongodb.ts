@@ -10,7 +10,17 @@ const options = {
     version: ServerApiVersion.v1,
     strict: true,
     deprecationErrors: true,
-  }
+  },
+  // Add these options for proper TLS handling
+  ssl: true,
+  tls: true,
+  tlsAllowInvalidCertificates: false,
+  tlsAllowInvalidHostnames: false,
+  retryWrites: true,
+  maxPoolSize: 10,
+  minPoolSize: 5,
+  maxIdleTimeMS: 15000,
+  connectTimeoutMS: 10000,
 };
 
 let client;
