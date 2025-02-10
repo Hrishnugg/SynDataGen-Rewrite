@@ -8,13 +8,11 @@ const uri = process.env.MONGODB_URI;
 const options = {
   ssl: true,
   tls: true,
-  tlsAllowInvalidCertificates: false,
-  tlsInsecure: false,
+  minTlsVersion: 'TLSv1.2',
   minPoolSize: 1,
   maxPoolSize: 10,
   retryWrites: true,
   w: 1,
-  minTlsVersion: 'TLSv1.2',
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
