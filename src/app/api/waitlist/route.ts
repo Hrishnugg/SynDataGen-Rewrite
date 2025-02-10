@@ -30,7 +30,18 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, name, company, industry, dataSize, useCase } = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      console.error('Error parsing request body:', error);
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
+    const { email, name, company, industry, dataSize, useCase } = body;
 
     // Validate required fields
     if (!email || !name || !company || !industry || !dataSize || !useCase) {
@@ -49,15 +60,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await clientPromise;
+    let client;
+    try {
+      client = await clientPromise;
+    } catch (error) {
+      console.error('MongoDB connection error:', error);
+      return NextResponse.json(
+        { error: "Database connection error. Please try again later." },
+        { status: 500 }
+      );
+    }
+
     const db = client.db("waitlist-serverless");
     
     // Check if email already exists
-    const existingUser = await db.collection("waitlist").findOne({ email });
-    if (existingUser) {
+    try {
+      const existingUser = await db.collection("waitlist").findOne({ email });
+      if (existingUser) {
+        return NextResponse.json(
+          { error: "You're already on the waitlist!" },
+          { status: 400 }
+        );
+      }
+    } catch (error) {
+      console.error('Error checking existing user:', error);
       return NextResponse.json(
-        { error: "You're already on the waitlist!" },
-        { status: 400 }
+        { error: "Database error. Please try again later." },
+        { status: 500 }
       );
     }
 
@@ -65,39 +94,57 @@ export async function POST(request: Request) {
     updateRateLimit(ip);
 
     // Add new entry with timestamp
-    const result = await db.collection("waitlist").insertOne({
-      email,
-      name,
-      company,
-      industry,
-      dataSize,
-      useCase,
-      createdAt: new Date(),
-      status: 'pending',
-      ipAddress: ip // Store IP for audit purposes
-    });
+    try {
+      await db.collection("waitlist").insertOne({
+        email,
+        name,
+        company,
+        industry,
+        dataSize,
+        useCase,
+        createdAt: new Date(),
+        status: 'pending',
+        ipAddress: ip
+      });
+    } catch (error) {
+      console.error('Error inserting new user:', error);
+      return NextResponse.json(
+        { error: "Failed to save your information. Please try again later." },
+        { status: 500 }
+      );
+    }
 
     // Send emails in parallel
-    await Promise.all([
-      // Send admin notification
-      sendWaitlistNotification({
-        email,
-        name,
-        company,
-        industry,
-        dataSize,
-        useCase
-      }),
-      // Send user confirmation
-      sendWaitlistConfirmation({
-        email,
-        name,
-        company,
-        industry,
-        dataSize,
-        useCase
-      })
-    ]);
+    try {
+      await Promise.all([
+        sendWaitlistNotification({
+          email,
+          name,
+          company,
+          industry,
+          dataSize,
+          useCase
+        }),
+        sendWaitlistConfirmation({
+          email,
+          name,
+          company,
+          industry,
+          dataSize,
+          useCase
+        })
+      ]);
+    } catch (error) {
+      console.error('Error sending emails:', error);
+      // Continue since the user is already added to the waitlist
+      // but notify the client about the email issue
+      return NextResponse.json({ 
+        message: "Successfully joined the waitlist! However, there was an issue sending the confirmation email. Our team has been notified.",
+        success: true,
+        emailError: true,
+        remainingRequests: rateLimitConfig.remainingRequests - 1
+      });
+    }
 
     return NextResponse.json({ 
       message: "Successfully joined the waitlist!",
@@ -108,8 +155,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Waitlist submission error:', error);
     return NextResponse.json(
-      { error: "Failed to join waitlist. Please try again." },
+      { error: "An unexpected error occurred. Please try again later." },
       { status: 500 }
     );
   }
-} 
+}
