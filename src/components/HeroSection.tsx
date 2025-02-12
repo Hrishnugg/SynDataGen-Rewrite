@@ -44,7 +44,7 @@ export default function HeroSection() {
         <div className="relative z-10 container mx-auto px-6 pt-24 pb-24 max-w-6xl">
           <div className="text-center">
             <div className="inline-block bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-6 py-2 rounded-full text-sm font-medium mb-12">
-              🎉 Now in Public Beta
+              🎉 Now in Private Beta
             </div>
 
             <div className="mb-12">
