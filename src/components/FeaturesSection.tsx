@@ -36,7 +36,7 @@ const features = [
   {
     icon: FiLock,
     title: 'Secure Infrastructure',
-    description: 'End-to-end encryption with AES-256, secure key rotation, and isolated compute environments. SOC 2 Type II compliant infrastructure with regular penetration testing.',
+    description: 'End-to-end encryption with AES-256, secure key rotation, and isolated compute environments.',
     color: 'from-red-500 to-red-600 dark:from-red-400 dark:to-red-500',
     glowColor: 'rgba(239, 68, 68, 0.5)',
   },
