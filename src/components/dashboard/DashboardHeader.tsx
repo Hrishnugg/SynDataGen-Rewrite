@@ -15,7 +15,6 @@ export default function DashboardHeader() {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Projects', href: '/dashboard/projects' },
     { name: 'Settings', href: '/dashboard/settings' },
   ];
 
