@@ -3,6 +3,9 @@ import { headers } from 'next/headers';
 import clientPromise from '@/lib/mongodb';
 import { getRateLimitConfig, updateRateLimit } from '@/lib/rate-limit';
 import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/email';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   try {
@@ -30,21 +33,11 @@ export async function POST(request: Request) {
       );
     }
 
-    let body;
-    try {
-      body = await request.json();
-    } catch (error) {
-      console.error('Error parsing request body:', error);
-      return NextResponse.json(
-        { error: "Invalid request body" },
-        { status: 400 }
-      );
-    }
-
-    const { email, name, company, industry, dataSize, useCase } = body;
+    const body = await request.json();
+    const { name, email, company, industry, dataVolume, useCase } = body;
 
     // Validate required fields
-    if (!email || !name || !company || !industry || !dataSize || !useCase) {
+    if (!name || !email || !company || !industry || !dataVolume || !useCase) {
       return NextResponse.json(
         { error: "All fields are required" },
         { status: 400 }
@@ -100,7 +93,7 @@ export async function POST(request: Request) {
         name,
         company,
         industry,
-        dataSize,
+        dataVolume,
         useCase,
         createdAt: new Date(),
         status: 'pending',
@@ -122,7 +115,7 @@ export async function POST(request: Request) {
           name,
           company,
           industry,
-          dataSize,
+          dataVolume,
           useCase
         }),
         sendWaitlistConfirmation({
@@ -130,7 +123,7 @@ export async function POST(request: Request) {
           name,
           company,
           industry,
-          dataSize,
+          dataVolume,
           useCase
         })
       ]);
@@ -145,6 +138,38 @@ export async function POST(request: Request) {
         remainingRequests: rateLimitConfig.remainingRequests - 1
       });
     }
+
+    // Send confirmation email
+    await resend.emails.send({
+      from: `${process.env.SENDER_NAME} <${process.env.FROM_EMAIL}>`,
+      to: email,
+      subject: 'Welcome to the Synoptic Waitlist',
+      html: `
+        <h1>Welcome to Synoptic!</h1>
+        <p>Hi ${name},</p>
+        <p>Thank you for joining our waitlist. We're excited to have you on board!</p>
+        <p>We'll keep you updated on our progress and let you know when we're ready to launch.</p>
+        <br>
+        <p>Best regards,</p>
+        <p>The Synoptic Team</p>
+      `
+    });
+
+    // Send notification to admin
+    await resend.emails.send({
+      from: `${process.env.SENDER_NAME} <${process.env.FROM_EMAIL}>`,
+      to: process.env.ADMIN_EMAIL!,
+      subject: 'New Waitlist Signup',
+      html: `
+        <h2>New Waitlist Signup</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Company:</strong> ${company}</p>
+        <p><strong>Industry:</strong> ${industry}</p>
+        <p><strong>Data Volume:</strong> ${dataVolume}</p>
+        <p><strong>Use Case:</strong> ${useCase}</p>
+      `
+    });
 
     return NextResponse.json({ 
       message: "Successfully joined the waitlist!",

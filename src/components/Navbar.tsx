@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
-import { FiSun, FiMoon, FiMenu, FiX } from 'react-icons/fi';
+import { useSession, signOut } from 'next-auth/react';
+import { FiSun, FiMoon, FiMenu, FiX, FiUser, FiLogOut } from 'react-icons/fi';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { data: session } = useSession();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,8 +24,13 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '#features', label: 'Features' },
-    { href: '#waitlist', label: 'Join Waitlist' },
+    ...(session ? [] : [{ href: '#waitlist', label: 'Join Waitlist' }]),
   ];
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/' });
+    setIsUserMenuOpen(false);
+  };
 
   return (
     <nav
@@ -56,6 +64,8 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -67,6 +77,55 @@ export default function Navbar() {
                 <FiMoon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               )}
             </button>
+
+            {/* Auth Links */}
+            {session ? (
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className="flex items-center space-x-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <FiUser className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <span>{session.user?.name}</span>
+                </button>
+
+                {/* User Dropdown */}
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-secondary rounded-xl shadow-lg py-1 ring-1 ring-black ring-opacity-5">
+                    <Link
+                      href="/dashboard"
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <button
+                      onClick={handleSignOut}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center space-x-4">
+                <Link
+                  href="/auth/login"
+                  className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/auth/register"
+                  className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
+                >
+                  Register
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -114,6 +173,53 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
+
+              {/* Mobile Auth Links */}
+              {session ? (
+                <>
+                  <div className="pt-2 border-t dark:border-gray-800">
+                    <div className="flex items-center space-x-2 px-2">
+                      <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                        <FiUser className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {session.user?.name}
+                      </span>
+                    </div>
+                    <Link
+                      href="/dashboard"
+                      className="block mt-2 px-2 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <button
+                      onClick={handleSignOut}
+                      className="flex items-center space-x-2 w-full mt-2 px-2 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      <FiLogOut className="w-4 h-4" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col space-y-2 pt-2 border-t dark:border-gray-800">
+                  <Link
+                    href="/auth/login"
+                    className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-2"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 text-center"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Register
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         )}
