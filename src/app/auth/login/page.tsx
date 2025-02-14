@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { FiArrowRight, FiLoader } from 'react-icons/fi';
 import ThemeToggle from '@/components/ThemeToggle';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
@@ -49,7 +49,7 @@ export default function LoginPage() {
       
       const result = await signIn('credentials', {
         redirect: false,
-        email: formData.email.toLowerCase(), // Ensure email is lowercase
+        email: formData.email.toLowerCase(),
         password: formData.password,
         callbackUrl: searchParams?.get('callbackUrl') || '/dashboard',
       });
@@ -164,5 +164,17 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary">
+        <FiLoader className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 } 
