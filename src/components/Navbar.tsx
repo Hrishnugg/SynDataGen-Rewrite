@@ -157,7 +157,7 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden py-4 border-t dark:border-gray-800">
+          <div className="md:hidden py-4 border-t dark:border-gray-800 bg-white dark:bg-dark-primary">
             <div className="flex flex-col space-y-4">
               {navLinks.map((link) => (
                 <Link
