@@ -122,7 +122,7 @@ export default function WaitlistForm() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto bg-white dark:bg-[#1B2333] rounded-3xl shadow-lg p-12">
+    <div className="max-w-5xl mx-auto bg-white dark:bg-[#1F2937] rounded-3xl shadow-lg p-12">
       {success ? (
         <div className="text-center">
           <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
@@ -151,7 +151,7 @@ export default function WaitlistForm() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
                 required
               />
             </div>
@@ -165,7 +165,7 @@ export default function WaitlistForm() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
                 required
               />
             </div>
@@ -182,7 +182,7 @@ export default function WaitlistForm() {
                 name="company"
                 value={formData.company}
                 onChange={handleChange}
-                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
+                className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
                 required
               />
             </div>
@@ -196,12 +196,12 @@ export default function WaitlistForm() {
                   name="industry"
                   value={formData.industry}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white appearance-none pr-10"
+                  className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white appearance-none pr-10"
                   required
                 >
                   <option value="" disabled>Select Industry</option>
                   {industries.map((industry) => (
-                    <option key={industry} value={industry} className="bg-gray-50 dark:bg-[#0D1425]">
+                    <option key={industry} value={industry} className="bg-gray-50 dark:bg-[#0A0F1C]">
                       {industry}
                     </option>
                   ))}
@@ -226,7 +226,7 @@ export default function WaitlistForm() {
                     value={formData.customIndustry}
                     onChange={handleChange}
                     placeholder="Enter your industry"
-                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
+                    className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
                     required={formData.industry === 'Other'}
                   />
                 </motion.div>
@@ -245,7 +245,7 @@ export default function WaitlistForm() {
                 className={`px-4 py-3 rounded-lg border ${
                   formData.dataVolume === '< 100K records'
                     ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-500 dark:hover:border-blue-500'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -258,7 +258,7 @@ export default function WaitlistForm() {
                 className={`px-4 py-3 rounded-lg border ${
                   formData.dataVolume === '100K - 1M records'
                     ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-500 dark:hover:border-blue-500'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -271,7 +271,7 @@ export default function WaitlistForm() {
                 className={`px-4 py-3 rounded-lg border ${
                   formData.dataVolume === '1M - 10M records'
                     ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-500 dark:hover:border-blue-500'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -284,7 +284,7 @@ export default function WaitlistForm() {
                 className={`px-4 py-3 rounded-lg border ${
                   formData.dataVolume === '10M+ records'
                     ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-500 dark:hover:border-blue-500'
+                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -304,7 +304,7 @@ export default function WaitlistForm() {
               value={formData.useCase}
               onChange={handleChange}
               rows={4}
-              className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0D1425] border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white resize-none"
+              className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white resize-none"
               required
             />
           </div>
@@ -332,7 +332,7 @@ export default function WaitlistForm() {
                 </>
               )}
             </motion.button>
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+            <p className="mt-4 text-sm text-gray-400 text-center">
               By joining the waitlist, you agree to receive updates about Synoptic. We respect your privacy and will never share your information.
             </p>
           </div>

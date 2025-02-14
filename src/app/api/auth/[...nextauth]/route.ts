@@ -3,6 +3,35 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
 import clientPromise from '@/lib/mongodb';
 import { USER_COLLECTION } from '@/lib/models/user';
+import { JWT } from 'next-auth/jwt';
+import { Session } from 'next-auth';
+
+// Extend the built-in types
+declare module 'next-auth' {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+      company?: string;
+    }
+  }
+  interface User {
+    id: string;
+    name: string;
+    email: string;
+    company: string;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    id: string;
+    email: string;
+    name: string;
+    company: string;
+  }
+}
 
 const handler = NextAuth({
   providers: [
@@ -83,9 +112,9 @@ const handler = NextAuth({
           };
         } catch (error) {
           console.error('Auth error details:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
+            message: error instanceof Error ? error.message : 'An unknown error occurred',
+            stack: error instanceof Error ? error.stack : undefined,
+            name: error instanceof Error ? error.name : undefined
           });
           throw error;
         }
@@ -122,7 +151,6 @@ const handler = NextAuth({
         session.user.id = token.id as string;
         session.user.email = token.email as string;
         session.user.name = token.name as string;
-        // @ts-ignore
         session.user.company = token.company as string;
       }
       return session;
