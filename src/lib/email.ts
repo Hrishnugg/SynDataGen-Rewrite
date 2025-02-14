@@ -1,11 +1,11 @@
 import { Resend } from 'resend';
 
 interface WaitlistSubmission {
-  name: string;
   email: string;
+  name: string;
   company: string;
   industry: string;
-  dataSize: string;
+  dataVolume: string;
   useCase: string;
 }
 
@@ -38,7 +38,7 @@ export async function sendWaitlistNotification(submission: WaitlistSubmission) {
         <p><strong>Email:</strong> ${submission.email}</p>
         <p><strong>Company:</strong> ${submission.company}</p>
         <p><strong>Industry:</strong> ${submission.industry}</p>
-        <p><strong>Data Size:</strong> ${submission.dataSize}</p>
+        <p><strong>Data Volume:</strong> ${submission.dataVolume}</p>
         <p><strong>Use Case:</strong> ${submission.useCase}</p>
         <p><em>Submitted at: ${new Date().toLocaleString()}</em></p>
       `,
