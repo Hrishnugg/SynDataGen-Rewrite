@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
-import clientPromise from '@/lib/mongodb';
+import clientPromise, { ensureConnection } from '@/lib/mongodb';
 import { USER_COLLECTION } from '@/lib/models/user';
 import { JWT } from 'next-auth/jwt';
 import { Session } from 'next-auth';
@@ -52,7 +52,8 @@ const handler = NextAuth({
         }
 
         try {
-          const client = await clientPromise;
+          // Use the enhanced connection handling
+          const client = await ensureConnection();
           
           // List all databases
           const adminDb = client.db().admin();

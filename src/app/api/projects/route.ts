@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { ObjectId } from 'mongodb';
-import clientPromise from '@/lib/mongodb';
+import clientPromise, { ensureConnection } from '@/lib/mongodb';
 import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/project';
 
 // Helper function to generate a unique bucket name
@@ -22,8 +22,9 @@ export async function POST(req: Request) {
     const body: CreateProjectInput = await req.json();
     const { name, description, region = 'us-central1', settings } = body;
 
-    const client = await clientPromise;
-    const db = client.db('test'); // Using the same database as auth
+    // Use enhanced connection handling
+    const client = await ensureConnection();
+    const db = client.db('test');
 
     // Create project document
     const project = {
@@ -57,9 +58,14 @@ export async function POST(req: Request) {
       ...project
     });
   } catch (error) {
-    console.error('Project creation error:', error);
+    console.error('Project creation error:', error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : error);
+    
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { error: error instanceof Error ? error.message : 'Failed to create project' },
       { status: 500 }
     );
   }
@@ -72,8 +78,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const client = await clientPromise;
+    // Use enhanced connection handling
+    const client = await ensureConnection();
     const db = client.db('test');
+
+    console.log('Fetching projects for user:', session.user.id);
 
     // Get all projects where user is a team member
     const projects = await db.collection(PROJECT_COLLECTION)
@@ -84,11 +93,22 @@ export async function GET(req: Request) {
       .sort({ createdAt: -1 })
       .toArray();
 
+    console.log(`Found ${projects.length} projects for user`);
+    
     return NextResponse.json(projects);
   } catch (error) {
-    console.error('Project fetch error:', error);
+    console.error('Project fetch error:', error instanceof Error ? {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    } : error);
+    
+    // Return a more descriptive error message
     return NextResponse.json(
-      { error: 'Failed to fetch projects' },
+      { 
+        error: error instanceof Error ? error.message : 'Failed to fetch projects',
+        details: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
