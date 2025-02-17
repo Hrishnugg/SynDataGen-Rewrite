@@ -106,10 +106,7 @@ const connect = async (): Promise<MongoClient> => {
       const sessionId = Math.random().toString(36).substring(2, 15);
       console.log(`Initializing connection with session ID: ${sessionId}`);
       
-      client = new MongoClient(uri, {
-        ...options,
-        metadata: { sessionId }
-      });
+      client = new MongoClient(uri, options);
 
       try {
         await client.connect();
