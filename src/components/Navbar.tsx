@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useTheme } from '@/context/ThemeContext';
 import { useSession, signOut } from 'next-auth/react';
 import { FiSun, FiMoon, FiMenu, FiX, FiUser, FiLogOut } from 'react-icons/fi';
@@ -43,10 +44,15 @@ export default function Navbar() {
       <div className="container mx-auto px-6 max-w-7xl">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-              Synoptic
-            </span>
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/synoptic-logo.png"
+              alt="Synoptic"
+              width={100}
+              height={25}
+              className="h-6 w-auto"
+              priority
+            />
           </Link>
 
           {/* Desktop Navigation */}

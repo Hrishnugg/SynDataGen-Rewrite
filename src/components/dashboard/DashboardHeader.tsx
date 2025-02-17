@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
+import Image from 'next/image';
 import { FiUser, FiSettings, FiLogOut, FiChevronDown, FiBell } from 'react-icons/fi';
 import { signOut } from 'next-auth/react';
 import Link from 'next/link';
@@ -26,9 +27,14 @@ export default function DashboardHeader() {
           <div className="flex items-center gap-8">
             {/* Logo */}
             <Link href="/" className="flex-shrink-0">
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-                Synoptic
-              </span>
+              <Image
+                src="/synoptic-logo.png"
+                alt="Synoptic"
+                width={100}
+                height={25}
+                className="h-6 w-auto"
+                priority
+              />
             </Link>
 
             {/* Navigation */}

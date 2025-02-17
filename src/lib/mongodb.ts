@@ -8,15 +8,18 @@ if (!process.env.MONGODB_URI) {
 // Enable DNS caching
 dns.setDefaultResultOrder('ipv4first');
 
-const uri = process.env.MONGODB_URI;
+// Modify the URI to use a different port for outbound connections
+const baseUri = process.env.MONGODB_URI;
+const uri = baseUri.includes('?') 
+  ? `${baseUri}&localThresholdMS=2000&connectTimeoutMS=10000&socketTimeoutMS=45000`
+  : `${baseUri}?localThresholdMS=2000&connectTimeoutMS=10000&socketTimeoutMS=45000`;
+
 const options = {
-  maxPoolSize: 10,
-  minPoolSize: 5,
-  maxIdleTimeMS: 60000,
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 45000,
+  maxPoolSize: 1,
+  minPoolSize: 0,
+  maxIdleTimeMS: 30000,
   serverSelectionTimeoutMS: 10000,
-  heartbeatFrequencyMS: 2000,
+  family: 4,
   retryWrites: true,
   retryReads: true,
   serverApi: {
@@ -26,46 +29,129 @@ const options = {
   }
 } as const;
 
-// Global singleton client
+// Track connection state
 let client: MongoClient | null = null;
-let clientPromise: Promise<MongoClient>;
+let connectingPromise: Promise<MongoClient> | null = null;
+let isShuttingDown = false;
+let connectionAttempts = 0;
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000;
 
-const connect = async (): Promise<MongoClient> => {
-  try {
-    if (client) {
-      console.log('Reusing existing MongoDB connection');
-      return client;
+// Handle process termination
+if (process.env.NODE_ENV === 'development') {
+  process.on('SIGINT', async () => {
+    isShuttingDown = true;
+    await cleanupConnection();
+    process.exit(0);
+  });
+}
+
+const cleanupConnection = async () => {
+  if (client) {
+    try {
+      await client.close(true);
+    } catch (err) {
+      console.error('Error during connection cleanup:', err);
     }
-
-    console.log('Creating new MongoDB connection');
-    client = new MongoClient(uri, options);
-    await client.connect();
-    
-    // Test the connection
-    await client.db('admin').command({ ping: 1 });
-    console.log('MongoDB connected successfully');
-
-    // Handle connection events
-    client.on('close', () => {
-      console.log('MongoDB connection closed');
-      client = null;
-    });
-
-    client.on('error', (error) => {
-      console.error('MongoDB connection error:', error);
-      client = null;
-    });
-
-    return client;
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
     client = null;
-    throw error;
+  }
+  
+  // Reset connection state
+  connectingPromise = null;
+  
+  // Add longer delay for Windows socket cleanup
+  if (process.platform === 'win32') {
+    await new Promise(resolve => setTimeout(resolve, 5000));
   }
 };
 
+const connect = async (): Promise<MongoClient> => {
+  if (isShuttingDown) {
+    throw new Error('Server is shutting down');
+  }
+
+  if (connectingPromise) {
+    return connectingPromise;
+  }
+
+  if (connectionAttempts >= MAX_RETRIES) {
+    await cleanupConnection();
+    connectionAttempts = 0;
+    throw new Error(`Failed to connect after ${MAX_RETRIES} attempts`);
+  }
+
+  connectingPromise = (async () => {
+    try {
+      if (client) {
+        try {
+          await client.db('admin').command({ ping: 1 });
+          console.log('Reusing existing MongoDB connection');
+          return client;
+        } catch (error) {
+          console.log('Existing connection failed, cleaning up...');
+          await cleanupConnection();
+        }
+      }
+
+      connectionAttempts++;
+      console.log(`Creating new MongoDB connection (attempt ${connectionAttempts}/${MAX_RETRIES})`);
+
+      if (connectionAttempts > 1) {
+        const delay = RETRY_DELAY * connectionAttempts;
+        console.log(`Waiting ${delay}ms before next connection attempt...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      // Create a new client with unique session ID
+      const sessionId = Math.random().toString(36).substring(2, 15);
+      console.log(`Initializing connection with session ID: ${sessionId}`);
+      
+      client = new MongoClient(uri, {
+        ...options,
+        metadata: { sessionId }
+      });
+
+      try {
+        await client.connect();
+        await client.db('admin').command({ ping: 1 });
+        console.log('MongoDB connected successfully');
+        
+        connectionAttempts = 0;
+        return client;
+      } catch (error: any) {
+        console.error('MongoDB connection error:', error);
+        
+        // Special handling for Windows errors
+        if (process.platform === 'win32') {
+          console.log('Connection failed on Windows, performing extended cleanup...');
+          await cleanupConnection();
+          // Force garbage collection if available
+          if (global.gc) {
+            console.log('Running garbage collection...');
+            global.gc();
+          }
+        } else {
+          await cleanupConnection();
+        }
+        
+        if (connectionAttempts < MAX_RETRIES) {
+          connectingPromise = null;
+          return await connect();
+        }
+        throw error;
+      }
+    } finally {
+      connectingPromise = null;
+    }
+  })();
+
+  return connectingPromise;
+};
+
+// Create a new promise for the client
+let clientPromise: Promise<MongoClient>;
+
 if (process.env.NODE_ENV === 'development') {
-  // In development, use a global variable to maintain the connection
   let globalWithMongo = global as typeof globalThis & {
     _mongoClientPromise?: Promise<MongoClient>;
   };
@@ -75,7 +161,6 @@ if (process.env.NODE_ENV === 'development') {
   }
   clientPromise = globalWithMongo._mongoClientPromise;
 } else {
-  // In production, it's best to not use a global variable
   clientPromise = connect();
 }
 
@@ -96,20 +181,19 @@ export async function testDbConnection() {
 export async function ensureConnection() {
   try {
     const connectedClient = await clientPromise;
-    
-    // Test the connection
     try {
       await connectedClient.db('admin').command({ ping: 1 });
       return connectedClient;
     } catch (error) {
-      // If ping fails, clear the client and try to reconnect
       console.log('Connection test failed, reconnecting...');
-      client = null;
+      await cleanupConnection();
+      connectionAttempts = 0;
       return await connect();
     }
   } catch (error) {
     console.error("Connection error:", error);
-    client = null;
+    await cleanupConnection();
+    connectionAttempts = 0;
     return await connect();
   }
 }
