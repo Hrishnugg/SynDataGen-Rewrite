@@ -1,10 +1,10 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
-import clientPromise, { ensureConnection } from '@/lib/mongodb';
-import { USER_COLLECTION } from '@/lib/models/user';
+import { USER_COLLECTION } from '@/lib/models/firestore/user';
 import { JWT } from 'next-auth/jwt';
 import { Session } from 'next-auth';
+import { getFirestore } from '@/lib/services/db-service';
 
 // Extend the built-in types
 declare module 'next-auth' {
@@ -52,51 +52,38 @@ const handler = NextAuth({
         }
 
         try {
-          // Use the enhanced connection handling
-          const client = await ensureConnection();
+          // Get Firestore service
+          const firestoreService = getFirestore();
           
-          // List all databases
-          const adminDb = client.db().admin();
-          const dbList = await adminDb.listDatabases();
-          console.log('Available databases:', dbList.databases.map(db => db.name));
+          // Initialize the service if needed
+          await firestoreService.init();
           
-          // Connect to test database
-          const db = client.db('test');
-          
-          console.log('DB Connection successful');
-          console.log('Using database:', 'test');
+          console.log('Firestore connection initialized');
           console.log('Attempting to authenticate user:', credentials.email);
-          console.log('Searching in collection:', USER_COLLECTION);
           
-          // Log the collections in all databases
-          for (const dbInfo of dbList.databases) {
-            const currentDb = client.db(dbInfo.name);
-            const collections = await currentDb.listCollections().toArray();
-            console.log(`Collections in ${dbInfo.name}:`, collections.map(c => c.name));
-          }
+          // Query Firestore to find the user
+          const users = await firestoreService.query(
+            USER_COLLECTION,
+            (collection) => collection.where('email', '==', credentials.email.toLowerCase())
+          );
           
-          // First, try to find the user
-          const user = await db.collection(USER_COLLECTION).findOne({ 
-            email: credentials.email.toLowerCase() // Ensure case-insensitive comparison
-          });
-
           console.log('Database query completed');
           
-          if (!user) {
+          if (!users || users.length === 0) {
             console.log('No user found with email:', credentials.email);
-            // Try to find any users in the collection
-            const userCount = await db.collection(USER_COLLECTION).countDocuments();
-            console.log('Total users in collection:', userCount);
             
-            // Log all users in the collection (without passwords)
-            const allUsers = await db.collection(USER_COLLECTION)
-              .find({}, { projection: { password: 0 } })
-              .toArray();
-            console.log('All users in collection:', allUsers);
+            // Log how many users exist in the collection
+            const allUsers = await firestoreService.query(
+              USER_COLLECTION,
+              (collection) => collection.limit(10)
+            );
+            
+            console.log('Sample users in collection:', allUsers.length);
             
             throw new Error('No user found with this email');
           }
 
+          const user = users[0];
           console.log('User found, verifying password');
 
           const isValid = await compare(credentials.password, user.password);
@@ -110,7 +97,7 @@ const handler = NextAuth({
           
           // Return a standardized user object
           return {
-            id: user._id.toString(),
+            id: user.id,
             email: user.email,
             name: user.name,
             company: user.company

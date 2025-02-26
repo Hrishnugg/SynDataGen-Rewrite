@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
-import clientPromise from '@/lib/mongodb';
-import { USER_COLLECTION, type User } from '@/lib/models/user';
+import { USER_COLLECTION } from '@/lib/models/firestore/user';
+import { getFirestore } from '@/lib/services/db-service';
 
 export async function POST(request: Request) {
   try {
@@ -33,12 +33,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const client = await clientPromise;
-    const db = client.db();
+    // Get Firestore service
+    const firestoreService = getFirestore();
+    await firestoreService.init();
     
     // Check if user already exists
-    const existingUser = await db.collection(USER_COLLECTION).findOne({ email });
-    if (existingUser) {
+    const existingUsers = await firestoreService.query(
+      USER_COLLECTION,
+      (collection) => collection.where('email', '==', email.toLowerCase())
+    );
+    
+    if (existingUsers && existingUsers.length > 0) {
       return NextResponse.json(
         { error: "Email already registered" },
         { status: 400 }
@@ -49,8 +54,8 @@ export async function POST(request: Request) {
     const hashedPassword = await hash(password, 12);
 
     // Create user
-    const user: User = {
-      email,
+    const userData = {
+      email: email.toLowerCase(),
       password: hashedPassword,
       name,
       company,
@@ -58,11 +63,13 @@ export async function POST(request: Request) {
       updatedAt: new Date(),
     };
 
-    await db.collection(USER_COLLECTION).insertOne(user);
+    // Add user to Firestore
+    const userId = await firestoreService.create(USER_COLLECTION, userData);
 
     return NextResponse.json({
       message: "User registered successfully",
-      success: true
+      success: true,
+      userId
     });
 
   } catch (error) {
