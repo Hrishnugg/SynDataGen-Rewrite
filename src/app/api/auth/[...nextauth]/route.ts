@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { compare } from 'bcryptjs';
-import { USER_COLLECTION } from '@/lib/models/firestore/user';
+import { USER_COLLECTION, User } from '@/lib/models/firestore/user';
 import { JWT } from 'next-auth/jwt';
 import { Session } from 'next-auth';
 import { getFirestore } from '@/lib/services/db-service';
@@ -14,6 +14,8 @@ declare module 'next-auth' {
       name?: string | null;
       email?: string | null;
       company?: string;
+      role?: string;
+      isAdmin?: boolean;
     }
   }
   interface User {
@@ -62,7 +64,7 @@ const handler = NextAuth({
           console.log('Attempting to authenticate user:', credentials.email);
           
           // Query Firestore to find the user
-          const users = await firestoreService.query(
+          const users = await firestoreService.query<User>(
             USER_COLLECTION,
             (collection) => collection.where('email', '==', credentials.email.toLowerCase())
           );
@@ -83,7 +85,7 @@ const handler = NextAuth({
             throw new Error('No user found with this email');
           }
 
-          const user = users[0];
+          const user = users[0] as User;
           console.log('User found, verifying password');
 
           const isValid = await compare(credentials.password, user.password);

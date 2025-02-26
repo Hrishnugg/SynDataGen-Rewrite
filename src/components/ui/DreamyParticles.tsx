@@ -106,8 +106,11 @@ function ParticlesScene({
       setLoading(false);
     }, 15000);
     
+    // Ensure modelPath is a string (defensive check)
+    const modelUrl = typeof modelPath === 'string' ? modelPath : 'sphere';
+    
     loader.load(
-      modelPath,
+      modelUrl,
       (gltf) => {
         clearTimeout(loadTimeout);
         console.log('Model loaded successfully');
@@ -168,7 +171,8 @@ function ParticlesScene({
       (error) => {
         clearTimeout(loadTimeout);
         console.error('Error loading model:', error);
-        setError(`Failed to load model: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setError(`Failed to load model: ${errorMessage}`);
         setLoading(false);
       }
     );

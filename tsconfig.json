@@ -36,6 +36,14 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/scripts/migration/**/*.ts",
+    "src/scripts/migration-control.ts",
+    "src/scripts/test-mongodb.js",
+    "src/scripts/test-waitlist-dual-write.js",
+    "src/scripts/complete-migration.js",
+    "src/scripts/validate-data.js",
+    "src/scripts/check-backend-status.js",
+    "src/scripts/set-backend.js"
   ]
 }

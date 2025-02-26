@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/project';
+import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/firestore/project';
 import { getFirestore } from '@/lib/services/db-service';
 
 // Helper function to generate a unique bucket name
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json() as CreateProjectInput;
+    const body = await req.json();
 
     // Validate required fields
     if (!body.name || !body.description) {
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const projectData = {
       name: body.name,
       description: body.description,
-      customerId: body.customerId || session.user.customerId || session.user.id,
+      customerId: body.customerId || session.user.id,
       bucketName,
       createdAt: new Date(),
       updatedAt: new Date(),

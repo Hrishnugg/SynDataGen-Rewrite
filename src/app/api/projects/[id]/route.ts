@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { PROJECT_COLLECTION } from '@/lib/models/project';
+import { PROJECT_COLLECTION } from '@/lib/models/firestore/project';
+import { Project } from '@/lib/models/firestore/project';
 import { getFirestore } from '@/lib/services/db-service';
 import { getFirestoreService } from '@/lib/services/firestore-service';
 
@@ -22,7 +23,7 @@ export async function GET(
     await firestoreService.init();
     
     // Get the project from Firestore
-    project = await firestoreService.getById(PROJECT_COLLECTION, projectId);
+    project = await firestoreService.getById<Project>(PROJECT_COLLECTION, projectId);
     
     // Check if the user has access to this project
     if (project) {
@@ -66,7 +67,7 @@ export async function PATCH(
     await firestoreService.init();
     
     // Get project first to check permissions
-    const existingProject = await firestoreService.getById(
+    const existingProject = await firestoreService.getById<Project>(
       PROJECT_COLLECTION, 
       projectId
     );
@@ -96,7 +97,7 @@ export async function PATCH(
     );
     
     // Retrieve the updated project
-    updatedProject = await firestoreService.getById(
+    updatedProject = await firestoreService.getById<Project>(
       PROJECT_COLLECTION, 
       projectId
     );
@@ -128,7 +129,7 @@ export async function DELETE(
     await firestoreService.init();
     
     // Get project first to check permissions
-    const existingProject = await firestoreService.getById(
+    const existingProject = await firestoreService.getById<Project>(
       PROJECT_COLLECTION, 
       projectId
     );

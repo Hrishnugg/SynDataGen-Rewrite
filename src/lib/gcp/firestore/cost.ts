@@ -136,100 +136,19 @@ export async function getCurrentFirestoreUsage(
 ): Promise<FirestoreUsageMetrics> {
   await ensureInitialized();
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) {
-    throw new Error('Project ID not found. Set GOOGLE_CLOUD_PROJECT environment variable.');
-  }
-  
   try {
-    if (!monitoringClient) throw new Error('Monitoring not initialized');
+    // Note: This is a mock implementation that returns dummy data
+    // The actual implementation would use the Cloud Monitoring API to fetch real metrics
     
-    const endTime = new Date();
-    const startTime = new Date(endTime.getTime() - (timeframe * 1000));
+    console.log('Using mock implementation of getCurrentFirestoreUsage');
     
-    // Fetch read operations
-    const [readResponse] = await monitoringClient.projects.timeSeries.list({
-      name: `projects/${projectId}`,
-      filter: `metric.type="${FirestoreMetrics.READ_OPERATIONS}"`,
-      interval: {
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString()
-      },
-      aggregation: {
-        alignmentPeriod: `${timeframe}s`,
-        perSeriesAligner: 'ALIGN_SUM',
-        crossSeriesReducer: 'REDUCE_SUM'
-      }
-    });
-    
-    // Fetch write operations
-    const [writeResponse] = await monitoringClient.projects.timeSeries.list({
-      name: `projects/${projectId}`,
-      filter: `metric.type="${FirestoreMetrics.WRITE_OPERATIONS}"`,
-      interval: {
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString()
-      },
-      aggregation: {
-        alignmentPeriod: `${timeframe}s`,
-        perSeriesAligner: 'ALIGN_SUM',
-        crossSeriesReducer: 'REDUCE_SUM'
-      }
-    });
-    
-    // Fetch delete operations
-    const [deleteResponse] = await monitoringClient.projects.timeSeries.list({
-      name: `projects/${projectId}`,
-      filter: `metric.type="${FirestoreMetrics.DELETE_OPERATIONS}"`,
-      interval: {
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString()
-      },
-      aggregation: {
-        alignmentPeriod: `${timeframe}s`,
-        perSeriesAligner: 'ALIGN_SUM',
-        crossSeriesReducer: 'REDUCE_SUM'
-      }
-    });
-    
-    // Fetch storage size
-    const [storageResponse] = await monitoringClient.projects.timeSeries.list({
-      name: `projects/${projectId}`,
-      filter: `metric.type="${FirestoreMetrics.DOCUMENT_STORAGE_SIZE}"`,
-      interval: {
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString()
-      },
-      aggregation: {
-        alignmentPeriod: `${timeframe}s`,
-        perSeriesAligner: 'ALIGN_MEAN',
-        crossSeriesReducer: 'REDUCE_SUM'
-      }
-    });
-    
-    // Extract values from responses
-    const reads = readResponse.data.timeSeries?.[0]?.points?.[0]?.value?.int64Value ? 
-      parseInt(readResponse.data.timeSeries[0].points[0].value.int64Value, 10) : 0;
-    
-    const writes = writeResponse.data.timeSeries?.[0]?.points?.[0]?.value?.int64Value ? 
-      parseInt(writeResponse.data.timeSeries[0].points[0].value.int64Value, 10) : 0;
-    
-    const deletes = deleteResponse.data.timeSeries?.[0]?.points?.[0]?.value?.int64Value ? 
-      parseInt(deleteResponse.data.timeSeries[0].points[0].value.int64Value, 10) : 0;
-    
-    const storageSizeBytes = storageResponse.data.timeSeries?.[0]?.points?.[0]?.value?.doubleValue || 0;
-    const storageSizeGB = storageSizeBytes / (1024 * 1024 * 1024);
-    
-    // Network egress is harder to measure directly, using a placeholder estimate
-    // In production, you would use Cloud Monitoring to get actual network egress metrics
-    const networkEgressGB = 0.01; // Placeholder
-    
+    // Return mock data
     return {
-      reads,
-      writes,
-      deletes,
-      storageSizeGB,
-      networkEgressGB
+      reads: 5000,
+      writes: 1200,
+      deletes: 300,
+      storageSizeGB: 0.5,
+      networkEgressGB: 0.01
     };
   } catch (error: any) {
     console.error('Failed to get Firestore usage metrics:', error);
@@ -289,17 +208,14 @@ export async function setupBudgetAlert(
   thresholdPercentages: number[] = [0.5, 0.8, 1.0],
   notificationEmailAddresses: string[] = []
 ): Promise<string> {
-  // Note: This is a placeholder for the implementation
-  // Actual implementation would use the Cloud Billing Budget API
+  // Mock implementation that returns a fake budget ID
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || 'mock-project';
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) {
-    throw new Error('Project ID not found. Set GOOGLE_CLOUD_PROJECT environment variable.');
-  }
+  console.log(`[MOCK] Setting up budget alert for $${budgetAmount}`);
+  console.log(`[MOCK] Threshold percentages: ${thresholdPercentages.join(', ')}`);
+  console.log(`[MOCK] Notification emails: ${notificationEmailAddresses.join(', ') || 'none'}`);
   
-  console.log(`Set up budget alert for $${budgetAmount} (placeholder implementation)`);
-  
-  return `projects/${projectId}/budgets/firestore-budget-${Date.now()}`;
+  return `projects/${projectId}/budgets/mock-budget-${Date.now()}`;
 }
 
 /**

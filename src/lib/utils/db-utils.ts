@@ -26,14 +26,15 @@ export function isValidObjectId(id: string): boolean {
  * @param doc MongoDB document with _id
  * @returns Document with _id converted to string id
  */
-export function normalizeMongoId<T extends Record<string, any>>(doc: T & { _id: ObjectId }): T & { id: string } {
+export function normalizeMongoId<T extends Record<string, any>>(doc: T & { _id: ObjectId }): Omit<T, '_id'> & { id: string } {
   if (!doc) return null as any;
   
   const { _id, ...rest } = doc;
+  // Use type assertion to handle the transformation correctly
   return {
     ...rest,
     id: _id.toString()
-  } as T & { id: string };
+  } as Omit<T, '_id'> & { id: string };
 }
 
 /**
@@ -44,7 +45,7 @@ export function normalizeMongoId<T extends Record<string, any>>(doc: T & { _id: 
  */
 export function normalizeMongoIds<T extends Record<string, any>>(
   docs: Array<T & { _id: ObjectId }>
-): Array<T & { id: string }> {
+): Array<Omit<T, '_id'> & { id: string }> {
   return docs.map(normalizeMongoId);
 }
 
@@ -74,7 +75,8 @@ export function formatDocument<T extends Record<string, any>>(
 ): T {
   if (!doc) return doc;
   
-  const formatted = { ...doc };
+  // Create a mutable copy of the document
+  const formatted: Record<string, any> = { ...doc };
   
   // Convert date fields
   for (const field of dateFields) {
@@ -83,5 +85,6 @@ export function formatDocument<T extends Record<string, any>>(
     }
   }
   
-  return formatted;
+  // Cast back to the original type
+  return formatted as T;
 }

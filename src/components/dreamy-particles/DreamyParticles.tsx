@@ -12,7 +12,6 @@ import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRe
 
 // Import our copied files
 import GPGPUUtils from './webgl/gpgpu/GPGPUUtils.js';
-import MouseEvents from './webgl/gpgpu/MouseEvents.js';
 
 // Size of the GPGPU simulation
 const SIZE = 128;
@@ -113,6 +112,11 @@ void main() {
 
 // Mouse utility class to match original implementation
 class Mouse {
+	cursorPosition: THREE.Vector2;
+	callbacks: {
+		mousemove: Array<(position: THREE.Vector2) => void>;
+	};
+	
 	constructor() {
 		this.cursorPosition = new THREE.Vector2(0, 0);
 		this.callbacks = {
@@ -135,7 +139,7 @@ class Mouse {
 		});
 	}
 	
-	on(event, callback) {
+	on(event: 'mousemove', callback: (position: THREE.Vector2) => void) {
 		if (this.callbacks[event]) {
 			this.callbacks[event].push(callback);
 		}
@@ -147,20 +151,20 @@ export default function DreamyParticles({
 	primaryColor = [1.0, 0.8, 0.3], 
 	mouseStrength = 0.05 
 }) {
-	const containerRef = useRef(null);
-	const rendererRef = useRef(null);
-	const sceneRef = useRef(null);
-	const cameraRef = useRef(null);
-	const controlsRef = useRef(null);
-	const composerRef = useRef(null);
-	const mouseRef = useRef(null);
-	const gpgpuRef = useRef(null);
-	const frameIdRef = useRef(null);
-	const startTimeRef = useRef(Date.now());
+	const containerRef = useRef<HTMLDivElement>(null);
+	const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+	const sceneRef = useRef<THREE.Scene | null>(null);
+	const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+	const controlsRef = useRef<any | null>(null);
+	const composerRef = useRef<any | null>(null);
+	const mouseRef = useRef<Mouse | null>(null);
+	const gpgpuRef = useRef<any | null>(null);
+	const frameIdRef = useRef<number | null>(null);
+	const startTimeRef = useRef<number>(Date.now());
 	
 	const [isLoading, setIsLoading] = useState(true);
 	const [loadingProgress, setLoadingProgress] = useState(0);
-	const [error, setError] = useState(null);
+	const [error, setError] = useState<string | null>(null);
 	
 	// Initialize Three.js scene
 	useEffect(() => {
@@ -228,7 +232,7 @@ export default function DreamyParticles({
 			}
 			
 			// Cancel animation frame
-			if (frameIdRef.current) {
+			if (frameIdRef.current !== null) {
 				cancelAnimationFrame(frameIdRef.current);
 			}
 			
@@ -271,7 +275,7 @@ export default function DreamyParticles({
 		if (!sceneRef.current || !rendererRef.current || !cameraRef.current || !mouseRef.current) return;
 		
 		// Clean up previous animation frame if exists
-		if (frameIdRef.current) {
+		if (frameIdRef.current !== null) {
 			cancelAnimationFrame(frameIdRef.current);
 		}
 		
@@ -296,7 +300,7 @@ export default function DreamyParticles({
 		
 		let mesh;
 		
-		const initParticles = (geometry) => {
+		const initParticles = (geometry: THREE.BufferGeometry) => {
 			// Create mesh for sampling
 			mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial());
 			
@@ -308,10 +312,15 @@ export default function DreamyParticles({
 			
 			// Create textures
 			const positionTexture = gpgpuUtils.getPositionTexture();
-			const originalPositionTexture = positionTexture.clone();
+			const originalPositionTexture = positionTexture ? positionTexture.clone() : null;
 			const velocityTexture = gpgpuUtils.getVelocityTexture();
 			
 			// Create variables
+			if (!positionTexture || !velocityTexture) {
+				console.error("Failed to initialize textures");
+				return;
+			}
+			
 			const positionVariable = gpuCompute.addVariable('uCurrentPosition', simFragmentPosition, positionTexture);
 			const velocityVariable = gpuCompute.addVariable('uCurrentVelocity', simFragmentVelocity, velocityTexture);
 			
@@ -340,8 +349,33 @@ export default function DreamyParticles({
 				velocityUniforms: velocityVariable.material.uniforms
 			};
 			
-			// Create events handler
-			const events = new MouseEvents(mouse, camera, mesh, uniforms);
+			// Create a mouse events handler with update method
+			const events = {
+				mouseSpeed: 0,
+				lastMouseX: 0,
+				lastMouseY: 0,
+				update: function() {
+					// Calculate mouse speed based on position change
+					const mouseX = mouse.cursorPosition.x;
+					const mouseY = mouse.cursorPosition.y;
+					
+					// Calculate speed
+					const deltaX = mouseX - this.lastMouseX;
+					const deltaY = mouseY - this.lastMouseY;
+					const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+					
+					// Update speed with smoothing
+					this.mouseSpeed = this.mouseSpeed * 0.8 + distance * 0.2;
+					
+					// Update position for next frame
+					this.lastMouseX = mouseX;
+					this.lastMouseY = mouseY;
+					
+					// Update mouse position in the shader
+					const mouseVector = new THREE.Vector3(mouseX, mouseY, 0);
+					velocityVariable.material.uniforms.uMouse.value = mouseVector;
+				}
+			};
 			
 			// Create particle material with optimized settings
 			const particleMaterial = new THREE.ShaderMaterial({
@@ -362,8 +396,18 @@ export default function DreamyParticles({
 			
 			// Create particles
 			const particleGeometry = new THREE.BufferGeometry();
-			particleGeometry.setAttribute('position', new THREE.BufferAttribute(gpgpuUtils.getPositions(), 3));
-			particleGeometry.setAttribute('uv', new THREE.BufferAttribute(gpgpuUtils.getUVs(), 2));
+			const positions = gpgpuUtils.getPositions();
+			const uvs = gpgpuUtils.getUVs();
+			
+			if (!positions || !uvs) {
+				console.error("Failed to get positions or UVs");
+				setError('Failed to initialize particles');
+				setIsLoading(false);
+				return;
+			}
+			
+			particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+			particleGeometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 			
 			const points = new THREE.Points(particleGeometry, particleMaterial);
 			scene.add(points);
@@ -428,10 +472,10 @@ export default function DreamyParticles({
 				modelPath,
 				(gltf) => {
 					// Find first mesh with geometry
-					let targetMesh = null;
-					
+					let targetMesh = null as (THREE.Mesh | null);
+
 					gltf.scene.traverse((object) => {
-						if (object.isMesh && !targetMesh) {
+						if (object instanceof THREE.Mesh && !targetMesh) {
 							targetMesh = object;
 						}
 					});
@@ -445,12 +489,19 @@ export default function DreamyParticles({
 						const maxDim = Math.max(size.x, size.y, size.z);
 						const scale = 2 / maxDim;
 						
-						targetMesh.geometry.scale(scale, scale, scale);
-						targetMesh.geometry.translate(-center.x * scale, -center.y * scale, -center.z * scale);
-						
-						// Get geometry for particles
-						const geometry = targetMesh.geometry.clone();
-						initParticles(geometry);
+						// Ensure targetMesh geometry exists
+						if (targetMesh.geometry) {
+							targetMesh.geometry.scale(scale, scale, scale);
+							targetMesh.geometry.translate(-center.x * scale, -center.y * scale, -center.z * scale);
+							
+							// Get geometry for particles
+							const geometry = targetMesh.geometry.clone();
+							initParticles(geometry);
+						} else {
+							console.error('Target mesh has no geometry');
+							setError('Model has no valid geometry');
+							setIsLoading(false);
+						}
 					} else {
 						console.error('No mesh found in the model');
 						setError('No valid mesh found in the model');
@@ -465,19 +516,22 @@ export default function DreamyParticles({
 				},
 				(error) => {
 					console.error('Error loading model:', error);
-					setError(`Failed to load model: ${error.message}`);
+					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+					setError(`Failed to load model: ${errorMessage}`);
 					setIsLoading(false);
 				}
 			);
 		}
 		
 		return () => {
-			cancelAnimationFrame(frameIdRef.current);
+			if (frameIdRef.current !== null) {
+				cancelAnimationFrame(frameIdRef.current);
+			}
 		};
 	}, [modelPath, primaryColor, mouseStrength]);
 	
 	// Clean up previous animation frame if exists
-	if (frameIdRef.current) {
+	if (frameIdRef.current !== null) {
 		cancelAnimationFrame(frameIdRef.current);
 	}
 	
@@ -486,7 +540,7 @@ export default function DreamyParticles({
 		const { points, gpuCompute } = gpgpuRef.current;
 		
 		// Remove points from scene
-		if (points) {
+		if (points && sceneRef.current) {
 			sceneRef.current.remove(points);
 			if (points.geometry) points.geometry.dispose();
 			if (points.material) {

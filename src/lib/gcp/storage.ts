@@ -263,7 +263,7 @@ export async function getBucketUsage(
     
     for (const file of files) {
       const [metadata] = await file.getMetadata();
-      totalSizeBytes += parseInt(metadata.size, 10) || 0;
+      totalSizeBytes += metadata.size ? parseInt(metadata.size.toString(), 10) : 0;
     }
     
     return {

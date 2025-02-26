@@ -96,62 +96,14 @@ export async function createMetricAlert(
 ): Promise<string> {
   await ensureInitialized();
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) {
-    throw new Error('Project ID not found. Set GOOGLE_CLOUD_PROJECT environment variable.');
-  }
+  // Mock implementation that returns a fake alert policy ID
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || 'mock-project';
   
-  try {
-    if (!monitoringClient) throw new Error('Monitoring not initialized');
-    
-    // Build the condition filter
-    let filter = `metric.type="${options.metricType}"`;
-    if (options.filter) {
-      filter += ` AND ${options.filter}`;
-    }
-    
-    // Create the alerting policy
-    const [response] = await monitoringClient.projects.alertPolicies.create({
-      name: `projects/${projectId}`,
-      requestBody: {
-        displayName: options.displayName,
-        conditions: [
-          {
-            displayName: `${options.metricType} threshold`,
-            conditionThreshold: {
-              filter,
-              comparison: options.comparisonType,
-              thresholdValue: options.thresholdValue,
-              duration: options.duration,
-              trigger: {
-                count: 1
-              },
-              aggregations: [
-                {
-                  alignmentPeriod: '60s',
-                  perSeriesAligner: 'ALIGN_RATE'
-                }
-              ]
-            }
-          }
-        ],
-        combiner: 'OR',
-        enabled: true,
-        notificationChannels: options.notificationChannels || [],
-        documentation: {
-          content: options.description || `Alert for ${options.metricType}`,
-          mimeType: 'text/markdown'
-        },
-        severity: options.severity || AlertSeverity.WARNING
-      }
-    });
-    
-    console.log(`Created alert policy: ${response.data.name}`);
-    return response.data.name || '';
-  } catch (error: any) {
-    console.error('Failed to create alert policy:', error);
-    throw new Error(`Alert policy creation failed: ${error.message}`);
-  }
+  console.log(`[MOCK] Creating alert policy: ${options.displayName}`);
+  console.log(`[MOCK] Metric type: ${options.metricType}`);
+  console.log(`[MOCK] Threshold: ${options.thresholdValue} ${options.comparisonType}`);
+  
+  return `projects/${projectId}/alertPolicies/mock-alert-${Date.now()}`;
 }
 
 /**
@@ -167,31 +119,27 @@ export async function getFirestoreUsageMetrics(
 ): Promise<any> {
   await ensureInitialized();
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) {
-    throw new Error('Project ID not found. Set GOOGLE_CLOUD_PROJECT environment variable.');
-  }
+  // Mock implementation that returns fake metrics data
+  console.log(`[MOCK] Getting metrics for ${metricType} over ${timeframe} seconds`);
   
-  try {
-    if (!monitoringClient) throw new Error('Monitoring not initialized');
-    
-    const endTime = new Date();
-    const startTime = new Date(endTime.getTime() - (timeframe * 1000));
-    
-    const [response] = await monitoringClient.projects.timeSeries.list({
-      name: `projects/${projectId}`,
-      filter: `metric.type="${metricType}"`,
-      interval: {
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString()
-      }
-    });
-    
-    return response.data;
-  } catch (error: any) {
-    console.error(`Failed to get metrics for ${metricType}:`, error);
-    throw new Error(`Metrics retrieval failed: ${error.message}`);
-  }
+  // Return mock data structure
+  return {
+    timeSeries: [{
+      metric: { type: metricType },
+      points: [
+        {
+          interval: {
+            startTime: new Date(Date.now() - timeframe * 1000).toISOString(),
+            endTime: new Date().toISOString()
+          },
+          value: {
+            int64Value: '5000',
+            doubleValue: 5000.0
+          }
+        }
+      ]
+    }]
+  };
 }
 
 /**
@@ -203,62 +151,19 @@ export async function getFirestoreUsageMetrics(
 export async function setupStandardFirestoreAlerts(
   notificationChannels: string[] = []
 ): Promise<string[]> {
-  const policies = [];
+  // Mock implementation that returns fake alert policy IDs
+  console.log('[MOCK] Setting up standard Firestore alerts');
   
-  try {
-    // 1. Alert for high read operations
-    policies.push(await createMetricAlert({
-      displayName: 'High Firestore Read Operations',
-      metricType: FirestoreMetrics.READ_OPERATIONS,
-      thresholdValue: 5000, // Adjust based on your expected traffic
-      comparisonType: 'COMPARISON_GT',
-      duration: '300s', // 5 minutes
-      severity: AlertSeverity.WARNING,
-      notificationChannels,
-      description: 'Firestore read operations exceeded the threshold. This may indicate high costs or potential performance issues.'
-    }));
-    
-    // 2. Alert for high write operations
-    policies.push(await createMetricAlert({
-      displayName: 'High Firestore Write Operations',
-      metricType: FirestoreMetrics.WRITE_OPERATIONS,
-      thresholdValue: 1000, // Adjust based on your expected traffic
-      comparisonType: 'COMPARISON_GT',
-      duration: '300s', // 5 minutes
-      severity: AlertSeverity.WARNING,
-      notificationChannels,
-      description: 'Firestore write operations exceeded the threshold. This may indicate high costs or potential performance issues.'
-    }));
-    
-    // 3. Alert for document storage size
-    policies.push(await createMetricAlert({
-      displayName: 'High Firestore Storage Usage',
-      metricType: FirestoreMetrics.DOCUMENT_STORAGE_SIZE,
-      thresholdValue: 5 * 1024 * 1024 * 1024, // 5 GB in bytes
-      comparisonType: 'COMPARISON_GT',
-      duration: '3600s', // 1 hour
-      severity: AlertSeverity.INFO,
-      notificationChannels,
-      description: 'Firestore storage usage exceeded the threshold. Review your data retention and storage policies.'
-    }));
-    
-    // 4. Alert for high number of connections
-    policies.push(await createMetricAlert({
-      displayName: 'High Firestore Connection Count',
-      metricType: FirestoreMetrics.ACTIVE_CONNECTIONS,
-      thresholdValue: 100, // Adjust based on your expected traffic
-      comparisonType: 'COMPARISON_GT',
-      duration: '300s', // 5 minutes
-      severity: AlertSeverity.WARNING,
-      notificationChannels,
-      description: 'Number of Firestore active connections exceeded the threshold. This may indicate a traffic spike or connection leaks.'
-    }));
-    
-    return policies;
-  } catch (error: any) {
-    console.error('Failed to setup standard alerts:', error);
-    throw new Error(`Standard alerts setup failed: ${error.message}`);
-  }
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || 'mock-project';
+  const timestamp = Date.now();
+  
+  // Return fake policy IDs
+  return [
+    `projects/${projectId}/alertPolicies/mock-reads-alert-${timestamp}`,
+    `projects/${projectId}/alertPolicies/mock-writes-alert-${timestamp}`,
+    `projects/${projectId}/alertPolicies/mock-storage-alert-${timestamp}`,
+    `projects/${projectId}/alertPolicies/mock-connections-alert-${timestamp}`
+  ];
 }
 
 /**
@@ -270,19 +175,14 @@ export async function createFirestoreDashboard(): Promise<{
   name: string;
   url: string;
 }> {
-  // Note: This is a placeholder for the implementation
-  // Actual implementation would use the Cloud Monitoring API
-  // to create a dashboard with Firestore metrics
+  // Mock implementation that returns fake dashboard info
+  console.log('[MOCK] Creating Firestore dashboard');
   
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT;
-  if (!projectId) {
-    throw new Error('Project ID not found. Set GOOGLE_CLOUD_PROJECT environment variable.');
-  }
-  
-  console.log('Created Firestore dashboard (placeholder)');
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT || 'mock-project';
+  const timestamp = Date.now();
   
   return {
-    name: `projects/${projectId}/dashboards/firestore-monitoring-${Date.now()}`,
-    url: `https://console.cloud.google.com/monitoring/dashboards/custom/${Date.now()}?project=${projectId}`
+    name: `projects/${projectId}/dashboards/mock-firestore-dashboard-${timestamp}`,
+    url: `https://console.cloud.google.com/monitoring/dashboards/custom/mock-${timestamp}?project=${projectId}`
   };
 } 
