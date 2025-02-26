@@ -40,6 +40,7 @@
     "src/scripts/migration/**/*.ts",
     "src/lib/migration/**/*.ts",
     "src/scripts/migration-control.ts",
+    "src/scripts/migration-example.ts",
     "src/scripts/test-mongodb.js",
     "src/scripts/test-waitlist-dual-write.js",
     "src/scripts/complete-migration.js",
