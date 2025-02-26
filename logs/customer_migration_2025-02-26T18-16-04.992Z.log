@@ -1,0 +1,6 @@
+[2025-02-26T18:16:04.994Z] Starting customer migration from MongoDB to Firestore
+[2025-02-26T18:16:05.001Z] Firestore initialized
+[2025-02-26T18:16:05.001Z] Connecting to MongoDB...
+[2025-02-26T18:16:05.304Z] MongoDB connection established
+[2025-02-26T18:16:05.305Z] Extracting customer data from MongoDB...
+[2025-02-26T18:16:05.334Z] Extracted 0 customers from MongoDB

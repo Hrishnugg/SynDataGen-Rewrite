@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth';
 import { ObjectId } from 'mongodb';
 import clientPromise, { ensureConnection } from '@/lib/mongodb';
 import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/project';
+import { 
+  shouldUseFirestore, 
+  shouldUseMongoDB 
+} from '@/lib/services/db-service';
+import { getFirestoreService } from '@/lib/services/firestore-service';
 
 // Helper function to generate a unique bucket name
 function generateBucketName(projectName: string, userId: string): string {
@@ -19,53 +24,113 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body: CreateProjectInput = await req.json();
-    const { name, description, region = 'us-central1', settings } = body;
+    const body = await req.json() as CreateProjectInput;
 
-    // Use enhanced connection handling
-    const client = await ensureConnection();
-    const db = client.db('test');
+    // Validate required fields
+    if (!body.name || !body.description) {
+      return NextResponse.json(
+        { error: "Project name and description are required" },
+        { status: 400 }
+      );
+    }
 
-    // Create project document
-    const project = {
-      name,
-      description,
-      ownerId: session.user.id,
-      teamMembers: [{
-        userId: session.user.id,
-        role: 'owner',
-        addedAt: new Date(),
-        addedBy: session.user.id
-      }],
+    // Generate a unique bucket name
+    const bucketName = generateBucketName(body.name, session.user.id);
+
+    // Create project with default settings
+    const projectData = {
+      name: body.name,
+      description: body.description,
+      customerId: body.customerId || session.user.customerId || session.user.id,
+      bucketName,
       createdAt: new Date(),
       updatedAt: new Date(),
-      status: 'active',
-      storageConfig: {
-        bucketName: generateBucketName(name, session.user.id),
-        region
-      },
-      settings: {
-        ...DEFAULT_PROJECT_SETTINGS,
-        ...settings
-      },
-      metadata: {}
+      settings: DEFAULT_PROJECT_SETTINGS,
+      teamMembers: [
+        {
+          userId: session.user.id,
+          email: session.user.email,
+          role: 'owner',
+          joinedAt: new Date()
+        }
+      ],
+      status: 'active'
     };
 
-    const result = await db.collection(PROJECT_COLLECTION).insertOne(project);
+    let projectId: string | ObjectId = '';
+    let projectData_return = null;
 
-    return NextResponse.json({
-      id: result.insertedId,
-      ...project
-    });
+    // Determine which database backend to use
+    const useFirestore = shouldUseFirestore('projects');
+    const useMongoDB = shouldUseMongoDB('projects');
+    const isWritingToBoth = useFirestore && useMongoDB;
+
+    // Store in Firestore if enabled
+    if (useFirestore) {
+      try {
+        const firestoreService = getFirestoreService();
+        await firestoreService.init();
+        
+        projectId = await firestoreService.create(
+          PROJECT_COLLECTION, 
+          projectData
+        );
+        
+        projectData_return = {
+          ...projectData,
+          id: projectId
+        };
+        
+        console.log('Project created in Firestore:', projectId);
+      } catch (error) {
+        console.error('Error creating project in Firestore:', error);
+        if (!isWritingToBoth) {
+          return NextResponse.json(
+            { error: 'Failed to create project' }, 
+            { status: 500 }
+          );
+        }
+        // If both databases are being used, continue to MongoDB
+      }
+    }
+
+    // Store in MongoDB if enabled
+    if (useMongoDB) {
+      try {
+        const client = await ensureConnection();
+        const db = client.db('test');
+        
+        const result = await db.collection(PROJECT_COLLECTION).insertOne(projectData);
+        
+        if (!projectId) {
+          projectId = result.insertedId;
+          projectData_return = {
+            ...projectData,
+            _id: result.insertedId
+          };
+        }
+        
+        console.log('Project created in MongoDB:', result.insertedId);
+      } catch (error) {
+        console.error('Error creating project in MongoDB:', error);
+        
+        // If Firestore was successful but MongoDB failed and we're writing to both,
+        // we can still continue
+        if (!useFirestore) {
+          return NextResponse.json(
+            { error: 'Failed to create project' }, 
+            { status: 500 }
+          );
+        }
+      }
+    }
+
+    // Return the created project
+    return NextResponse.json(projectData_return);
   } catch (error) {
-    console.error('Project creation error:', error instanceof Error ? {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    } : error);
-    
+    console.error('Project creation error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create project' },
+      { error: 'Failed to create project' },
       { status: 500 }
     );
   }
@@ -78,22 +143,93 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Use enhanced connection handling
-    const client = await ensureConnection();
-    const db = client.db('test');
+    // Determine which database backend to use
+    const useFirestore = shouldUseFirestore('projects');
+    const useMongoDB = shouldUseMongoDB('projects');
 
-    console.log('Fetching projects for user:', session.user.id);
+    // Extract query parameters
+    const url = new URL(req.url);
+    const customerId = url.searchParams.get('customerId');
+    const status = url.searchParams.get('status') || 'active';
 
-    // Get all projects where user is a team member
-    const projects = await db.collection(PROJECT_COLLECTION)
-      .find({
-        'teamMembers.userId': session.user.id,
-        status: 'active'
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
+    let projects = [];
 
-    console.log(`Found ${projects.length} projects for user`);
+    // Query Firestore if enabled
+    if (useFirestore) {
+      try {
+        const firestoreService = getFirestoreService();
+        await firestoreService.init();
+        
+        projects = await firestoreService.query(
+          PROJECT_COLLECTION,
+          (collection) => {
+            let query = collection
+              .where('teamMembers', 'array-contains', {
+                userId: session.user.id,
+                role: 'owner'
+              })
+              .where('status', '==', status);
+              
+            if (customerId) {
+              query = query.where('customerId', '==', customerId);
+            }
+            
+            return query.orderBy('createdAt', 'desc');
+          }
+        );
+        
+        console.log(`Found ${projects.length} projects in Firestore for user:`, session.user.id);
+        
+        // If we got results from Firestore, return them
+        if (projects.length > 0) {
+          return NextResponse.json(projects);
+        }
+      } catch (error) {
+        console.error('Error fetching projects from Firestore:', error);
+        // Continue to MongoDB if enabled
+      }
+    }
+
+    // Fallback to MongoDB if enabled or if Firestore query returned no results
+    if (useMongoDB && projects.length === 0) {
+      try {
+        // Use enhanced connection handling
+        const client = await ensureConnection();
+        const db = client.db('test');
+
+        console.log('Fetching projects from MongoDB for user:', session.user.id);
+
+        // Build MongoDB query
+        const query: any = {
+          'teamMembers.userId': session.user.id,
+          status
+        };
+        
+        if (customerId) {
+          query.customerId = customerId;
+        }
+
+        // Get all projects where user is a team member
+        projects = await db.collection(PROJECT_COLLECTION)
+          .find(query)
+          .sort({ createdAt: -1 })
+          .toArray();
+
+        console.log(`Found ${projects.length} projects in MongoDB for user`);
+      } catch (error) {
+        console.error('MongoDB project fetch error:', error);
+        // If Firestore has already been tried and failed, return error
+        if (useFirestore) {
+          return NextResponse.json(
+            { 
+              error: 'Failed to fetch projects',
+              details: error instanceof Error ? error.stack : undefined
+            },
+            { status: 500 }
+          );
+        }
+      }
+    }
     
     return NextResponse.json(projects);
   } catch (error) {

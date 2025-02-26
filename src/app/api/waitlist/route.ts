@@ -4,6 +4,16 @@ import clientPromise from '@/lib/mongodb';
 import { getRateLimitConfig, updateRateLimit } from '@/lib/rate-limit';
 import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/email';
 import { Resend } from 'resend';
+import { 
+  shouldUseFirestore, 
+  shouldUseMongoDB 
+} from '@/lib/services/db-service';
+import { getFirestoreService } from '@/lib/services/firestore-service';
+import { 
+  WAITLIST_COLLECTION, 
+  WaitlistSubmission, 
+  CreateWaitlistInput 
+} from '@/lib/models/firestore/waitlist';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -34,12 +44,12 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, email, company, industry, dataVolume, useCase } = body;
+    const { name, email, company, industry, dataVolume, useCase, jobTitle } = body;
 
     // Validate required fields
-    if (!name || !email || !company || !industry || !dataVolume || !useCase) {
+    if (!name || !email || !company || !useCase) {
       return NextResponse.json(
-        { error: "All fields are required" },
+        { error: "Required fields: name, email, company, and use case" },
         { status: 400 }
       );
     }
@@ -53,58 +63,93 @@ export async function POST(request: Request) {
       );
     }
 
-    let client;
-    try {
-      client = await clientPromise;
-    } catch (error) {
-      console.error('MongoDB connection error:', error);
-      return NextResponse.json(
-        { error: "Database connection error. Please try again later." },
-        { status: 500 }
-      );
-    }
-
-    const db = client.db("waitlist-serverless");
-    
-    // Check if email already exists
-    try {
-      const existingUser = await db.collection("waitlist").findOne({ email });
-      if (existingUser) {
-        return NextResponse.json(
-          { error: "You're already on the waitlist!" },
-          { status: 400 }
-        );
-      }
-    } catch (error) {
-      console.error('Error checking existing user:', error);
-      return NextResponse.json(
-        { error: "Database error. Please try again later." },
-        { status: 500 }
-      );
-    }
-
     // Update rate limit counter
     updateRateLimit(ip);
+    
+    // Determine which database backend to use
+    const useFirestore = shouldUseFirestore('waitlist');
+    const useMongoDB = shouldUseMongoDB('waitlist'); 
+    const isWritingToBoth = useFirestore && useMongoDB;
 
-    // Add new entry with timestamp
-    try {
-      await db.collection("waitlist").insertOne({
-        email,
-        name,
-        company,
-        industry,
-        dataVolume,
-        useCase,
-        createdAt: new Date(),
-        status: 'pending',
-        ipAddress: ip
-      });
-    } catch (error) {
-      console.error('Error inserting new user:', error);
+    // Entry already exists check
+    const existingUser = await checkExistingWaitlistUser(email, useFirestore, useMongoDB);
+    if (existingUser) {
       return NextResponse.json(
-        { error: "Failed to save your information. Please try again later." },
-        { status: 500 }
+        { error: "You're already on the waitlist!" },
+        { status: 400 }
       );
+    }
+
+    // Prepare submission data
+    const submissionData = {
+      email,
+      name,
+      company,
+      industry: industry || '',
+      jobTitle: jobTitle || '',
+      useCase,
+      dataVolume: dataVolume || '',
+      createdAt: new Date(),
+      status: 'pending',
+      metadata: { ipAddress: ip }
+    };
+
+    // Track the document ID for response
+    let documentId: string | null = null;
+
+    // Add new entry to Firestore if enabled
+    if (useFirestore) {
+      try {
+        const firestoreService = getFirestoreService();
+        await firestoreService.init();
+        
+        documentId = await firestoreService.create(
+          WAITLIST_COLLECTION, 
+          submissionData
+        );
+        
+        console.log('Added to Firestore waitlist:', email, 'with ID:', documentId);
+      } catch (error) {
+        console.error('Error saving to Firestore waitlist:', error);
+        if (!isWritingToBoth) {
+          return NextResponse.json(
+            { error: "Failed to save your information. Please try again later." },
+            { status: 500 }
+          );
+        }
+        // If both databases are being used, continue to MongoDB
+      }
+    }
+
+    // Add new entry to MongoDB if enabled
+    if (useMongoDB) {
+      try {
+        const client = await clientPromise;
+        const db = client.db(process.env.MONGODB_DB_NAME || "syndatagen");
+        
+        const result = await db.collection("waitlist").insertOne({
+          ...submissionData,
+          // MongoDB specific fields if needed
+        });
+        
+        // Set documentId if not already set from Firestore
+        if (!documentId) {
+          documentId = result.insertedId.toString();
+        }
+        
+        console.log('Added to MongoDB waitlist:', email, 'with ID:', result.insertedId);
+      } catch (error) {
+        console.error('Error saving to MongoDB waitlist:', error);
+        
+        // If Firestore was successful but MongoDB failed and we're writing to both,
+        // we can still continue if we have a documentId
+        if (!useFirestore || !documentId) {
+          return NextResponse.json(
+            { error: "Failed to save your information. Please try again later." },
+            { status: 500 }
+          );
+        }
+      }
     }
 
     // Send emails in parallel
@@ -114,16 +159,16 @@ export async function POST(request: Request) {
           email,
           name,
           company,
-          industry,
-          dataVolume,
+          industry: industry || '',
+          dataVolume: dataVolume || '',
           useCase
         }),
         sendWaitlistConfirmation({
           email,
           name,
           company,
-          industry,
-          dataVolume,
+          industry: industry || '',
+          dataVolume: dataVolume || '',
           useCase
         })
       ]);
@@ -135,45 +180,15 @@ export async function POST(request: Request) {
         message: "Successfully joined the waitlist! However, there was an issue sending the confirmation email. Our team has been notified.",
         success: true,
         emailError: true,
+        id: documentId,
         remainingRequests: rateLimitConfig.remainingRequests - 1
       });
     }
 
-    // Send confirmation email
-    await resend.emails.send({
-      from: `${process.env.SENDER_NAME} <${process.env.FROM_EMAIL}>`,
-      to: email,
-      subject: 'Welcome to the Synoptic Waitlist',
-      html: `
-        <h1>Welcome to Synoptic!</h1>
-        <p>Hi ${name},</p>
-        <p>Thank you for joining our waitlist. We're excited to have you on board!</p>
-        <p>We'll keep you updated on our progress and let you know when we're ready to launch.</p>
-        <br>
-        <p>Best regards,</p>
-        <p>The Synoptic Team</p>
-      `
-    });
-
-    // Send notification to admin
-    await resend.emails.send({
-      from: `${process.env.SENDER_NAME} <${process.env.FROM_EMAIL}>`,
-      to: process.env.ADMIN_EMAIL!,
-      subject: 'New Waitlist Signup',
-      html: `
-        <h2>New Waitlist Signup</h2>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Company:</strong> ${company}</p>
-        <p><strong>Industry:</strong> ${industry}</p>
-        <p><strong>Data Volume:</strong> ${dataVolume}</p>
-        <p><strong>Use Case:</strong> ${useCase}</p>
-      `
-    });
-
     return NextResponse.json({ 
       message: "Successfully joined the waitlist!",
       success: true,
+      id: documentId,
       remainingRequests: rateLimitConfig.remainingRequests - 1
     });
 
@@ -184,4 +199,56 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Check if a user already exists in the waitlist
+ * 
+ * @param email User's email
+ * @param useFirestore Whether to check Firestore
+ * @param useMongoDB Whether to check MongoDB
+ * @returns True if user exists in any of the active backends
+ */
+async function checkExistingWaitlistUser(
+  email: string, 
+  useFirestore: boolean, 
+  useMongoDB: boolean
+): Promise<boolean> {
+  // Check Firestore first if enabled
+  if (useFirestore) {
+    try {
+      const firestoreService = getFirestoreService();
+      await firestoreService.init();
+      
+      const results = await firestoreService.query<WaitlistSubmission>(
+        WAITLIST_COLLECTION,
+        (collection) => collection.where('email', '==', email).limit(1)
+      );
+      
+      if (results && results.length > 0) {
+        return true;
+      }
+    } catch (error) {
+      console.error('Error checking existing user in Firestore:', error);
+      // Continue to MongoDB if enabled
+    }
+  }
+  
+  // Check MongoDB if enabled
+  if (useMongoDB) {
+    try {
+      const client = await clientPromise;
+      const db = client.db(process.env.MONGODB_DB_NAME || "syndatagen");
+      
+      const existingUser = await db.collection("waitlist").findOne({ email });
+      if (existingUser) {
+        return true;
+      }
+    } catch (error) {
+      console.error('Error checking existing user in MongoDB:', error);
+    }
+  }
+  
+  // User does not exist in any active backend
+  return false;
 }

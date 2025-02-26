@@ -1,0 +1,912 @@
+'use client';
+
+import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { OrbitControls, useGLTF, Html, Text as DreiText } from '@react-three/drei';
+import * as THREE from 'three';
+import { GPUComputationRenderer } from 'three/examples/jsm/misc/GPUComputationRenderer.js';
+import { MeshSurfaceSampler } from 'three/examples/jsm/math/MeshSurfaceSampler.js';
+import { AccumulativeShadows, RandomizedLight, MeshTransmissionMaterial } from '@react-three/drei';
+import { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+// Define constants
+const WIDTH = 128; // texture size for computation (128×128 = 16,384 particles)
+
+// Define types
+interface DreamyParticlesProps {
+  modelPath?: string;
+  primaryColor?: [number, number, number];
+  secondaryColor?: [number, number, number];
+  mouseStrength?: number;
+}
+
+// Main component for particle system
+function ParticleSystem({ model, settings }: { model: THREE.Object3D, settings: any }) {
+  const { gl, scene, camera, size } = useThree();
+  const points = useRef<THREE.Points>(null);
+  const [initialized, setInitialized] = useState(false);
+  
+  // Store the model UUID to detect changes
+  const modelIdRef = useRef<string>('');
+  
+  // Extract settings
+  const { 
+    primaryColor = [1.0, 0.8, 0.3],
+    secondaryColor = [1.0, 0.4, 0.0],
+    mouseStrength = 0.05 
+  } = settings;
+  
+  // Create mouse position and velocity tracking
+  const mousePosition = useRef(new THREE.Vector3(0, 0, 0));
+  const mouseVelocity = useRef(0);
+  const lastMousePosition = useRef(new THREE.Vector3(0, 0, 0));
+  
+  // Find a suitable mesh for sampling
+  const findMeshInScene = useCallback(() => {
+    console.log('🔍 FINDING MESH IN SCENE');
+    let foundMesh: THREE.Mesh | null = null;
+    let inspectedObjects = 0;
+    let meshesFound = 0;
+    
+    // Helper function to recursively find meshes
+    function findMeshInChildren(object: THREE.Object3D) {
+      inspectedObjects++;
+      // Print the object type and name for debugging
+      console.log(`📦 Examining object: ${object.type} - ${object.name || 'unnamed'} - uuid: ${object.uuid.substring(0, 8)}`);
+      
+      // Check if this object is a mesh
+      if (object instanceof THREE.Mesh && object.geometry) {
+        meshesFound++;
+        console.log(`✅ Found mesh: ${object.name || 'unnamed'} - uuid: ${object.uuid.substring(0, 8)}`);
+        foundMesh = object;
+        return true;
+      }
+      
+      // Check children
+      if (object.children && object.children.length > 0) {
+        console.log(`👪 Checking ${object.children.length} children of ${object.name || 'unnamed'}`);
+        for (let i = 0; i < object.children.length; i++) {
+          if (findMeshInChildren(object.children[i])) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    }
+    
+    // Start searching from the scene
+    findMeshInChildren(scene);
+    
+    console.log(`🔍 Mesh search summary: inspected ${inspectedObjects} objects, found ${meshesFound} meshes`);
+    
+    if (!foundMesh) {
+      console.warn('⚠️ No mesh found in model, creating default sphere');
+      const geometry = new THREE.SphereGeometry(1, 32, 32);
+      const material = new THREE.MeshBasicMaterial({ visible: false });
+      foundMesh = new THREE.Mesh(geometry, material);
+      foundMesh.name = "generatedSphere";
+      scene.add(foundMesh);
+    }
+    
+    return foundMesh;
+  }, [scene]);
+  
+  // Reset when model changes
+  useEffect(() => {
+    if (model) {
+      const newModelId = model.uuid;
+      console.log('🔍 MODEL CHANGE CHECK:', { 
+        current: modelIdRef.current.substring(0, 8),
+        new: newModelId.substring(0, 8),
+        isDifferent: newModelId !== modelIdRef.current
+      });
+      
+      if (newModelId !== modelIdRef.current) {
+        console.log('🔄 MODEL CHANGED, reinitializing particles');
+        setInitialized(false);
+        modelIdRef.current = newModelId;
+      }
+    }
+  }, [model]);
+
+  // Initialize GPGPU system
+  useEffect(() => {
+    console.log('🚀 INIT CHECK: GL Ready:', !!gl, 'Initialized:', initialized);
+    
+    if (!gl || !initialized) {
+      console.log('⏱️ Waiting to initialize particles...');
+      // Wait a bit to ensure model is fully loaded
+      const initTimer = setTimeout(() => {
+        console.log('⏰ Init timer triggered, finding mesh for sampling');
+        
+        // Find mesh for sampling
+        const mesh = findMeshInScene();
+        
+        if (!mesh) {
+          console.error('❌ Could not find or create a mesh for sampling');
+          return;
+        }
+        
+        console.log('✅ Found mesh for sampling:', mesh.name || 'unnamed', 'Starting GPGPU init');
+        
+        // ----------------------------------------------------------
+        // Initialize particle sampling system
+        // ----------------------------------------------------------
+        
+        // Setup the sampler
+        const sampler = new MeshSurfaceSampler(mesh).build();
+        const tempPosition = new THREE.Vector3();
+        const tempNormal = new THREE.Vector3();
+        
+        // Initialize data arrays
+        const positions = new Float32Array(WIDTH * WIDTH * 3);
+        const uvs = new Float32Array(WIDTH * WIDTH * 2);
+        const positionData = new Float32Array(WIDTH * WIDTH * 4);
+        
+        // Sample positions from the mesh
+        for (let i = 0; i < WIDTH; i++) {
+          for (let j = 0; j < WIDTH; j++) {
+            const index = i * WIDTH + j;
+            
+            // Sample position from mesh surface
+            sampler.sample(tempPosition, tempNormal);
+            
+            // Add slight randomization to spread particles
+            tempPosition.x += (Math.random() - 0.5) * 0.01;
+            tempPosition.y += (Math.random() - 0.5) * 0.01;
+            tempPosition.z += (Math.random() - 0.5) * 0.01;
+            
+            // Store in position array
+            const posIdx = index * 3;
+            positions[posIdx] = tempPosition.x;
+            positions[posIdx + 1] = tempPosition.y;
+            positions[posIdx + 2] = tempPosition.z;
+            
+            // Store in data texture format
+            const dataIdx = index * 4;
+            positionData[dataIdx] = tempPosition.x;
+            positionData[dataIdx + 1] = tempPosition.y;
+            positionData[dataIdx + 2] = tempPosition.z;
+            positionData[dataIdx + 3] = 1.0;
+            
+            // Store UVs for texture lookup
+            const uvIdx = index * 2;
+            uvs[uvIdx] = j / WIDTH;
+            uvs[uvIdx + 1] = i / WIDTH;
+          }
+        }
+        
+        // Create position texture
+        const positionTexture = new THREE.DataTexture(
+          positionData, 
+          WIDTH, 
+          WIDTH, 
+          THREE.RGBAFormat, 
+          THREE.FloatType
+        );
+        positionTexture.needsUpdate = true;
+        
+        // Create original position texture (reference for attraction)
+        const originalPositionTexture = positionTexture.clone();
+        
+        // Create empty velocity texture
+        const velocityData = new Float32Array(WIDTH * WIDTH * 4);
+        velocityData.fill(0);
+        const velocityTexture = new THREE.DataTexture(
+          velocityData,
+          WIDTH,
+          WIDTH,
+          THREE.RGBAFormat,
+          THREE.FloatType
+        );
+        velocityTexture.needsUpdate = true;
+        
+        // ----------------------------------------------------------
+        // Initialize GPGPU computation
+        // ----------------------------------------------------------
+        
+        // Create computation renderer
+        const gpuCompute = new GPUComputationRenderer(WIDTH, WIDTH, gl);
+        
+        // Position update shader
+        const positionFragmentShader = `
+          uniform sampler2D uOriginalPosition;
+          uniform vec3 uMouse;
+          uniform float uMouseSpeed;
+          uniform float uTime;
+          
+          void main() {
+            vec2 vUv = gl_FragCoord.xy / resolution.xy;
+            
+            vec3 position = texture2D(uCurrentPosition, vUv).xyz;
+            vec3 velocity = texture2D(uCurrentVelocity, vUv).xyz;
+            
+            // Update position based on velocity
+            position += velocity;
+            
+            gl_FragColor = vec4(position, 1.0);
+          }
+        `;
+        
+        // Velocity update shader
+        const velocityFragmentShader = `
+          uniform sampler2D uOriginalPosition;
+          uniform vec3 uMouse;
+          uniform float uMouseSpeed;
+          uniform float uTime;
+          uniform float uForce;
+          
+          void main() {
+            vec2 vUv = gl_FragCoord.xy / resolution.xy;
+            
+            vec3 position = texture2D(uCurrentPosition, vUv).xyz;
+            vec3 original = texture2D(uOriginalPosition, vUv).xyz;
+            vec3 velocity = texture2D(uCurrentVelocity, vUv).xyz;
+            
+            // Apply friction/damping
+            velocity *= uForce; 
+            
+            // Attraction to original position
+            vec3 direction = normalize(original - position);
+            float dist = length(original - position);
+            
+            if (dist > 0.001) {
+              velocity += direction * (dist * 0.05); // Increased attraction force for faster recovery
+            }
+            
+            // Mouse repulsion
+            float mouseDistance = distance(position, uMouse);
+            float maxDistance = 2.5; // Increased from 2.0 for wider effect
+            
+            if (mouseDistance < maxDistance) {
+              vec3 pushDirection = normalize(position - uMouse);
+              float strength = (1.0 - mouseDistance / maxDistance) * 0.035 * uMouseSpeed; // Increased from 0.02
+              velocity += pushDirection * strength;
+            }
+            
+            // Add slight ambient motion
+            float noiseTime = uTime * 0.15; // Faster time movement
+            float noiseScale = 0.0005; // Increased ambient movement
+            velocity.x += sin(position.y * 3.0 + noiseTime) * noiseScale;
+            velocity.y += cos(position.z * 3.0 + noiseTime) * noiseScale;
+            velocity.z += sin(position.x * 3.0 + noiseTime) * noiseScale;
+            
+            gl_FragColor = vec4(velocity, 1.0);
+          }
+        `;
+        
+        // Add variables to computation
+        const positionVariable = gpuCompute.addVariable(
+          'uCurrentPosition',
+          positionFragmentShader,
+          positionTexture
+        );
+        
+        const velocityVariable = gpuCompute.addVariable(
+          'uCurrentVelocity',
+          velocityFragmentShader,
+          velocityTexture
+        );
+        
+        // Set dependencies between variables
+        gpuCompute.setVariableDependencies(positionVariable, [positionVariable, velocityVariable]);
+        gpuCompute.setVariableDependencies(velocityVariable, [positionVariable, velocityVariable]);
+        
+        // Add custom uniforms
+        positionVariable.material.uniforms.uOriginalPosition = { value: originalPositionTexture };
+        positionVariable.material.uniforms.uMouse = { value: new THREE.Vector3(0, 0, 0) };
+        positionVariable.material.uniforms.uMouseSpeed = { value: 0 };
+        positionVariable.material.uniforms.uTime = { value: 0 };
+        
+        velocityVariable.material.uniforms.uOriginalPosition = { value: originalPositionTexture };
+        velocityVariable.material.uniforms.uMouse = { value: new THREE.Vector3(0, 0, 0) };
+        velocityVariable.material.uniforms.uMouseSpeed = { value: 0 };
+        velocityVariable.material.uniforms.uTime = { value: 0 };
+        velocityVariable.material.uniforms.uForce = { value: 0.94 }; // Slightly more friction
+        
+        // Initialize computation
+        const error = gpuCompute.init();
+        if (error) {
+          console.error('GPGPU init error:', error);
+          return;
+        }
+        
+        // ----------------------------------------------------------
+        // Create particles
+        // ----------------------------------------------------------
+        
+        // Create geometry with positions and UVs
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+        
+        // Create particle material
+        const particleVertexShader = `
+          varying vec2 vUv;
+          varying vec3 vPosition;
+          
+          uniform float uParticleSize;
+          uniform sampler2D uPositionTexture;
+          
+          void main() {
+            vUv = uv;
+            
+            // Get position from texture
+            vec4 positionData = texture2D(uPositionTexture, vUv);
+            
+            // Update vertex position
+            vec3 newpos = positionData.xyz;
+            vPosition = newpos;
+            
+            vec4 mvPosition = modelViewMatrix * vec4(newpos, 1.0);
+            
+            // Adjust point size based on distance and camera distance
+            gl_PointSize = uParticleSize * (5.0 / -mvPosition.z);
+            
+            gl_Position = projectionMatrix * mvPosition;
+          }
+        `;
+        
+        const particleFragmentShader = `
+          varying vec2 vUv;
+          
+          uniform sampler2D uVelocityTexture;
+          uniform vec3 uColor;
+          uniform vec3 uSecondaryColor;
+          uniform float uMinAlpha;
+          uniform float uMaxAlpha;
+          
+          void main() {
+            // Create a circular particle with soft edges
+            vec2 uv = gl_PointCoord - 0.5;
+            float r = length(uv);
+            
+            // Smoother circle with better falloff
+            float circle = 1.0 - smoothstep(0.2, 0.5, r);
+            if (circle < 0.01) discard;
+            
+            // Get velocity for color variation
+            vec3 velocity = texture2D(uVelocityTexture, vUv).xyz;
+            float speed = length(velocity) * 200.0; // Increased multiplier for greater variation
+            
+            // Blend colors based on velocity and using a power curve for more pop
+            float blend = pow(smoothstep(0.0, 1.0, min(speed * 8.0, 1.0)), 1.5);
+            vec3 finalColor = mix(uColor, uSecondaryColor, blend);
+            
+            // Calculate alpha based on velocity and distance from center
+            float edgeFade = smoothstep(0.5, 0.0, r);
+            float velocityAlpha = mix(uMinAlpha, uMaxAlpha, min(speed * 5.0, 1.0));
+            
+            float alpha = edgeFade * velocityAlpha;
+            
+            // Add some glow variation
+            finalColor += mix(vec3(0.1, 0.05, 0.025), vec3(0.0), r) * alpha;
+            
+            gl_FragColor = vec4(finalColor, alpha);
+          }
+        `;
+        
+        // Create material and set uniforms
+        const material = new THREE.ShaderMaterial({
+          vertexShader: particleVertexShader,
+          fragmentShader: particleFragmentShader,
+          uniforms: {
+            uPositionTexture: { value: null },
+            uVelocityTexture: { value: null },
+            uColor: { value: new THREE.Color(primaryColor[0], primaryColor[1], primaryColor[2]) },
+            uSecondaryColor: { value: new THREE.Color(secondaryColor[0], secondaryColor[1], secondaryColor[2]) },
+            uParticleSize: { value: 5.0 }, // Increased from 3.0 for better visibility
+            uMinAlpha: { value: 0.2 }, // Increased for better visibility
+            uMaxAlpha: { value: 0.95 }, // Increased for better visibility
+          },
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          transparent: true,
+        });
+        
+        // Assign the geometry and material to the points
+        if (points.current) {
+          points.current.geometry = geometry;
+          points.current.material = material;
+          
+          // Store references for update
+          points.current.userData = {
+            gpuCompute,
+            positionVariable,
+            velocityVariable,
+          };
+          
+          setInitialized(true);
+          console.log('GPGPU particle system initialized');
+        }
+      }, 100); // Wait a bit for the model to load
+      
+      return () => clearTimeout(initTimer);
+    }
+  }, [gl, findMeshInScene, initialized, primaryColor, secondaryColor, settings]);
+  
+  // Update colors when they change
+  useEffect(() => {
+    if (points.current && points.current.material && initialized) {
+      const material = points.current.material as THREE.ShaderMaterial;
+      if (material.uniforms) {
+        if (material.uniforms.uColor) {
+          material.uniforms.uColor.value = new THREE.Color(
+            primaryColor[0], primaryColor[1], primaryColor[2]
+          );
+        }
+        if (material.uniforms.uSecondaryColor) {
+          material.uniforms.uSecondaryColor.value = new THREE.Color(
+            secondaryColor[0], secondaryColor[1], secondaryColor[2]
+          );
+        }
+      }
+    }
+  }, [primaryColor, secondaryColor, initialized]);
+  
+  // Update mouse strength when it changes
+  useEffect(() => {
+    if (points.current && points.current.userData && initialized) {
+      const { velocityVariable } = points.current.userData;
+      if (velocityVariable && velocityVariable.material && velocityVariable.material.uniforms) {
+        // Keep force between 0.8 and 0.98 based on mouseStrength
+        const force = 0.8 + (mouseStrength * 0.18);
+        velocityVariable.material.uniforms.uForce.value = force;
+      }
+    }
+  }, [mouseStrength, initialized]);
+  
+  // Animation and update
+  useFrame(({ mouse, clock, camera }) => {
+    if (!points.current || !points.current.userData || !initialized) return;
+    
+    const { gpuCompute, positionVariable, velocityVariable } = points.current.userData;
+    const material = points.current.material as THREE.ShaderMaterial;
+    
+    const time = clock.getElapsedTime();
+    
+    // Update time uniforms
+    if (velocityVariable.material.uniforms.uTime) {
+      velocityVariable.material.uniforms.uTime.value = time;
+    }
+    
+    // Calculate mouse position in world space
+    const vector = new THREE.Vector3(mouse.x, mouse.y, 0.5);
+    vector.unproject(camera);
+    
+    const dir = vector.sub(camera.position).normalize();
+    const distance = -camera.position.z / dir.z;
+    const currentMousePos = camera.position.clone().add(dir.multiplyScalar(distance));
+    
+    // Calculate mouse velocity
+    const delta = currentMousePos.clone().sub(lastMousePosition.current);
+    const mouseSpeed = delta.length() * 40; // Increased from 25 for stronger effect
+    lastMousePosition.current.copy(currentMousePos);
+    
+    // Smooth mouse speed with faster response
+    mouseVelocity.current = THREE.MathUtils.lerp(mouseVelocity.current, mouseSpeed, 0.3);
+    
+    // Update mouse position and speed in uniforms
+    if (velocityVariable.material.uniforms.uMouse) {
+      velocityVariable.material.uniforms.uMouse.value.copy(currentMousePos);
+    }
+    
+    if (velocityVariable.material.uniforms.uMouseSpeed) {
+      velocityVariable.material.uniforms.uMouseSpeed.value = 
+        mouseVelocity.current * mouseStrength * 40; // Increased from 20 for stronger effect
+    }
+    
+    // Compute new state
+    gpuCompute.compute();
+    
+    // Update textures for rendering
+    material.uniforms.uPositionTexture.value = gpuCompute.getCurrentRenderTarget(positionVariable).texture;
+    material.uniforms.uVelocityTexture.value = gpuCompute.getCurrentRenderTarget(velocityVariable).texture;
+    
+    // Dampen mouse velocity more slowly
+    mouseVelocity.current *= 0.92;
+  });
+  
+  return (
+    <points ref={points}>
+      <bufferGeometry />
+      <shaderMaterial
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        transparent
+      />
+    </points>
+  );
+}
+
+// Improved mesh finder function with better traversal and naming
+function findMeshInScene(object: THREE.Object3D): THREE.Mesh | null {
+  console.log('🔍 FINDING MESH IN SCENE');
+  
+  // Statistics for debug
+  let inspectedCount = 0;
+  let foundMeshes: THREE.Mesh[] = [];
+  
+  // Recursive function to search the entire scene graph
+  function searchForMesh(obj: THREE.Object3D): THREE.Mesh | null {
+    inspectedCount++;
+    
+    // Log the object we're examining
+    console.log(`📦 Examining object: ${obj.type} - ${obj.name || 'unnamed'} - uuid: ${obj.uuid}`);
+    
+    // Direct check if this object is a mesh
+    if (obj.type === 'Mesh') {
+      const mesh = obj as THREE.Mesh;
+      console.log(`✅ Found mesh: ${mesh.name || 'unnamed'} - uuid: ${mesh.uuid}`);
+      foundMeshes.push(mesh);
+      return mesh;  // Return the first mesh we find
+    }
+    
+    // If it has children, log that and search children
+    if (obj.children.length > 0) {
+      console.log(`👪 Checking ${obj.children.length} children of ${obj.name || 'unnamed'}`);
+      
+      // Identify containers specifically holding our models
+      const isModelContainer = obj.name.includes('modelContainer_') || 
+                               obj.name === 'sphereModelGroup' ||
+                               obj.parent?.name.includes('modelContainer_');
+      
+      // Prioritize searching children of model containers
+      if (isModelContainer) {
+        for (const child of obj.children) {
+          const result = searchForMesh(child);
+          if (result) return result;
+        }
+      }
+      
+      // Otherwise search all children
+      for (const child of obj.children) {
+        const result = searchForMesh(child);
+        if (result) return result;
+      }
+    }
+    
+    return null;
+  }
+  
+  // Start search from the root object
+  const result = searchForMesh(object);
+  
+  // Log summary
+  console.log(`🔍 Mesh search summary: inspected ${inspectedCount} objects, found ${foundMeshes.length} meshes`);
+  
+  return result || (foundMeshes.length > 0 ? foundMeshes[0] : null);
+}
+
+// Model component that loads the 3D model
+function Model({ path }: { path: string }) {
+  const [isActive, setIsActive] = useState(true);
+  const modelRef = useRef<THREE.Group>(null);
+  const { scene } = useThree();
+  const [loading, setLoading] = useState(0); // 0-100 for progress
+  const [error, setError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    console.log(`🔄 MODEL LOADING: Path changed to ${path}`);
+    
+    // Clean up previous model
+    const previousModel = scene.children.find(
+      child => child.name === 'sphereModelGroup' || child.name.startsWith('modelContainer_')
+    );
+    
+    if (previousModel) {
+      console.log(`🧹 Cleaning up previous model ${previousModel.name}`);
+      scene.remove(previousModel);
+    }
+    
+    if (path === 'sphere') {
+      // Create default sphere
+      console.log('🌐 Creating default sphere model');
+      const geometry = new THREE.SphereGeometry(1, 32, 32);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffffff, 
+        roughness: 0.3, 
+        metalness: 0.2 
+      });
+      const sphere = new THREE.Mesh(geometry, material);
+      sphere.name = 'particleSphere';
+      
+      const sphereGroup = new THREE.Group();
+      sphereGroup.name = 'sphereModelGroup';
+      sphereGroup.add(sphere);
+      
+      console.log('🎯 Adding sphere model to scene');
+      scene.add(sphereGroup);
+      
+      // Log scene structure after adding the sphere
+      console.log('📊 SCENE STRUCTURE after adding sphere:');
+      logSceneHierarchy(scene);
+      
+      setLoading(100);
+    } else {
+      setLoading(10);
+      loadModel();
+    }
+    
+    // Cleanup function
+    return () => {
+      if (isActive) {
+        console.log('🗑️ Removing sphere model from scene');
+        setIsActive(false);
+      }
+    };
+    
+    async function loadModel() {
+      try {
+        console.log(`📥 Starting to load model: ${path}`);
+        setLoading(20);
+        
+        // Create a container for this specific model
+        const modelName = path.split('/').pop() || 'model';
+        const container = new THREE.Group();
+        container.name = `modelContainer_${modelName}`;
+        console.log(`📦 Created model container: ${container.name}`);
+        
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+        
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.setDRACOLoader(dracoLoader);
+        
+        setLoading(30);
+        const gltf = await new Promise<GLTF>((resolve, reject) => {
+          gltfLoader.load(
+            path,
+            (gltf) => resolve(gltf),
+            (progress) => {
+              if (progress.total > 0) {
+                const progressPercent = Math.round((progress.loaded / progress.total) * 70) + 30;
+                setLoading(progressPercent);
+              }
+            },
+            (error) => {
+              console.error('Error loading model:', error);
+              setError(`Failed to load model: ${error.message}`);
+              reject(error);
+            }
+          );
+        });
+        
+        console.log(`✅ Model loaded successfully: ${path}`);
+        setLoading(100);
+        
+        // Function to count meshes in the loaded model
+        function countMeshes(obj: THREE.Object3D): number {
+          let count = 0;
+          if (obj.type === 'Mesh') count++;
+          obj.children.forEach(child => {
+            count += countMeshes(child);
+          });
+          return count;
+        }
+        
+        // Center and scale the model
+        const modelScene = gltf.scene;
+        const meshCount = countMeshes(modelScene);
+        
+        console.log(`📎 Adding model to container. Found ${meshCount} meshes.`);
+        container.add(modelScene);
+        scene.add(container);
+        
+        // Log scene structure after adding the model
+        console.log('📊 SCENE STRUCTURE after adding model:');
+        logSceneHierarchy(scene);
+        
+      } catch (err) {
+        console.error('Failed to load model:', err);
+        setError(`Failed to load model: ${err instanceof Error ? err.message : String(err)}`);
+        setLoading(0);
+      }
+    }
+  }, [path, scene]);
+  
+  useEffect(() => {
+    return () => {
+      console.log('🔄 Model component cleanup - setting isActive to false');
+      setIsActive(false);
+    };
+  }, []);
+  
+  if (error) {
+    return (
+      <Html center>
+        <div style={{ 
+          color: 'red', 
+          background: 'rgba(0,0,0,0.7)', 
+          padding: '12px', 
+          borderRadius: '8px',
+          fontFamily: 'monospace'
+        }}>
+          {error}
+        </div>
+      </Html>
+    );
+  }
+  
+  if (loading < 100) {
+    return (
+      <Html center>
+        <div style={{ 
+          color: 'white', 
+          background: 'rgba(0,0,0,0.7)', 
+          padding: '12px', 
+          borderRadius: '8px',
+          fontFamily: 'monospace'
+        }}>
+          Loading... {loading}%
+        </div>
+      </Html>
+    );
+  }
+  
+  return null;
+}
+
+// Utility function to log scene hierarchy
+function logSceneHierarchy(obj: THREE.Object3D, indent: string = '') {
+  console.log(`${indent}${obj.name || 'unnamed'} (${obj.type}) - uuid: ${obj.uuid.substring(0, 8)}`);
+  if (obj.children && obj.children.length > 0) {
+    obj.children.forEach(child => {
+      logSceneHierarchy(child, indent + '  ');
+    });
+  }
+}
+
+// Main scene setup
+function DreamyParticlesScene({
+  modelPath = 'sphere',
+  primaryColor = [1.0, 0.8, 0.3],
+  secondaryColor = [1.0, 0.4, 0.0],
+  mouseStrength = 0.05
+}: DreamyParticlesProps) {
+  const [currentModelUUID, setCurrentModelUUID] = useState('');
+  const { scene, gl } = useThree();
+  const [initialized, setInitialized] = useState(false);
+  
+  useEffect(() => {
+    // Get the model object (either the container or a specific mesh)
+    const modelObject = scene;
+    const newModelUUID = modelObject.uuid;
+    
+    // Check if model has changed
+    console.log(`🔍 MODEL CHANGE CHECK: {current: '${currentModelUUID}', new: '${newModelUUID}', isDifferent: ${currentModelUUID !== newModelUUID}}`);
+    
+    if (currentModelUUID !== newModelUUID) {
+      console.log('🔄 MODEL CHANGED, reinitializing particles');
+      setCurrentModelUUID(newModelUUID);
+      setInitialized(false);
+      
+      // Short delay to ensure the model is fully loaded before initializing particles
+      const initTimer = setInterval(() => {
+        // Check if GL is ready and we haven't initialized yet
+        console.log(`🚀 INIT CHECK: GL Ready: ${!!gl} Initialized: ${initialized}`);
+        
+        if (gl && !initialized) {
+          console.log('⏱️ Waiting to initialize particles...');
+        }
+      }, 500);
+      
+      // Force initialization after a timeout
+      setTimeout(() => {
+        console.log('⏰ Init timer triggered, finding mesh for sampling');
+        
+        // Find a mesh to sample from
+        const meshToSample = findMeshInScene(modelObject);
+        
+        if (meshToSample) {
+          console.log(`✅ Found mesh for sampling: ${meshToSample.name} Starting GPGPU init`);
+          setInitialized(true);
+          clearInterval(initTimer);
+        } else {
+          console.warn('⚠️ No suitable mesh found for particle sampling, using default sphere');
+          
+          // Create a default sphere if no mesh is found
+          const geometry = new THREE.SphereGeometry(1, 32, 32);
+          const material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            wireframe: true
+          });
+          const defaultSphere = new THREE.Mesh(geometry, material);
+          defaultSphere.name = 'defaultFallbackSphere';
+          
+          // Add to scene if not already present
+          if (!modelObject.getObjectByName('defaultFallbackSphere')) {
+            modelObject.add(defaultSphere);
+          }
+          
+          setInitialized(true);
+          clearInterval(initTimer);
+        }
+      }, 1000);
+      
+      return () => {
+        clearInterval(initTimer);
+      };
+    }
+  }, [scene, gl, currentModelUUID, initialized]);
+  
+  // The rest of the component remains mostly the same
+  return (
+    <>
+      {/* Background elements */}
+      <color attach="background" args={['#050505']} />
+      <ambientLight intensity={0.4} />
+      <directionalLight 
+        position={[10, 10, 10]} 
+        intensity={0.8} 
+      />
+      
+      {/* Model */}
+      <Model path={modelPath} />
+      
+      {/* Particle System */}
+      {initialized && (
+        <ParticleSystem 
+          model={scene} 
+          settings={{
+            mouseStrength,
+            primaryColor,
+            secondaryColor
+          }}
+        />
+      )}
+      
+      {/* Controls */}
+      <OrbitControls 
+        enableDamping
+        dampingFactor={0.05}
+        rotateSpeed={0.5}
+        maxDistance={10}
+        minDistance={2}
+      />
+      
+      {/* Post-processing effects */}
+      <EffectComposer>
+        <Bloom
+          luminanceThreshold={0.01}
+          luminanceSmoothing={0.9}
+          intensity={3.0}
+        />
+      </EffectComposer>
+    </>
+  );
+}
+
+// Main exported component
+export default function DreamyParticles({
+  modelPath = 'sphere',
+  primaryColor = [1.0, 0.8, 0.3],
+  secondaryColor = [1.0, 0.4, 0.0],
+  mouseStrength = 0.05
+}: DreamyParticlesProps) {
+  return (
+    <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+      <div className="w-full h-full pointer-events-auto">
+        <Canvas
+          camera={{ position: [0, 0, 5], fov: 45 }}
+          gl={{ 
+            antialias: true, 
+            alpha: true,
+            preserveDrawingBuffer: true
+          }}
+        >
+          <DreamyParticlesScene 
+            modelPath={modelPath}
+            primaryColor={primaryColor}
+            secondaryColor={secondaryColor}
+            mouseStrength={mouseStrength}
+          />
+        </Canvas>
+      </div>
+    </div>
+  );
+} 

@@ -1,0 +1,30 @@
+{
+  "totalMongoDocuments": 0,
+  "totalFirestoreDocuments": 1,
+  "matchingDocuments": 0,
+  "missingInFirestore": [],
+  "missingInMongo": [
+    {
+      "key": "test@example.com",
+      "keyField": "email",
+      "firestoreDoc": {
+        "id": "test-customer-1",
+        "name": "Test Customer",
+        "email": "test@example.com",
+        "createdAt": "2025-02-26T18:18:16.253Z",
+        "updatedAt": "2025-02-26T18:18:16.253Z",
+        "status": "active",
+        "gcpConfig": {},
+        "settings": {
+          "storageQuota": 100,
+          "maxProjects": 5
+        },
+        "metadata": {
+          "source": "test-script",
+          "createdBy": "admin"
+        }
+      }
+    }
+  ],
+  "differences": []
+}

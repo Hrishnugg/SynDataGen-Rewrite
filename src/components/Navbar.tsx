@@ -63,7 +63,7 @@ export default function Navbar() {
                 href={link.href}
                 className={`text-sm font-medium transition-colors hover:text-blue-600 dark:hover:text-blue-400 ${
                   link.href === '#waitlist'
-                    ? 'px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                    ? 'px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)]'
                     : 'text-gray-600 dark:text-gray-300'
                 }`}
               >
@@ -126,7 +126,7 @@ export default function Navbar() {
                 </Link>
                 <Link
                   href="/auth/register"
-                  className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600"
+                  className="text-sm font-medium px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)]"
                 >
                   Register
                 </Link>
@@ -172,7 +172,7 @@ export default function Navbar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`text-sm font-medium transition-colors ${
                     link.href === '#waitlist'
-                      ? 'px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 text-center'
+                      ? 'px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)] text-center'
                       : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400'
                   }`}
                 >
@@ -219,7 +219,7 @@ export default function Navbar() {
                   </Link>
                   <Link
                     href="/auth/register"
-                    className="text-sm font-medium px-4 py-2 rounded-lg bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600 text-center"
+                    className="text-sm font-medium px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)] text-center"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Register
