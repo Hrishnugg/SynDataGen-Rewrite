@@ -15,12 +15,12 @@ export default function ProjectCard({ project, onUpdate, onDelete }: ProjectCard
   const [showMenu, setShowMenu] = useState(false);
 
   const handleDelete = async () => {
-    if (!project._id) return;
+    if (!project.id) return;
     
     if (!confirm('Are you sure you want to archive this project?')) return;
 
     try {
-      const response = await fetch(`/api/projects/${project._id}`, {
+      const response = await fetch(`/api/projects/${project.id}`, {
         method: 'DELETE',
       });
 
@@ -28,7 +28,7 @@ export default function ProjectCard({ project, onUpdate, onDelete }: ProjectCard
         throw new Error('Failed to archive project');
       }
 
-      onDelete(project._id.toString());
+      onDelete(project.id);
     } catch (error) {
       console.error('Error archiving project:', error);
       alert('Failed to archive project');
@@ -45,7 +45,7 @@ export default function ProjectCard({ project, onUpdate, onDelete }: ProjectCard
             </div>
             <div>
               <Link
-                href={`/dashboard/projects/${project._id}`}
+                href={`/dashboard/projects/${project.id}`}
                 className="text-lg font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
                 {project.name}
@@ -67,7 +67,7 @@ export default function ProjectCard({ project, onUpdate, onDelete }: ProjectCard
             {showMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-primary rounded-xl shadow-lg py-1 z-10">
                 <Link
-                  href={`/dashboard/projects/${project._id}/settings`}
+                  href={`/dashboard/projects/${project.id}/settings`}
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   onClick={() => setShowMenu(false)}
                 >

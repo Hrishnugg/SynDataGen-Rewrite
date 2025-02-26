@@ -1,7 +1,11 @@
-import { ObjectId } from 'mongodb';
+/**
+ * User Model
+ * 
+ * User data model for the application, using string IDs for Firestore compatibility.
+ */
 
 export interface User {
-  _id?: ObjectId;
+  id?: string;
   name: string;
   email: string;
   password: string;
@@ -15,10 +19,10 @@ export interface SafeUser extends Omit<User, 'password'> {
 }
 
 export function sanitizeUser(user: User): SafeUser {
-  const { password, _id, ...safeUser } = user;
+  const { password, ...safeUser } = user;
   return {
     ...safeUser,
-    id: _id?.toString() || '',
+    id: user.id || '',
   };
 }
 

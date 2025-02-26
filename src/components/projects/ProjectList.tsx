@@ -84,18 +84,18 @@ export default function ProjectList() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
             <ProjectCard
-              key={project._id?.toString()}
+              key={project.id}
               project={project}
               onUpdate={(updatedProject) => {
                 setProjects(prev =>
                   prev.map(p =>
-                    p._id === updatedProject._id ? updatedProject : p
+                    p.id === updatedProject.id ? updatedProject : p
                   )
                 );
               }}
               onDelete={(projectId) => {
                 setProjects(prev =>
-                  prev.filter(p => p._id?.toString() !== projectId)
+                  prev.filter(p => p.id !== projectId)
                 );
               }}
             />

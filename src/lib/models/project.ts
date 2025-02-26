@@ -1,4 +1,8 @@
-import { ObjectId } from 'mongodb';
+/**
+ * Project Model
+ * 
+ * Project data model for the application, using string IDs for Firestore compatibility.
+ */
 
 export const PROJECT_COLLECTION = 'projects';
 
@@ -10,7 +14,7 @@ export interface TeamMember {
 }
 
 export interface Project {
-  _id?: ObjectId;
+  id?: string;
   name: string;
   description: string;
   ownerId: string;
