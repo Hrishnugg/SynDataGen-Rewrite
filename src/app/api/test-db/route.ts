@@ -1,28 +1,36 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import { getFirestore } from '@/lib/services/db-service';
 
 export async function GET() {
   try {
-    const client = await clientPromise;
-    const db = client.db("waitlist-serverless");
+    // Get Firestore service
+    const firestoreService = getFirestore();
+    await firestoreService.init();
     
-    // Test the connection
-    await db.command({ ping: 1 });
+    // Test the connection by listing collections
+    const collections = await firestoreService.query(
+      '_connection_test',
+      (collection) => collection.limit(1)
+    );
     
-    // Create the waitlist collection if it doesn't exist
-    if (!(await db.listCollections({ name: "waitlist" }).hasNext())) {
-      await db.createCollection("waitlist");
-    }
+    // Create a test document to verify write access
+    const testId = await firestoreService.create('_connection_test', {
+      timestamp: new Date(),
+      message: 'Connection test successful'
+    });
+    
+    // Clean up the test document
+    await firestoreService.delete('_connection_test', testId);
 
     return NextResponse.json({ 
-      message: "Database connection successful",
+      message: "Firestore database connection successful",
       status: "ok" 
     });
 
   } catch (error) {
     console.error('Database connection error:', error);
     return NextResponse.json(
-      { error: "Failed to connect to database" },
+      { error: "Failed to connect to Firestore database" },
       { status: 500 }
     );
   }
