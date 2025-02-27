@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { useState } from "react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 
 interface PasswordInputProps {
   id: string;
@@ -20,14 +20,14 @@ export default function PasswordInput({
   required = false,
   minLength,
   placeholder,
-  className = '',
+  className = "",
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="relative">
       <input
-        type={showPassword ? 'text' : 'password'}
+        type={showPassword ? "text" : "password"}
         id={id}
         name={name}
         value={value}
@@ -37,6 +37,7 @@ export default function PasswordInput({
         placeholder={placeholder}
         className={`w-full px-4 py-3 pr-12 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white ${className}`}
       />
+
       <button
         type="button"
         onClick={() => setShowPassword(!showPassword)}
@@ -50,4 +51,4 @@ export default function PasswordInput({
       </button>
     </div>
   );
-} 
+}

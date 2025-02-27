@@ -1,61 +1,60 @@
-'use client';
+"use client";
 
-import { useState, useEffect, Suspense } from 'react';
-import { signIn, useSession } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
-import { FiArrowRight, FiLoader } from 'react-icons/fi';
-import ThemeToggle from '@/components/ThemeToggle';
-import PasswordInput from '@/components/ui/PasswordInput';
+import { useState, useEffect, Suspense } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { FiArrowRight, FiLoader } from "react-icons/fi";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 function LoginContent() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // Handle successful registration message
   useEffect(() => {
-    if (searchParams?.get('registered')) {
-      setError('Registration successful! Please sign in.');
+    if (searchParams?.get("registered")) {
+      setError("Registration successful! Please sign in.");
     }
   }, [searchParams]);
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (status === 'authenticated' && session) {
-      router.push('/dashboard');
+    if (status === "authenticated" && session) {
+      router.push("/dashboard");
     }
   }, [session, status, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      console.log('Attempting to sign in with:', formData.email);
-      
-      const result = await signIn('credentials', {
+      console.log("Attempting to sign in with:", formData.email);
+
+      const result = await signIn("credentials", {
         redirect: false,
         email: formData.email.toLowerCase(),
         password: formData.password,
-        callbackUrl: searchParams?.get('callbackUrl') || '/dashboard',
+        callbackUrl: searchParams?.get("callbackUrl") || "/dashboard",
       });
 
-      console.log('Sign in result:', result);
+      console.log("Sign in result:", result);
 
       if (result?.error) {
         setError(result.error);
@@ -63,15 +62,15 @@ function LoginContent() {
         router.push(result.url);
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setError('An unexpected error occurred');
+      console.error("Login error:", error);
+      setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
   };
 
   // Show loading state while checking session
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary">
         <FiLoader className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
@@ -81,10 +80,6 @@ function LoginContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary py-12 px-4 sm:px-6 lg:px-8">
-      <div className="fixed top-4 right-4">
-        <ThemeToggle />
-      </div>
-      
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h2 className="text-4xl font-bold mb-4 text-gray-900 dark:text-white">
@@ -98,17 +93,22 @@ function LoginContent() {
         <div className="bg-white dark:bg-dark-secondary rounded-2xl shadow-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className={`p-4 rounded-lg text-sm ${
-                error.includes('successful') 
-                  ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                  : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-              }`}>
+              <div
+                className={`p-4 rounded-lg text-sm ${
+                  error.includes("successful")
+                    ? "bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                    : "bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                }`}
+              >
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Email Address
               </label>
               <input
@@ -123,7 +123,10 @@ function LoginContent() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Password
               </label>
               <PasswordInput
@@ -146,13 +149,13 @@ function LoginContent() {
                 ) : (
                   <FiArrowRight className="w-5 h-5" />
                 )}
-                {isLoading ? 'Signing in...' : 'Sign In'}
+                {isLoading ? "Signing in..." : "Sign In"}
               </button>
             </div>
 
             <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{' '}
-              <Link 
+              Don't have an account?{" "}
+              <Link
                 href="/auth/register"
                 className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
               >
@@ -168,12 +171,14 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary">
-        <FiLoader className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary">
+          <FiLoader className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
-} 
+}

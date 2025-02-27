@@ -14,6 +14,38 @@ export interface Customer {
   createdAt: Date;       // Account creation date
   updatedAt: Date;       // Last update timestamp
   status: 'active' | 'inactive' | 'suspended';
+  billingTier?: 'free' | 'basic' | 'professional' | 'enterprise'; // Customer's billing tier
+  usageStatistics?: {
+    lastLoginDate?: Date;       // Last time customer logged in
+    totalProjects?: number;     // Total number of projects created
+    totalDataGenerated?: number; // Total data generated in bytes
+    apiRequestsThisMonth?: number; // API requests made this month
+    lastAccessedAt?: Date;      // Last time customer accessed the platform
+  };
+  contactInfo?: {
+    primary: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+    billing?: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+    technical?: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+  };
+  subscriptionDetails?: {
+    planId?: string;       // ID of the subscription plan
+    startDate?: Date;      // When subscription started
+    renewalDate?: Date;    // When subscription renews
+    autoRenew?: boolean;   // Whether subscription auto-renews
+    paymentMethod?: string; // Payment method reference
+  };
   gcpConfig?: {
     serviceAccountId?: string;    // GCP service account ID
     serviceAccountEmail?: string; // GCP service account email
@@ -33,6 +65,31 @@ export interface CreateCustomerInput {
   name: string;
   email: string;
   status?: 'active' | 'inactive' | 'suspended';
+  billingTier?: 'free' | 'basic' | 'professional' | 'enterprise';
+  contactInfo?: {
+    primary: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+    billing?: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+    technical?: {
+      name: string;
+      email: string;
+      phone?: string;
+    };
+  };
+  subscriptionDetails?: {
+    planId?: string;
+    startDate?: Date;
+    renewalDate?: Date;
+    autoRenew?: boolean;
+    paymentMethod?: string;
+  };
   settings?: {
     storageQuota?: number;
     maxProjects?: number;
@@ -49,9 +106,19 @@ export const DEFAULT_CUSTOMER_SETTINGS = {
 };
 
 /**
+ * Default billing tier for new customers
+ */
+export const DEFAULT_BILLING_TIER = 'free';
+
+/**
  * Firestore collection name for customers
  */
 export const CUSTOMER_COLLECTION = 'customers';
+
+/**
+ * Firestore subcollection name for customer audit logs
+ */
+export const CUSTOMER_AUDIT_LOG_COLLECTION = 'auditLog';
 
 /**
  * Convert a Firestore document to a Customer object
@@ -67,6 +134,22 @@ export function firestoreToCustomer(doc: FirebaseFirestore.DocumentData, id: str
     createdAt: doc.createdAt?.toDate() || new Date(),
     updatedAt: doc.updatedAt?.toDate() || new Date(),
     status: doc.status || 'inactive',
+    billingTier: doc.billingTier || DEFAULT_BILLING_TIER,
+    usageStatistics: doc.usageStatistics ? {
+      lastLoginDate: doc.usageStatistics.lastLoginDate?.toDate(),
+      totalProjects: doc.usageStatistics.totalProjects || 0,
+      totalDataGenerated: doc.usageStatistics.totalDataGenerated || 0,
+      apiRequestsThisMonth: doc.usageStatistics.apiRequestsThisMonth || 0,
+      lastAccessedAt: doc.usageStatistics.lastAccessedAt?.toDate()
+    } : undefined,
+    contactInfo: doc.contactInfo || undefined,
+    subscriptionDetails: doc.subscriptionDetails ? {
+      planId: doc.subscriptionDetails.planId,
+      startDate: doc.subscriptionDetails.startDate?.toDate(),
+      renewalDate: doc.subscriptionDetails.renewalDate?.toDate(),
+      autoRenew: doc.subscriptionDetails.autoRenew || false,
+      paymentMethod: doc.subscriptionDetails.paymentMethod
+    } : undefined,
     gcpConfig: doc.gcpConfig || {},
     settings: doc.settings || { ...DEFAULT_CUSTOMER_SETTINGS },
     metadata: doc.metadata || {}
@@ -79,7 +162,7 @@ export function firestoreToCustomer(doc: FirebaseFirestore.DocumentData, id: str
  * @returns Firestore document data
  */
 export function customerToFirestore(customer: Customer): FirebaseFirestore.DocumentData {
-  return {
+  const data: FirebaseFirestore.DocumentData = {
     name: customer.name,
     email: customer.email,
     createdAt: customer.createdAt,
@@ -88,5 +171,55 @@ export function customerToFirestore(customer: Customer): FirebaseFirestore.Docum
     gcpConfig: customer.gcpConfig || {},
     settings: customer.settings,
     metadata: customer.metadata || {}
+  };
+
+  // Add optional fields only if they exist
+  if (customer.billingTier) {
+    data.billingTier = customer.billingTier;
+  }
+
+  if (customer.usageStatistics) {
+    data.usageStatistics = { ...customer.usageStatistics };
+  }
+
+  if (customer.contactInfo) {
+    data.contactInfo = { ...customer.contactInfo };
+  }
+
+  if (customer.subscriptionDetails) {
+    data.subscriptionDetails = { ...customer.subscriptionDetails };
+  }
+
+  return data;
+}
+
+/**
+ * Customer audit log entry
+ */
+export interface CustomerAuditLogEntry {
+  id?: string;           // Entry ID
+  customerId: string;    // Reference to customer
+  timestamp: Date;       // When the action occurred
+  action: 'create' | 'update' | 'delete' | 'status_change' | 'login' | 'billing_change' | 'service_account_action';
+  performedBy: string;   // User ID who performed the action
+  details: {
+    changes?: Record<string, { old: any; new: any }>;
+    message?: string;
+    serviceAccountAction?: 'create' | 'rotate' | 'delete' | 'suspend' | 'restore';
+  };
+}
+
+/**
+ * Creates an audit log entry for customer actions
+ * @param entry Audit log entry data
+ * @returns Firestore document data
+ */
+export function auditLogToFirestore(entry: CustomerAuditLogEntry): FirebaseFirestore.DocumentData {
+  return {
+    customerId: entry.customerId,
+    timestamp: entry.timestamp || new Date(),
+    action: entry.action,
+    performedBy: entry.performedBy,
+    details: entry.details || {}
   };
 } 

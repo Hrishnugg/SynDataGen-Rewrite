@@ -1,96 +1,143 @@
-'use client';
+import * as React from "react"
+import { useState, useEffect } from "react"
+import { cn } from "@/lib/utils"
 
-import { ReactNode, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
-
-interface CardProps {
-  children: ReactNode;
-  className?: string;
+// Extended interface for Card props
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   gradient?: boolean;
-  hover?: boolean;
-  onClick?: () => void;
   glowColor?: string;
+  hoverEffect?: boolean;
 }
 
-export default function Card({ 
-  children, 
-  className = '', 
-  gradient = false,
-  hover = true,
-  onClick,
-  glowColor = 'rgba(59, 130, 246, 0.5)' // default blue glow
-}: CardProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const card = cardRef.current;
-    if (!card) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left; // x position within the element
-      const y = e.clientY - rect.top;  // y position within the element
-      
-      card.style.setProperty('--mouse-x', `${x}px`);
-      card.style.setProperty('--mouse-y', `${y}px`);
-    };
-
-    card.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      card.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
-
+const Card = React.forwardRef<
+  HTMLDivElement,
+  CardProps
+>(({ className, gradient, glowColor, hoverEffect = true, ...props }, ref) => {
+  // Track mouse position for dynamic gradient effect
+  const [position, setPosition] = useState({ x: 50, y: 50 });
+  const [isHovered, setIsHovered] = useState(false);
+  
+  // Generate styles for gradient and glow effects
+  const style: React.CSSProperties = {
+    ...(props.style || {}),
+    position: "relative",
+    overflow: "hidden",
+    transition: "all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+    ...(isHovered && hoverEffect ? { 
+      transform: 'translateY(-5px)',
+      boxShadow: glowColor ? `0 15px 30px -5px ${glowColor}` : '0 15px 30px -5px rgba(0, 0, 0, 0.1)'
+    } : {}),
+  };
+  
+  // Handle mouse movement for gradient effect
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!hoverEffect) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setPosition({ x, y });
+  };
+  
   return (
-    <motion.div
-      ref={cardRef}
-      whileHover={hover ? { 
-        y: -8, 
-        scale: 1.02,
-        transition: { duration: 0.2, ease: 'easeOut' }
-      } : {}}
-      transition={{ duration: 0.2, ease: 'easeOut' }}
-      onClick={onClick}
-      className={`
-        relative overflow-hidden rounded-[2rem] bg-white dark:bg-gray-900
-        ${hover ? 'cursor-pointer' : ''}
-        ${gradient ? 'bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-900' : ''}
-        shadow-lg dark:shadow-2xl
-        hover:shadow-xl dark:hover:shadow-2xl
-        border border-gray-100/10 dark:border-gray-800/50
-        transition-all duration-200
-        group
-        ${className}
-      `}
-      style={{
-        '--glow-color': glowColor,
-      } as any}
+    <div
+      ref={ref}
+      className={cn(
+        "rounded-3xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm",
+        className
+      )}
+      style={style}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      {...props}
     >
-      {/* Gradient glow effect */}
-      <div 
-        className="absolute inset-[-1px] rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
-        style={{
-          background: `radial-gradient(
-            1000px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
-            var(--glow-color),
-            transparent 40%
-          )`,
-        }}
-      />
-      
-      {/* Border glow */}
-      <div 
-        className="absolute inset-[-1px] rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
-        style={{
-          background: `linear-gradient(to bottom right, var(--glow-color), transparent)`,
-        }}
-      />
-
       {/* Content container */}
       <div className="relative z-10">
-        {children}
+        {props.children}
       </div>
-    </motion.div>
+      
+      {/* Mouse-following gradient overlay on hover */}
+      {gradient && isHovered && hoverEffect && (
+        <div 
+          className="absolute inset-0 pointer-events-none rounded-3xl z-0"
+          style={{
+            background: `radial-gradient(circle at ${position.x}% ${position.y}%, rgba(255,255,255,0.5), transparent 70%)`,
+            mixBlendMode: 'overlay',
+            opacity: 0.8,
+          }}
+        />
+      )}
+      
+      {/* Colored glow edge effect */}
+      {gradient && glowColor && (
+        <div 
+          className={`absolute inset-0 -z-10 rounded-3xl transition-opacity duration-300 ${isHovered ? 'opacity-40' : 'opacity-15'}`}
+          style={{
+            background: `linear-gradient(45deg, ${glowColor}33, ${glowColor}00, ${glowColor}22)`,
+            boxShadow: isHovered ? `inset 0 0 30px 5px ${glowColor}33` : 'none',
+          }}
+        />
+      )}
+    </div>
   );
-} 
+})
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    {...props}
+  />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("text-xl font-semibold text-gray-900 dark:text-white", className)}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardDescription = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("text-sm text-gray-500 dark:text-gray-400", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
+
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0 text-gray-700 dark:text-gray-300", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn("flex items-center p-6 pt-0", className)}
+    {...props}
+  />
+))
+CardFooter.displayName = "CardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }

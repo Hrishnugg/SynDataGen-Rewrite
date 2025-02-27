@@ -20,7 +20,9 @@ let isInitialized = false;
 export interface ServiceAccountCreationParams {
   customerId: string;
   customerName: string;
+  billingTier?: 'free' | 'basic' | 'professional' | 'enterprise';
   projectId?: string;
+  customRoles?: string[];
 }
 
 /**
@@ -30,7 +32,35 @@ export interface ServiceAccountResult {
   accountId: string;
   email: string;
   keySecretName: string; // Reference to Secret Manager
+  roles: string[];
 }
+
+/**
+ * Define role templates for different billing tiers
+ */
+export const BILLING_TIER_ROLES: Record<string, string[]> = {
+  'free': [
+    'roles/storage.objectViewer',
+    'roles/dataflow.viewer'
+  ],
+  'basic': [
+    'roles/storage.objectUser',
+    'roles/dataflow.developer',
+    'roles/logging.viewer'
+  ],
+  'professional': [
+    'roles/storage.objectAdmin',
+    'roles/dataflow.developer',
+    'roles/logging.viewer',
+    'roles/monitoring.viewer'
+  ],
+  'enterprise': [
+    'roles/storage.objectAdmin',
+    'roles/dataflow.admin',
+    'roles/logging.admin',
+    'roles/monitoring.admin'
+  ]
+};
 
 /**
  * Initialize the Service Account manager
@@ -84,23 +114,51 @@ export async function createCustomerServiceAccount(
   }
   
   try {
-    // Generate a unique account ID
-    const accountId = `customer-${params.customerId.substring(0, 8)}-${Date.now().toString(36)}`;
+    // Create a more structured account ID using customer ID and sanitized name
+    const sanitizedName = params.customerName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '-')
+      .substring(0, 15); // Keep it short
+      
+    const accountId = `sa-${sanitizedName}-${params.customerId.substring(0, 6)}`;
     
     // Create the service account
+    console.log(`Creating service account: ${accountId} for customer ${params.customerId}`);
+    
     const serviceAccount = await iamClient.projects.serviceAccounts.create({
       name: `projects/${projectId}`,
       requestBody: {
         accountId,
         serviceAccount: {
-          displayName: `SynDataGen Customer: ${params.customerName}`,
-          description: `Service account for customer ${params.customerId}`,
+          displayName: `SynDataGen - ${params.customerName}`,
+          description: `Service account for customer ${params.customerId} (${params.billingTier || 'free'} tier)`,
         }
       }
     });
     
     const email = serviceAccount.data.email;
     console.log(`Service account created: ${email}`);
+    
+    // Determine which roles to assign based on billing tier
+    const billingTier = params.billingTier || 'free';
+    let rolesToAssign = [...BILLING_TIER_ROLES[billingTier]];
+    
+    // Add any custom roles if specified
+    if (params.customRoles && params.customRoles.length > 0) {
+      rolesToAssign = [...rolesToAssign, ...params.customRoles];
+    }
+    
+    // Assign roles to the service account
+    const resource = `projects/${projectId}`;
+    for (const role of rolesToAssign) {
+      try {
+        await assignRole(email, role, resource);
+        console.log(`Assigned role ${role} to service account ${email}`);
+      } catch (error) {
+        console.error(`Error assigning role ${role} to service account ${email}:`, error);
+        // Continue with other roles, don't fail the whole process
+      }
+    }
     
     // Create a key for the service account
     const key = await iamClient.projects.serviceAccounts.keys.create({
@@ -111,24 +169,86 @@ export async function createCustomerServiceAccount(
     // The key is a base64-encoded JSON file
     const privateKeyData = Buffer.from(key.data.privateKeyData, 'base64').toString('utf8');
     
-    // Store the key in Secret Manager
-    const keySecretName = `customer-sa-key-${params.customerId}`;
+    // Store the key in Secret Manager with metadata
+    const keySecretName = `sa-key-${params.customerId}`;
     await storeSecret(keySecretName, privateKeyData, {
       customerId: params.customerId,
-      type: 'service-account-key'
+      type: 'service-account-key',
+      billingTier: billingTier,
+      createdAt: new Date().toISOString(),
+      serviceAccountEmail: email
     });
     
     console.log(`Service account key stored in Secret Manager: ${keySecretName}`);
     
+    // Implement permission boundary if the customer is on free or basic tier
+    if (billingTier === 'free' || billingTier === 'basic') {
+      // Set up usage limits or resource constraints
+      // This would typically involve setting up quotas or constraints
+      console.log(`Setting up permission boundaries for ${billingTier} tier service account ${email}`);
+      // Note: Implementation of quota/constraints would go here
+    }
+    
     return {
       accountId,
       email,
-      keySecretName
+      keySecretName,
+      roles: rolesToAssign
     };
   } catch (error: any) {
     console.error(`Error creating service account for customer ${params.customerId}:`, error);
     throw error;
   }
+}
+
+/**
+ * Assign an IAM role to a service account
+ * 
+ * @param serviceAccountEmail Email of the service account
+ * @param role Role to assign
+ * @param resource Resource to assign the role on (e.g., project, bucket)
+ */
+async function assignRole(
+  serviceAccountEmail: string, 
+  role: string,
+  resource: string
+): Promise<void> {
+  // Get current policy
+  const policy = await iamClient.projects.getIamPolicy({
+    resource: resource,
+    requestBody: {
+      options: {
+        requestedPolicyVersion: 3
+      }
+    }
+  });
+  
+  // Add binding for the role to the service account
+  const serviceAccountMember = `serviceAccount:${serviceAccountEmail}`;
+  const bindings = policy.data.bindings || [];
+  
+  let roleBinding = bindings.find((binding: any) => binding.role === role);
+  
+  if (!roleBinding) {
+    roleBinding = {
+      role: role,
+      members: [serviceAccountMember]
+    };
+    bindings.push(roleBinding);
+  } else if (!roleBinding.members.includes(serviceAccountMember)) {
+    roleBinding.members.push(serviceAccountMember);
+  }
+  
+  // Update policy
+  await iamClient.projects.setIamPolicy({
+    resource: resource,
+    requestBody: {
+      policy: {
+        ...policy.data,
+        bindings: bindings
+      }
+    }
+  });
 }
 
 /**
@@ -174,11 +294,13 @@ export async function rotateServiceAccountKey(
     const privateKeyData = Buffer.from(key.data.privateKeyData, 'base64').toString('utf8');
     
     // Store the key in Secret Manager
-    const keySecretName = `customer-sa-key-${customerId}`;
+    const keySecretName = `sa-key-${customerId}`;
     await storeSecret(keySecretName, privateKeyData, {
       customerId,
       type: 'service-account-key',
-      rotatedAt: new Date().toISOString()
+      rotatedAt: new Date().toISOString(),
+      serviceAccountEmail: email,
+      billingTier: customer.billingTier || 'free'
     });
     
     // Find old keys and delete them

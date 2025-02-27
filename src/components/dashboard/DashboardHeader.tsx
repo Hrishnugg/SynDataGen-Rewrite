@@ -1,26 +1,44 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import Image from 'next/image';
-import { FiUser, FiSettings, FiLogOut, FiChevronDown, FiBell } from 'react-icons/fi';
-import { signOut } from 'next-auth/react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import ThemeToggle from '@/components/ThemeToggle';
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import Image from "next/image";
+import {
+  FiUser,
+  FiSettings,
+  FiLogOut,
+  FiChevronDown,
+  FiBell,
+  FiSun,
+  FiMoon,
+} from "react-icons/fi";
+import { signOut } from "next-auth/react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function DashboardHeader() {
   const { data: session } = useSession();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const pathname = usePathname();
 
+  // Initialize theme on client-side only
+  useEffect(() => {
+    setIsDarkMode(document.documentElement.classList.contains('dark'));
+  }, []);
+
+  // Handle theme toggle
+  const toggleTheme = () => {
+    document.documentElement.classList.toggle('dark');
+    setIsDarkMode(!isDarkMode);
+  };
+
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard' },
-    { name: 'Settings', href: '/dashboard/settings' },
+    { name: "Dashboard", href: "/dashboard" }
   ];
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-white dark:bg-dark-secondary border-b border-gray-200 dark:border-gray-800 z-50">
+    <header className="sticky top-0 left-0 right-0 bg-white dark:bg-dark-secondary border-b border-gray-200 dark:border-gray-800 z-50">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
           {/* Left section */}
@@ -45,8 +63,8 @@ export default function DashboardHeader() {
                   href={item.href}
                   className={`text-sm font-medium transition-colors ${
                     pathname === item.href
-                      ? 'text-gray-900 dark:text-white'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
+                      ? "text-gray-900 dark:text-white"
+                      : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >
                   {item.name}
@@ -56,9 +74,21 @@ export default function DashboardHeader() {
           </div>
 
           {/* Right section */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {/* Theme Toggle */}
-            <ThemeToggle />
+            <div className="mr-2">
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Toggle theme"
+              >
+                {isDarkMode ? (
+                  <FiSun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                ) : (
+                  <FiMoon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                )}
+              </button>
+            </div>
             
             {/* Notifications */}
             <button className="p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
@@ -82,7 +112,9 @@ export default function DashboardHeader() {
                     {session?.user?.email}
                   </div>
                 </div>
-                <FiChevronDown className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                <FiChevronDown
+                  className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               {/* Dropdown menu */}
@@ -105,7 +137,7 @@ export default function DashboardHeader() {
                     Settings
                   </Link>
                   <button
-                    onClick={() => signOut({ callbackUrl: '/' })}
+                    onClick={() => signOut({ callbackUrl: "/" })}
                     className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <FiLogOut className="w-4 h-4" />
@@ -119,4 +151,4 @@ export default function DashboardHeader() {
       </div>
     </header>
   );
-} 
+}

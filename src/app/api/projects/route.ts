@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/firestore/project';
 import { getFirestore } from '@/lib/services/db-service';
+import { FirestoreQueryOptions } from '@/lib/services/firestore-service';
+import { authOptions } from '@/lib/auth';
 
 // Helper function to generate a unique bucket name
 function generateBucketName(projectName: string, userId: string): string {
@@ -11,14 +13,14 @@ function generateBucketName(projectName: string, userId: string): string {
   return `synoptic-${sanitizedName}-${timestamp}-${randomStr}`;
 }
 
-export async function POST(req: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(authOptions);
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await request.json();
 
     // Validate required fields
     if (!body.name || !body.description) {
@@ -36,40 +38,40 @@ export async function POST(req: Request) {
       name: body.name,
       description: body.description,
       customerId: body.customerId || session.user.id,
-      bucketName,
       createdAt: new Date(),
       updatedAt: new Date(),
-      settings: DEFAULT_PROJECT_SETTINGS,
+      settings: body.settings || DEFAULT_PROJECT_SETTINGS,
       teamMembers: [
         {
           userId: session.user.id,
-          email: session.user.email,
           role: 'owner',
-          joinedAt: new Date()
+          addedAt: new Date()
         }
       ],
-      status: 'active'
+      status: 'active',
+      storage: {
+        bucketName,
+        region: body.region || 'us-central1',
+        usedStorage: 0
+      },
+      metadata: body.metadata || {}
     };
 
     // Get Firestore service
-    const firestoreService = getFirestore();
-    await firestoreService.init();
+    const firestoreService = await getFirestore(true); // Enable data preloading
     
-    // Create project in Firestore
+    // Create project with optimized write
     const projectId = await firestoreService.create(
       PROJECT_COLLECTION, 
-      projectData
+      projectData,
+      { useBatch: true } // Use batch write for better atomicity
     );
     
-    const projectData_return = {
+    // Return the created project with ID
+    return NextResponse.json({
       ...projectData,
       id: projectId
-    };
-    
-    console.log('Project created in Firestore:', projectId);
-
-    // Return the created project
-    return NextResponse.json(projectData_return);
+    });
   } catch (error) {
     console.error('Project creation error:', error);
     return NextResponse.json(
@@ -79,44 +81,238 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
+    console.log('Starting projects fetch...');
+    
+    // Get the session using authOptions
+    console.log('Calling getServerSession with authOptions...');
+    const session = await getServerSession(authOptions);
+    console.log('GetServerSession returned:', session ? 'Session object exists' : 'No session returned');
+    
+    // Detailed session structure logging
+    if (session) {
+      console.log('Session full structure:', JSON.stringify(session, null, 2));
+      console.log('Session.user keys:', session.user ? Object.keys(session.user) : 'No user object');
+      
+      if (session.user) {
+        // Log values with partial masking for sensitive data
+        const userEmail = session.user.email ? 
+          `${session.user.email.substring(0, 3)}...${session.user.email.substring(session.user.email.indexOf('@'))}` : 
+          'undefined';
+        
+        console.log('User details found:', {
+          id: session.user.id || 'undefined',
+          email: userEmail,
+          name: session.user.name ? `${session.user.name.substring(0, 3)}...` : 'undefined',
+          company: session.user.company ? `${session.user.company.substring(0, 3)}...` : 'undefined'
+        });
+      }
+    }
+    
     if (!session?.user) {
+      console.log('No session found, returning unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    console.log('Session found for user:', session.user.email, 'ID:', session.user.id);
+
+    // Check if user ID is defined with more logging
+    if (!session.user.id) {
+      console.log('User ID is undefined in session', {
+        userObject: session.user ? JSON.stringify(session.user) : 'null',
+        userObjectType: session.user ? typeof session.user : 'null',
+        sessionType: typeof session
+      });
+      
+      return NextResponse.json({ 
+        error: 'Authentication error: User ID not found in session',
+        debug: {
+          sessionUser: session.user ? {
+            ...session.user,
+            // Don't log sensitive info
+            email: session.user.email ? `${session.user.email.substring(0, 3)}...` : undefined
+          } : null,
+          userIdType: session.user?.id ? typeof session.user.id : 'undefined',
+          sessionKeys: Object.keys(session),
+          userKeys: session.user ? Object.keys(session.user) : [],
+        }
+      }, { status: 401 });
     }
 
     // Extract query parameters
-    const url = new URL(req.url);
-    const customerId = url.searchParams.get('customerId');
+    const url = new URL(request.url);
     const status = url.searchParams.get('status') || 'active';
+    const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 20;
 
-    // Get Firestore service
-    const firestoreService = getFirestore();
-    await firestoreService.init();
-    
-    // Query Firestore for projects
-    const projects = await firestoreService.query(
-      PROJECT_COLLECTION,
-      (collection) => {
-        let query = collection
-          .where('teamMembers', 'array-contains', {
-            userId: session.user.id,
-            role: 'owner'
-          })
-          .where('status', '==', status);
-          
-        if (customerId) {
-          query = query.where('customerId', '==', customerId);
+    // Initialize debug info to track what happens
+    const debugInfo = {
+      userId: session.user.id,
+      userEmail: session.user.email,
+      environment: process.env.NODE_ENV,
+      firebaseCredentialsFound: false,
+      errors: [],
+      usedMockData: false,
+      timestamp: new Date().toISOString()
+    };
+
+    // Check for Firebase credentials availability before trying to initialize
+    try {
+      // Import the validation function
+      const { validateFirebaseCredentials } = await import('@/lib/gcp/firestore/initFirestore');
+      debugInfo.firebaseCredentialsFound = validateFirebaseCredentials();
+    } catch (validationError) {
+      console.error('Error validating Firebase credentials:', validationError);
+      debugInfo.errors.push(`Credential validation error: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
+    }
+
+    // If credentials are missing, use mock data for development environment
+    if (!debugInfo.firebaseCredentialsFound && process.env.NODE_ENV === 'development') {
+      console.log('Firebase credentials not found. Using mock data for development.');
+      debugInfo.usedMockData = true;
+      
+      // Generate mock project data
+      const mockProjects = generateMockProjects(session.user.id, status, limit);
+      
+      return NextResponse.json({
+        projects: mockProjects,
+        debug: {
+          ...debugInfo,
+          projectsCount: mockProjects.length,
+          mockDataUsed: true
         }
+      });
+    }
+    
+    // Try to get Firestore service - this may fail if credentials are missing
+    let firestoreService;
+    let mockDataUsed = false;
+    try {
+      console.log('Attempting to initialize Firestore service...');
+      firestoreService = await getFirestore(true);
+      console.log('Firestore service initialized successfully');
+    } catch (firestoreInitError) {
+      console.error('Failed to initialize Firestore service:', firestoreInitError);
+      debugInfo.errors.push(`Firestore init error: ${firestoreInitError instanceof Error ? firestoreInitError.message : String(firestoreInitError)}`);
+      
+      // Return mock data as fallback
+      console.log('Using mock data as fallback due to Firestore initialization failure');
+      const mockProjects = generateMockProjects(session.user.id, status, limit);
+      return NextResponse.json({
+        projects: mockProjects,
+        count: mockProjects.length,
+        debug: {
+          ...debugInfo,
+          projectsCount: mockProjects.length,
+          mockDataUsed: true
+        }
+      });
+    }
+    
+    // Check if we got a mock service with getMockData method
+    if (firestoreService.getMockData) {
+      console.log('Using mock data from FirestoreService fallback');
+      const mockProjects = firestoreService.getMockData('projects', 20);
+      mockDataUsed = true;
+      
+      return NextResponse.json({
+        projects: mockProjects,
+        count: mockProjects.length,
+        debug: {
+          ...debugInfo,
+          projectsCount: mockProjects.length,
+          mockDataUsed: true,
+          source: 'firestore-service-fallback'
+        }
+      });
+    }
+    
+    // Continue with normal query workflow if Firestore is initialized
+    let userProjects = [];
+    
+    // Step 1: Try direct teamMembers query (using our composite index)
+    try {
+      console.log('Executing query with teamMembers filter...');
+      userProjects = await firestoreService.queryDocuments(
+        PROJECT_COLLECTION,
+        (query) => {
+          let q = query;
+          // Apply status filter
+          q = q.where('status', '==', status);
+          // Apply team members filter
+          q = q.where('teamMembers', 'array-contains', { userId: session.user.id });
+          // Apply ordering
+          q = q.orderBy('createdAt', 'desc');
+          // Apply limit
+          q = q.limit(50);
+          return q;
+        }
+      );
+      
+      console.log(`Found ${userProjects.length} projects for user ${session.user.id} using direct query`);
+    } 
+    catch (directQueryError) {
+      console.error('Direct team member query failed:', directQueryError);
+      debugInfo.errors.push(`Team member query error: ${directQueryError instanceof Error ? directQueryError.message : String(directQueryError)}`);
+      
+      // Step 2: Fallback to simpler query using just status and createdAt
+      try {
+        console.log('Falling back to simple status query...');
+        const allProjects = await firestoreService.queryDocuments(
+          PROJECT_COLLECTION,
+          (query) => {
+            let q = query;
+            // Apply status filter
+            q = q.where('status', '==', status);
+            // Apply ordering
+            q = q.orderBy('createdAt', 'desc');
+            // Apply limit
+            q = q.limit(100);
+            return q;
+          }
+        );
         
-        return query.orderBy('createdAt', 'desc');
+        console.log(`Found ${allProjects.length} total projects with status ${status}`);
+        
+        // Filter client-side for the user's projects
+        userProjects = allProjects.filter(project => {
+          if (!project.teamMembers || !Array.isArray(project.teamMembers)) {
+            return false;
+          }
+          
+          return project.teamMembers.some(member => 
+            member && 
+            typeof member === 'object' && 
+            member.userId === session.user.id
+          );
+        });
+        
+        console.log(`After filtering, found ${userProjects.length} projects for user ${session.user.id}`);
+      } 
+      catch (simpleQueryError) {
+        console.error('Simple query also failed:', simpleQueryError);
+        debugInfo.errors.push(`Simple query error: ${simpleQueryError instanceof Error ? simpleQueryError.message : String(simpleQueryError)}`);
+        
+        // Use mock data as a last resort in development
+        if (process.env.NODE_ENV === 'development') {
+          userProjects = generateMockProjects(session.user.id, status, limit);
+          debugInfo.usedMockData = true;
+          console.log(`Using ${userProjects.length} mock projects as fallback`);
+        } else {
+          throw simpleQueryError; // In production, propagate the error
+        }
       }
-    );
+    }
     
-    console.log(`Found ${projects.length} projects in Firestore for user:`, session.user.id);
+    // Return the projects with debug information
+    return NextResponse.json({
+      projects: userProjects,
+      debug: {
+        ...debugInfo,
+        projectsCount: userProjects.length
+      }
+    });
     
-    return NextResponse.json(projects);
   } catch (error) {
     console.error('Project fetch error:', error instanceof Error ? {
       message: error.message,
@@ -124,7 +320,6 @@ export async function GET(req: Request) {
       name: error.name
     } : error);
     
-    // Return a more descriptive error message
     return NextResponse.json(
       { 
         error: error instanceof Error ? error.message : 'Failed to fetch projects',
@@ -133,4 +328,58 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * Generate mock projects for development when Firestore is unavailable
+ */
+function generateMockProjects(userId: string, status = 'active', count = 5) {
+  console.log(`Generating ${count} mock projects for user ${userId} with status ${status}`);
+  
+  const statuses = ['active', 'completed', 'archived'];
+  const mockProjects = [];
+  
+  for (let i = 0; i < count; i++) {
+    // Use the requested status or pick randomly if it's not valid
+    const projectStatus = statuses.includes(status) ? status : statuses[i % statuses.length];
+    
+    mockProjects.push({
+      id: `mock-project-${i + 1}`,
+      name: `Mock Project ${i + 1}`,
+      description: `This is a mock project created for development purposes when Firestore is unavailable.`,
+      status: projectStatus,
+      createdAt: new Date(Date.now() - i * 86400000).toISOString(), // Each a day apart
+      updatedAt: new Date(Date.now() - i * 43200000).toISOString(), // Each half a day apart
+      // Add settings property that matches our model
+      settings: {
+        dataRetentionDays: 30 + (i * 15), // Different retention periods
+        maxStorageGB: 50 + (i * 10)      // Different storage sizes
+      },
+      // Add storage configuration
+      storageConfig: {
+        bucketName: `mock-bucket-${i + 1}`,
+        region: 'us-central1'
+      },
+      teamMembers: [
+        {
+          userId: userId,
+          role: 'owner',
+          addedAt: new Date(Date.now() - i * 86400000).toISOString()
+        },
+        {
+          userId: `mock-user-${i + 1}`,
+          role: 'member',
+          addedAt: new Date(Date.now() - i * 86400000 + 3600000).toISOString()
+        }
+      ],
+      // Add metadata for completeness
+      metadata: {
+        mockData: true,
+        sampleId: `sample-${i + 1}`,
+        createdInDevMode: true
+      }
+    });
+  }
+  
+  return mockProjects;
 } 

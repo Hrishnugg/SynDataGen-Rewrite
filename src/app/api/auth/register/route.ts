@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { hash } from 'bcryptjs';
 import { USER_COLLECTION } from '@/lib/models/firestore/user';
 import { getFirestore } from '@/lib/services/db-service';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email, password, name, company } = body;

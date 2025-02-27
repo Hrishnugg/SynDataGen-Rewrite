@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 export default function ScrollProgressBar() {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -14,19 +14,19 @@ export default function ScrollProgressBar() {
         document.documentElement.scrollHeight -
         document.documentElement.clientHeight;
       // Convert the scroll distance to a percentage
-      const scrolled = `${scrollPx / winHeightPx * 100}%`;
-      
-      setScrollProgress(scrollPx / winHeightPx * 100);
+      const scrolled = `${(scrollPx / winHeightPx) * 100}%`;
+
+      setScrollProgress((scrollPx / winHeightPx) * 100);
     };
 
     // Add scroll event listener
-    window.addEventListener('scroll', updateScrollProgress);
+    window.addEventListener("scroll", updateScrollProgress);
 
     // Initial calculation
     updateScrollProgress();
 
     // Cleanup
-    return () => window.removeEventListener('scroll', updateScrollProgress);
+    return () => window.removeEventListener("scroll", updateScrollProgress);
   }, []);
 
   return (
@@ -37,4 +37,4 @@ export default function ScrollProgressBar() {
       />
     </div>
   );
-} 
+}

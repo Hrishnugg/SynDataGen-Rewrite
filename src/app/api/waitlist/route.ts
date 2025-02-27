@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { headers } from 'next/headers';
 import { getRateLimitConfig, updateRateLimit } from '@/lib/rate-limit';
 import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/email';
@@ -12,7 +12,7 @@ import {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     // Get IP address for rate limiting
     const forwardedFor = headers().get('x-forwarded-for');

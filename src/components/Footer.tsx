@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import Image from 'next/image';
-import { FiGithub, FiTwitter, FiLinkedin } from 'react-icons/fi';
+import Link from "next/link";
+import Image from "next/image";
+import { FiGithub, FiTwitter, FiLinkedin } from "react-icons/fi";
 
 export default function Footer() {
   return (
@@ -32,12 +32,18 @@ export default function Footer() {
             </h3>
             <ul className="space-y-3">
               <li>
-                <Link href="#features" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                <Link
+                  href="#features"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Features
                 </Link>
               </li>
               <li>
-                <Link href="#waitlist" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                <Link
+                  href="#waitlist"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Join Waitlist
                 </Link>
               </li>
@@ -51,12 +57,18 @@ export default function Footer() {
             </h3>
             <ul className="space-y-3">
               <li>
-                <Link href="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                <Link
+                  href="/about"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   About
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                <Link
+                  href="/contact"
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                >
                   Contact
                 </Link>
               </li>
@@ -105,4 +117,4 @@ export default function Footer() {
       </div>
     </footer>
   );
-} 
+}

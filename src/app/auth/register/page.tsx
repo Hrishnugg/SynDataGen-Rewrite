@@ -1,40 +1,39 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { FiArrowRight, FiLoader } from 'react-icons/fi';
-import ThemeToggle from '@/components/ThemeToggle';
-import PasswordInput from '@/components/ui/PasswordInput';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { FiArrowRight, FiLoader } from "react-icons/fi";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    company: '',
+    name: "",
+    email: "",
+    password: "",
+    company: "",
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
@@ -42,13 +41,15 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.error || "Registration failed");
       }
 
       // Redirect to login page on success
-      router.push('/auth/login?registered=true');
+      router.push("/auth/login?registered=true");
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -56,10 +57,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-primary py-12 px-4 sm:px-6 lg:px-8">
-      <div className="fixed top-4 right-4">
-        <ThemeToggle />
-      </div>
-      
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h2 className="text-4xl font-bold mb-4 text-gray-900 dark:text-white">
@@ -79,7 +76,10 @@ export default function RegisterPage() {
             )}
 
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="name"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Full Name
               </label>
               <input
@@ -94,7 +94,10 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Email Address
               </label>
               <input
@@ -109,7 +112,10 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Password
               </label>
               <PasswordInput
@@ -120,13 +126,17 @@ export default function RegisterPage() {
                 required
                 minLength={8}
               />
+
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 Must be at least 8 characters long
               </p>
             </div>
 
             <div>
-              <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label
+                htmlFor="company"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
                 Company Name
               </label>
               <input
@@ -151,13 +161,13 @@ export default function RegisterPage() {
                 ) : (
                   <FiArrowRight className="w-5 h-5" />
                 )}
-                {isLoading ? 'Creating Account...' : 'Create Account'}
+                {isLoading ? "Creating Account..." : "Create Account"}
               </button>
             </div>
 
             <div className="text-center text-sm text-gray-600 dark:text-gray-400">
-              Already have an account?{' '}
-              <Link 
+              Already have an account?{" "}
+              <Link
                 href="/auth/login"
                 className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
               >
@@ -169,4 +179,4 @@ export default function RegisterPage() {
       </div>
     </div>
   );
-} 
+}

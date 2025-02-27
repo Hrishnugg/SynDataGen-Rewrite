@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { FiX, FiLoader } from 'react-icons/fi';
-import { Project, CreateProjectInput } from '@/lib/models/project';
+import { useState } from "react";
+import { FiX, FiLoader } from "react-icons/fi";
+import { Project, CreateProjectInput } from "@/lib/models/project";
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -13,52 +13,54 @@ interface CreateProjectModalProps {
 export default function CreateProjectModal({
   isOpen,
   onClose,
-  onProjectCreated
+  onProjectCreated,
 }: CreateProjectModalProps) {
   const [formData, setFormData] = useState<CreateProjectInput>({
-    name: '',
-    description: '',
-    ownerId: '',
+    name: "",
+    description: "",
+    ownerId: "",
     settings: {
       dataRetentionDays: 30,
-      maxStorageGB: 50
-    }
+      maxStorageGB: 50,
+    },
   });
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/projects', {
-        method: 'POST',
+      const response = await fetch("/api/projects", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to create project');
+        throw new Error(data.error || "Failed to create project");
       }
 
       const project = await response.json();
       onProjectCreated(project);
       setFormData({
-        name: '',
-        description: '',
-        ownerId: '',
+        name: "",
+        description: "",
+        ownerId: "",
         settings: {
           dataRetentionDays: 30,
-          maxStorageGB: 50
-        }
+          maxStorageGB: 50,
+        },
       });
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to create project');
+      setError(
+        error instanceof Error ? error.message : "Failed to create project",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -120,7 +122,10 @@ export default function CreateProjectModal({
               name="description"
               value={formData.description}
               onChange={(e) =>
-                setFormData((prev) => ({ ...prev, description: e.target.value }))
+                setFormData((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
               }
               className="w-full px-4 py-2 rounded-lg bg-gray-50 dark:bg-dark-primary border border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
               rows={3}
@@ -146,8 +151,8 @@ export default function CreateProjectModal({
                     ...prev,
                     settings: {
                       ...prev.settings,
-                      dataRetentionDays: parseInt(e.target.value)
-                    }
+                      dataRetentionDays: parseInt(e.target.value),
+                    },
                   }))
                 }
                 min={1}
@@ -173,8 +178,8 @@ export default function CreateProjectModal({
                     ...prev,
                     settings: {
                       ...prev.settings,
-                      maxStorageGB: parseInt(e.target.value)
-                    }
+                      maxStorageGB: parseInt(e.target.value),
+                    },
                   }))
                 }
                 min={1}
@@ -203,7 +208,7 @@ export default function CreateProjectModal({
                   Creating...
                 </>
               ) : (
-                'Create Project'
+                "Create Project"
               )}
             </button>
           </div>
@@ -211,4 +216,4 @@ export default function CreateProjectModal({
       </div>
     </div>
   );
-} 
+}

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { FiArrowRight } from 'react-icons/fi';
-import { motion } from 'framer-motion';
+import { useState } from "react";
+import { FiArrowRight } from "react-icons/fi";
+import { motion } from "framer-motion";
 
 interface FormData {
   name: string;
@@ -16,84 +16,91 @@ interface FormData {
 
 export default function WaitlistForm() {
   const [formData, setFormData] = useState<FormData>({
-    name: '',
-    email: '',
-    company: '',
-    industry: '',
-    customIndustry: '',
-    dataVolume: '',
-    useCase: '',
+    name: "",
+    email: "",
+    company: "",
+    industry: "",
+    customIndustry: "",
+    dataVolume: "",
+    useCase: "",
   });
 
   const [showCustomIndustry, setShowCustomIndustry] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const industries = [
-    'Technology',
-    'Healthcare',
-    'Financial Services',
-    'Insurance',
-    'Retail',
-    'Manufacturing',
-    'Education',
-    'Government',
-    'Telecommunications',
-    'Energy',
-    'Transportation',
-    'Media & Entertainment',
-    'Real Estate',
-    'Non-Profit',
-    'Other'
+    "Technology",
+    "Healthcare",
+    "Financial Services",
+    "Insurance",
+    "Retail",
+    "Manufacturing",
+    "Education",
+    "Government",
+    "Telecommunications",
+    "Energy",
+    "Transportation",
+    "Media & Entertainment",
+    "Real Estate",
+    "Non-Profit",
+    "Other",
   ];
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
     const { name, value } = e.target;
-    
-    if (name === 'industry') {
-      setShowCustomIndustry(value === 'Other');
-      if (value !== 'Other') {
-        setFormData(prev => ({
+
+    if (name === "industry") {
+      setShowCustomIndustry(value === "Other");
+      if (value !== "Other") {
+        setFormData((prev) => ({
           ...prev,
           industry: value,
-          customIndustry: ''
+          customIndustry: "",
         }));
       } else {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          industry: value
+          industry: value,
         }));
       }
-    } else if (name === 'customIndustry') {
-      setFormData(prev => ({
+    } else if (name === "customIndustry") {
+      setFormData((prev) => ({
         ...prev,
         customIndustry: value,
-        industry: value ? 'Other' : ''
+        industry: value ? "Other" : "",
       }));
     } else {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: value
+        [name]: value,
       }));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsSubmitting(true);
 
     try {
       const submissionData = {
         ...formData,
-        industry: formData.industry === 'Other' ? formData.customIndustry : formData.industry
+        industry:
+          formData.industry === "Other"
+            ? formData.customIndustry
+            : formData.industry,
       };
 
-      const response = await fetch('/api/waitlist', {
-        method: 'POST',
+      const response = await fetch("/api/waitlist", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(submissionData),
       });
@@ -101,21 +108,23 @@ export default function WaitlistForm() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to join waitlist');
+        throw new Error(data.error || "Failed to join waitlist");
       }
 
       setSuccess(true);
       setFormData({
-        name: '',
-        email: '',
-        company: '',
-        industry: '',
-        customIndustry: '',
-        dataVolume: '',
-        useCase: '',
+        name: "",
+        email: "",
+        company: "",
+        industry: "",
+        customIndustry: "",
+        dataVolume: "",
+        useCase: "",
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(
+        err instanceof Error ? err.message : "An unexpected error occurred",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -129,7 +138,8 @@ export default function WaitlistForm() {
             Thank you for joining our waitlist!
           </h3>
           <p className="text-gray-600 dark:text-gray-300">
-            We'll keep you updated on our progress and let you know when we're ready to launch.
+            We'll keep you updated on our progress and let you know when we're
+            ready to launch.
           </p>
         </div>
       ) : (
@@ -142,7 +152,10 @@ export default function WaitlistForm() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <label htmlFor="name" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label
+                htmlFor="name"
+                className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3"
+              >
                 Full Name
               </label>
               <input
@@ -156,7 +169,10 @@ export default function WaitlistForm() {
               />
             </div>
             <div>
-              <label htmlFor="email" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label
+                htmlFor="email"
+                className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3"
+              >
                 Work Email
               </label>
               <input
@@ -173,7 +189,10 @@ export default function WaitlistForm() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
-              <label htmlFor="company" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label
+                htmlFor="company"
+                className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3"
+              >
                 Company Name
               </label>
               <input
@@ -187,7 +206,10 @@ export default function WaitlistForm() {
               />
             </div>
             <div className="relative">
-              <label htmlFor="industry" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">
+              <label
+                htmlFor="industry"
+                className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3"
+              >
                 Industry
               </label>
               <div className="relative">
@@ -199,15 +221,25 @@ export default function WaitlistForm() {
                   className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white appearance-none pr-10"
                   required
                 >
-                  <option value="" disabled>Select Industry</option>
+                  <option value="" disabled>
+                    Select Industry
+                  </option>
                   {industries.map((industry) => (
-                    <option key={industry} value={industry} className="bg-gray-50 dark:bg-[#0A0F1C]">
+                    <option
+                      key={industry}
+                      value={industry}
+                      className="bg-gray-50 dark:bg-[#0A0F1C]"
+                    >
                       {industry}
                     </option>
                   ))}
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-400">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <svg
+                    className="fill-current h-4 w-4"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                  >
                     <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                   </svg>
                 </div>
@@ -227,7 +259,7 @@ export default function WaitlistForm() {
                     onChange={handleChange}
                     placeholder="Enter your industry"
                     className="w-full px-4 py-3 rounded-lg bg-gray-50 dark:bg-[#0A0F1C] border border-gray-200 dark:border-gray-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-900 outline-none transition-colors text-gray-900 dark:text-white"
-                    required={formData.industry === 'Other'}
+                    required={formData.industry === "Other"}
                   />
                 </motion.div>
               )}
@@ -241,24 +273,34 @@ export default function WaitlistForm() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <motion.button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, dataVolume: '< 100K records' }))}
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    dataVolume: "< 100K records",
+                  }))
+                }
                 className={`px-4 py-3 rounded-lg border ${
-                  formData.dataVolume === '< 100K records'
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
+                  formData.dataVolume === "< 100K records"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500"
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                {'< 100K records'}
+                {"< 100K records"}
               </motion.button>
               <motion.button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, dataVolume: '100K - 1M records' }))}
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    dataVolume: "100K - 1M records",
+                  }))
+                }
                 className={`px-4 py-3 rounded-lg border ${
-                  formData.dataVolume === '100K - 1M records'
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
+                  formData.dataVolume === "100K - 1M records"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500"
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -267,11 +309,16 @@ export default function WaitlistForm() {
               </motion.button>
               <motion.button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, dataVolume: '1M - 10M records' }))}
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    dataVolume: "1M - 10M records",
+                  }))
+                }
                 className={`px-4 py-3 rounded-lg border ${
-                  formData.dataVolume === '1M - 10M records'
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
+                  formData.dataVolume === "1M - 10M records"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500"
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -280,11 +327,16 @@ export default function WaitlistForm() {
               </motion.button>
               <motion.button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, dataVolume: '10M+ records' }))}
+                onClick={() =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    dataVolume: "10M+ records",
+                  }))
+                }
                 className={`px-4 py-3 rounded-lg border ${
-                  formData.dataVolume === '10M+ records'
-                    ? 'bg-blue-600 border-blue-600 text-white'
-                    : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500'
+                  formData.dataVolume === "10M+ records"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-blue-500"
                 } transition-colors text-sm font-medium`}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -295,7 +347,10 @@ export default function WaitlistForm() {
           </div>
 
           <div>
-            <label htmlFor="useCase" className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3">
+            <label
+              htmlFor="useCase"
+              className="block text-base font-medium text-gray-700 dark:text-gray-300 mb-3"
+            >
               How will you use synthetic data?
             </label>
             <textarea
@@ -319,9 +374,25 @@ export default function WaitlistForm() {
             >
               {isSubmitting ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   Submitting...
                 </>
@@ -333,11 +404,13 @@ export default function WaitlistForm() {
               )}
             </motion.button>
             <p className="mt-4 text-sm text-gray-400 text-center">
-              By joining the waitlist, you agree to receive updates about Synoptic. We respect your privacy and will never share your information.
+              By joining the waitlist, you agree to receive updates about
+              Synoptic. We respect your privacy and will never share your
+              information.
             </p>
           </div>
         </form>
       )}
     </div>
   );
-} 
+}

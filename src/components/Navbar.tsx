@@ -1,17 +1,31 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
-import { useTheme } from '@/context/ThemeContext';
-import { useSession, signOut } from 'next-auth/react';
-import { FiSun, FiMoon, FiMenu, FiX, FiUser, FiLogOut } from 'react-icons/fi';
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { useTheme } from "@/context/ThemeContext";
+import { useSession, signOut } from "next-auth/react";
+import { FiSun, FiMoon, FiMenu, FiX, FiUser, FiLogOut } from "react-icons/fi";
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  
+  // Safely access the theme context with a fallback
+  const themeContext = (() => {
+    try {
+      return useTheme();
+    } catch (e) {
+      // Fallback theme context if not within a provider
+      return {
+        theme: 'light',
+        toggleTheme: () => console.warn('Theme context not available')
+      };
+    }
+  })();
+  
+  const { theme, toggleTheme } = themeContext;
   const { data: session } = useSession();
 
   useEffect(() => {
@@ -19,26 +33,52 @@ export default function Navbar() {
       setIsScrolled(window.scrollY > 10);
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const navLinks = [
-    { href: '#features', label: 'Features' },
-    ...(session ? [] : [{ href: '#waitlist', label: 'Join Waitlist' }]),
+    { href: "#features", label: "Features" },
+    ...(session ? [] : [{ href: "#waitlist", label: "Join Waitlist" }]),
   ];
 
   const handleSignOut = () => {
-    signOut({ callbackUrl: '/' });
+    signOut({ callbackUrl: "/" });
     setIsUserMenuOpen(false);
+  };
+  
+  // Handle smooth scrolling for anchor links
+  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    // Only handle anchor links (starting with #)
+    if (href.startsWith('#')) {
+      e.preventDefault();
+      
+      // Close mobile menu if open
+      if (isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+      
+      const targetId = href.substring(1);
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        // Add a small delay to allow mobile menu to close
+        setTimeout(() => {
+          window.scrollTo({
+            top: targetElement.offsetTop - 80, // Adjust for header height
+            behavior: 'smooth'
+          });
+        }, isMobileMenuOpen ? 300 : 0);
+      }
+    }
   };
 
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-40 transition-all duration-200 ${
         isScrolled
-          ? 'bg-white/80 dark:bg-dark-primary/80 backdrop-blur-lg shadow-sm'
-          : 'bg-transparent'
+          ? "bg-white/80 dark:bg-dark-primary/80 backdrop-blur-lg shadow-sm"
+          : "bg-transparent"
       }`}
     >
       <div className="container mx-auto px-6 max-w-7xl">
@@ -61,10 +101,11 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={(e) => handleSmoothScroll(e, link.href)}
                 className={`text-sm font-medium transition-colors hover:text-blue-600 dark:hover:text-blue-400 ${
-                  link.href === '#waitlist'
-                    ? 'px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)]'
-                    : 'text-gray-600 dark:text-gray-300'
+                  link.href === "#waitlist"
+                    ? "px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)]"
+                    : "text-gray-600 dark:text-gray-300"
                 }`}
               >
                 {link.label}
@@ -77,7 +118,7 @@ export default function Navbar() {
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle theme"
             >
-              {theme === 'dark' ? (
+              {theme === "dark" ? (
                 <FiSun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               ) : (
                 <FiMoon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -141,7 +182,7 @@ export default function Navbar() {
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
               aria-label="Toggle theme"
             >
-              {theme === 'dark' ? (
+              {theme === "dark" ? (
                 <FiSun className="w-5 h-5 text-gray-600 dark:text-gray-300" />
               ) : (
                 <FiMoon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -169,11 +210,11 @@ export default function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
+                  onClick={(e) => handleSmoothScroll(e, link.href)}
                   className={`text-sm font-medium transition-colors ${
-                    link.href === '#waitlist'
-                      ? 'px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)] text-center'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400'
+                    link.href === "#waitlist"
+                      ? "px-4 py-2 rounded-lg bg-[rgb(86,102,251)] dark:bg-[rgb(86,102,251)] text-white hover:bg-[rgb(76,92,241)] dark:hover:bg-[rgb(76,92,241)] text-center"
+                      : "text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
                   }`}
                 >
                   {link.label}
@@ -232,4 +273,4 @@ export default function Navbar() {
       </div>
     </nav>
   );
-} 
+}

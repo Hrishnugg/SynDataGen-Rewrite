@@ -1,13 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { PROJECT_COLLECTION } from '@/lib/models/firestore/project';
 import { Project } from '@/lib/models/firestore/project';
 import { getFirestore } from '@/lib/services/db-service';
 import { getFirestoreService } from '@/lib/services/firestore-service';
 
+// Define the IdParams type for Promise-based parameters
+type IdParams = Promise<{ id: string }>;
+
 export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: IdParams }
 ) {
   try {
     const session = await getServerSession();
@@ -15,7 +18,8 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
+    // Get project ID from params
+    const { id: projectId } = await params;
     let project = null;
 
     // Get Firestore service
@@ -49,8 +53,8 @@ export async function GET(
 }
 
 export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: IdParams }
 ) {
   try {
     const session = await getServerSession();
@@ -58,46 +62,45 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await req.json();
-    const projectId = params.id;
-    let updatedProject = null;
-
+    // Get project ID from params
+    const { id: projectId } = await params;
+    
     // Get Firestore service
     const firestoreService = getFirestore();
     await firestoreService.init();
     
-    // Get project first to check permissions
-    const existingProject = await firestoreService.getById<Project>(
-      PROJECT_COLLECTION, 
-      projectId
-    );
+    // Get the project to check ownership
+    const project = await firestoreService.getById<Project>(PROJECT_COLLECTION, projectId);
     
-    if (!existingProject) {
+    if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
     
-    // Check if user has access to update this project
-    const hasAccess = existingProject.teamMembers?.some(
-      (member: any) => member.userId === session.user.id && 
-        ['owner', 'admin'].includes(member.role)
+    // Check if the user is a team member with appropriate permissions
+    const canEdit = project.teamMembers?.some(
+      member => member.userId === session.user.id && 
+      (member.role === 'owner' || member.role === 'editor')
     );
     
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    if (!canEdit) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    
+    // Parse request body
+    const updateData = await request.json();
     
     // Update the project
     await firestoreService.update(
       PROJECT_COLLECTION, 
       projectId, 
       {
-        ...body,
+        ...updateData,
         updatedAt: new Date()
       }
     );
     
     // Retrieve the updated project
-    updatedProject = await firestoreService.getById<Project>(
+    const updatedProject = await firestoreService.getById<Project>(
       PROJECT_COLLECTION, 
       projectId
     );
@@ -113,8 +116,8 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: IdParams }
 ) {
   try {
     const session = await getServerSession();
@@ -122,30 +125,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const projectId = params.id;
-
+    // Get project ID from params
+    const { id: projectId } = await params;
+    
     // Get Firestore service
     const firestoreService = getFirestore();
     await firestoreService.init();
     
-    // Get project first to check permissions
-    const existingProject = await firestoreService.getById<Project>(
-      PROJECT_COLLECTION, 
-      projectId
-    );
+    // Get the project to check ownership
+    const project = await firestoreService.getById<Project>(PROJECT_COLLECTION, projectId);
     
-    if (!existingProject) {
+    if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
     
-    // Check if user has access to delete this project
-    const hasAccess = existingProject.teamMembers?.some(
-      (member: any) => member.userId === session.user.id && 
-        ['owner'].includes(member.role)
+    // Only the project owner can delete a project
+    const isOwner = project.teamMembers?.some(
+      member => member.userId === session.user.id && member.role === 'owner'
     );
     
-    if (!hasAccess) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
+    if (!isOwner) {
+      return NextResponse.json({ error: 'Only the project owner can delete a project' }, { status: 403 });
     }
     
     // Soft delete by updating status

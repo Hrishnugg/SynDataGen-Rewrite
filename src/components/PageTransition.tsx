@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname } from 'next/navigation';
-import { ReactNode } from 'react';
+import { motion, AnimatePresence } from "framer-motion";
+import { usePathname } from "next/navigation";
+import { ReactNode } from "react";
 
 interface PageTransitionProps {
   children: ReactNode;
@@ -19,7 +19,7 @@ const PageTransition = ({ children }: PageTransitionProps) => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{
-          type: 'spring',
+          type: "spring",
           stiffness: 260,
           damping: 20,
         }}
@@ -30,4 +30,4 @@ const PageTransition = ({ children }: PageTransitionProps) => {
   );
 };
 
-export default PageTransition; 
+export default PageTransition;

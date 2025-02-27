@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import { useState, useEffect } from "react";
+import Image from "next/image";
 
 interface LazyImageProps {
   src: string;
@@ -21,7 +21,7 @@ const LazyImage = ({
   alt,
   width,
   height,
-  className = '',
+  className = "",
   priority = false,
   quality = 75,
   sizes,
@@ -46,9 +46,9 @@ const LazyImage = ({
         }
       },
       {
-        rootMargin: '50px',
+        rootMargin: "50px",
         threshold: 0.1,
-      }
+      },
     );
 
     const element = document.querySelector(`[data-image-src="${src}"]`);
@@ -73,7 +73,7 @@ const LazyImage = ({
     <div
       className={`relative overflow-hidden ${className}`}
       data-image-src={src}
-      style={fill ? { width: '100%', height: '100%' } : undefined}
+      style={fill ? { width: "100%", height: "100%" } : undefined}
     >
       {(isInView || priority) && (
         <Image
@@ -82,7 +82,7 @@ const LazyImage = ({
           width={fill ? undefined : width}
           height={fill ? undefined : height}
           className={`transition-opacity duration-300 ${
-            isLoading ? 'opacity-0' : 'opacity-100'
+            isLoading ? "opacity-0" : "opacity-100"
           }`}
           quality={quality}
           sizes={sizes}
@@ -93,15 +93,15 @@ const LazyImage = ({
           onLoad={handleImageLoad}
         />
       )}
-      
+
       {/* Loading placeholder */}
       {isLoading && (
-        <div 
+        <div
           className="absolute inset-0 bg-gray-200 animate-pulse"
           style={{
             backgroundImage: `url(${blurDataURL})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: "cover",
+            backgroundPosition: "center",
           }}
         />
       )}
@@ -109,4 +109,4 @@ const LazyImage = ({
   );
 };
 
-export default LazyImage; 
+export default LazyImage;

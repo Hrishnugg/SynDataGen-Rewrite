@@ -1,8 +1,8 @@
 /**
- * Firestore Data Service
+ * Optimized Firestore Data Service
  * 
- * This service provides a standardized interface for Firestore operations
- * with caching, error handling, and transaction support.
+ * This service provides an optimized interface for Firestore operations
+ * with enhanced caching, cursor-based pagination, and batch operations.
  */
 
 import { getFirestoreInstance } from '../gcp/firestore/initFirestore';
@@ -14,124 +14,133 @@ import {
   Firestore,
   Transaction,
   WriteBatch,
-  QueryDocumentSnapshot
+  QueryDocumentSnapshot,
+  FieldValue,
+  FieldPath
 } from 'firebase-admin/firestore';
-import { timeOperation } from '@/lib/monitoring/firestore-metrics';
+import { timeOperation } from '../monitoring/firestore-metrics';
+import { cacheService, CacheConfig } from './cache-service';
 
-// Cache configuration
-interface CacheConfig {
-  enabled: boolean;
-  ttlSeconds: number;
+// Define error codes for Firestore service
+export enum FIRESTORE_ERROR_CODES {
+  INITIALIZATION_ERROR = 'firestore/initialization-error',
+  CONNECTION_ERROR = 'firestore/connection-error',
+  QUERY_ERROR = 'firestore/query-error',
+  DOCUMENT_NOT_FOUND = 'firestore/document-not-found',
+  WRITE_ERROR = 'firestore/write-error',
+  DELETE_ERROR = 'firestore/delete-error',
+  TRANSACTION_ERROR = 'firestore/transaction-error',
+  BATCH_ERROR = 'firestore/batch-error',
+  PERMISSION_ERROR = 'firestore/permission-error',
+  VALIDATION_ERROR = 'firestore/validation-error',
+  UNKNOWN_ERROR = 'firestore/unknown-error'
 }
 
-// Cache entry with expiry time
-interface CacheEntry<T> {
-  data: T;
-  expiresAt: number;
+// Custom error class for Firestore service
+export class FirestoreServiceError extends Error {
+  code: string;
+  details?: Record<string, any>;
+  originalError?: any;
+
+  constructor(code: string, message: string, details?: Record<string, any>) {
+    super(message);
+    this.name = 'FirestoreServiceError';
+    this.code = code;
+    this.details = details;
+    this.originalError = details?.originalError;
+    
+    // Ensure proper prototype chain for instanceof checks
+    Object.setPrototypeOf(this, FirestoreServiceError.prototype);
+  }
 }
 
-// Default cache configuration
-const DEFAULT_CACHE_CONFIG: CacheConfig = {
-  enabled: true,
-  ttlSeconds: 60 // 1 minute default TTL
-};
+// Enhanced query options
+export interface FirestoreQueryOptions {
+  where?: Array<{
+    field: string;
+    operator: '==' | '<' | '<=' | '>' | '>=' | '!=' | 'array-contains' | 'array-contains-any' | 'in' | 'not-in';
+    value: any;
+  }>;
+  orderBy?: Array<{
+    field: string;
+    direction?: 'asc' | 'desc';
+  }>;
+  limit?: number;
+  startAfter?: DocumentData | QueryDocumentSnapshot;
+  endBefore?: DocumentData | QueryDocumentSnapshot;
+  select?: string[]; // Fields to select (projection)
+  cacheTtl?: number; // Cache TTL in seconds
+  skipCache?: boolean; // Skip cache for this operation
+}
 
-// Cache interface
-class FirestoreCache {
-  private cache: Map<string, CacheEntry<any>>;
-  private config: CacheConfig;
-
-  constructor(config: CacheConfig = DEFAULT_CACHE_CONFIG) {
-    this.cache = new Map();
-    this.config = config;
-  }
-
-  /**
-   * Get an item from cache
-   * @param key Cache key
-   * @returns Cached data or null if expired/not found
-   */
-  get<T>(key: string): T | null {
-    if (!this.config.enabled) return null;
-
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-
-    // Check if entry has expired
-    if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return entry.data as T;
-  }
-
-  /**
-   * Store an item in cache
-   * @param key Cache key
-   * @param data Data to cache
-   */
-  set<T>(key: string, data: T): void {
-    if (!this.config.enabled) return;
-
-    const expiresAt = Date.now() + (this.config.ttlSeconds * 1000);
-    this.cache.set(key, { data, expiresAt });
-  }
-
-  /**
-   * Remove an item from cache
-   * @param key Cache key
-   */
-  delete(key: string): void {
-    this.cache.delete(key);
-  }
-
-  /**
-   * Clear the entire cache
-   */
-  clear(): void {
-    this.cache.clear();
-  }
-
-  /**
-   * Invalidate cache entries that match a pattern
-   * @param pattern Pattern to match
-   */
-  invalidatePattern(pattern: string): void {
-    const regex = new RegExp(pattern);
-    for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
-        this.cache.delete(key);
-      }
-    }
-  }
+// Pagination result that includes the last document for cursor-based pagination
+export interface PaginationResult<T> {
+  items: T[];
+  lastDoc: QueryDocumentSnapshot | null;
+  hasMore: boolean;
 }
 
 /**
- * Firestore Data Service Class
+ * Optimized Firestore Data Service Class
  */
 export class FirestoreService {
-  private db: Firestore;
-  private cache: FirestoreCache;
+  private db!: Firestore; // Use definite assignment assertion
   private initialized: boolean = false;
+  private useBatchWrite: boolean = true; // Default to using batch writes for better performance
 
-  constructor(cacheConfig: CacheConfig = DEFAULT_CACHE_CONFIG) {
-    this.cache = new FirestoreCache(cacheConfig);
-    this.db = null as unknown as Firestore; // Will be initialized in init()
+  constructor(private cacheConfig?: CacheConfig) {
+    // Initialize db as null, it will be properly set in init()
   }
 
   /**
    * Initialize the Firestore service
    */
   async init(): Promise<void> {
-    if (this.initialized) return;
+    console.log(`[FirestoreService] init() called at ${new Date().toISOString()}`);
+    
+    // Check if already initialized
+    if (this.initialized && this.db) {
+      console.log('[FirestoreService] Already initialized, reusing existing Firestore instance');
+      return;
+    }
     
     try {
-      this.db = getFirestoreInstance();
+      console.log('[FirestoreService] Attempting to initialize Firestore...');
+      
+      // Try getFirestoreInstance() first - this should give us an instance if one exists
+      let db = getFirestoreInstance();
+      
+      if (!db) {
+        console.log('[FirestoreService] No existing instance found, calling initializeFirestore directly');
+        db = await initializeFirestore();
+      } else {
+        console.log('[FirestoreService] Using existing Firestore instance from getFirestoreInstance');
+      }
+      
+      if (!db) {
+        throw new Error('Failed to initialize Firestore: null instance returned');
+      }
+      
+      // Store the initialized Firestore instance
+      this.db = db;
       this.initialized = true;
+      
+      // Initialize the cache if configured
+      if (this.cacheConfig?.enabled) {
+        console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
+        cacheService.init(this.cacheConfig);
+      }
+      
+      console.log('[FirestoreService] Successfully initialized');
     } catch (error) {
-      console.error('Failed to initialize Firestore service:', error);
-      throw new Error('Firestore initialization failed');
+      console.error('[FirestoreService] Initialization failed:', error instanceof Error ? error.message : String(error));
+      
+      // Rethrow the error with our error code
+      throw new FirestoreServiceError(
+        FIRESTORE_ERROR_CODES.INITIALIZATION_ERROR,
+        `Failed to initialize Firestore: ${error instanceof Error ? error.message : String(error)}`,
+        { originalError: error }
+      );
     }
   }
 
@@ -139,50 +148,106 @@ export class FirestoreService {
    * Ensure the service is initialized
    */
   private async ensureInitialized(): Promise<void> {
-    if (!this.initialized) {
-      await this.init();
+    if (!this.initialized || !this.db) {
+      let retries = 2; // Allow a couple of retries
+      let lastError: Error | null = null;
+      
+      while (retries >= 0 && (!this.initialized || !this.db)) {
+        try {
+          await this.init();
+          if (this.initialized && this.db) {
+            return; // Successfully initialized
+          }
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.error(`Firestore initialization attempt failed (${retries} retries left):`, error);
+          
+          // If this is specifically the "already initialized" error, break immediately
+          // as we should have handled it in init()
+          if (lastError.message.includes('Firestore has already been initialized')) {
+            break;
+          }
+          
+          retries--;
+          
+          // Small delay before retrying
+          if (retries >= 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+      }
+      
+      // If we get here and we're still not initialized, throw the last error
+      if (!this.initialized || !this.db) {
+        console.error('All Firestore initialization attempts failed');
+        throw new FirestoreServiceError(
+          FIRESTORE_ERROR_CODES.INITIALIZATION_ERROR,
+          `Firestore initialization failed after multiple attempts: ${lastError?.message || 'Unknown error'}`,
+          { originalError: lastError }
+        );
+      }
+    }
+    
+    // Final check to make sure we have a valid db instance
+    if (!this.db) {
+      throw new FirestoreServiceError(
+        FIRESTORE_ERROR_CODES.INITIALIZATION_ERROR,
+        'Firestore instance is not available after initialization',
+        {}
+      );
     }
   }
 
   /**
-   * Get a document by ID
-   * @param collectionPath Collection path
-   * @param id Document ID
-   * @param enableCache Whether to use cache
-   * @returns Document data or null if not found
+   * Get a document by ID with optimized caching
    */
   async getById<T>(
     collectionPath: string, 
     id: string, 
-    enableCache: boolean = true
+    options: { cacheTtl?: number; skipCache?: boolean; select?: string[] } = {}
   ): Promise<T | null> {
     await this.ensureInitialized();
 
     const cacheKey = `${collectionPath}:${id}`;
     
-    // Check cache first if enabled
-    if (enableCache) {
-      const cachedData = this.cache.get<T>(cacheKey);
+    // Check cache first unless skipped
+    if (!options.skipCache) {
+      const cachedData = cacheService.get<T>(cacheKey);
       if (cachedData) return cachedData;
     }
 
     return await timeOperation('read', collectionPath, async () => {
       try {
-        const docRef = this.db.collection(collectionPath).doc(id);
+        let docRef = this.db.collection(collectionPath).doc(id);
         const doc = await docRef.get();
 
         if (!doc.exists) {
           return null;
         }
 
-        const data = { id: doc.id, ...doc.data() } as unknown as T;
+        // Apply field selection manually if needed
+        let data: DocumentData;
+        if (options.select && options.select.length > 0) {
+          // Only include the selected fields
+          data = { id: doc.id };
+          const docData = doc.data() || {};
+          
+          for (const field of options.select) {
+            if (field !== 'id' && field in docData) {
+              data[field] = docData[field];
+            }
+          }
+        } else {
+          // Include all fields
+          data = { id: doc.id, ...doc.data() };
+        }
         
-        // Cache the result if caching is enabled
-        if (enableCache) {
-          this.cache.set(cacheKey, data);
+        // Cache the result if caching is not explicitly skipped
+        if (!options.skipCache) {
+          cacheService.set(cacheKey, data as unknown as T, options.cacheTtl);
         }
 
-        return data;
+        return data as unknown as T;
       } catch (error) {
         console.error(`Error fetching document ${id} from ${collectionPath}:`, error);
         throw new Error(`Failed to fetch document: ${error instanceof Error ? error.message : String(error)}`);
@@ -191,80 +256,183 @@ export class FirestoreService {
   }
 
   /**
-   * Query documents
-   * @param collectionPath Collection path
-   * @param queryBuilder Function to build the query
-   * @param enableCache Whether to use cache
-   * @returns Array of document data
+   * Query documents with enhanced features and cursor-based pagination
    */
   async query<T>(
     collectionPath: string,
-    queryBuilder: (query: CollectionReference) => Query,
-    enableCache: boolean = true
+    options: FirestoreQueryOptions = {}
   ): Promise<T[]> {
     await this.ensureInitialized();
 
     return await timeOperation('query', collectionPath, async () => {
       try {
-        const collectionRef = this.db.collection(collectionPath);
-        const query = queryBuilder(collectionRef);
+        console.log(`Executing query on collection: ${collectionPath} with options:`, 
+          JSON.stringify({
+            where: options.where,
+            orderBy: options.orderBy,
+            limit: options.limit,
+            select: options.select
+          }, null, 2));
+          
+        const query = this.buildQuery(collectionPath, options);
         
-        // Generate a cache key based on the query
-        const cacheKey = `query:${collectionPath}:${query.toString()}`;
+        // Generate a cache key based on the query options
+        const cacheKey = `query:${collectionPath}:${JSON.stringify(options)}`;
         
-        // Check cache first if enabled
-        if (enableCache) {
-          const cachedData = this.cache.get<T[]>(cacheKey);
-          if (cachedData) return cachedData;
+        // Check cache first unless explicitly skipped
+        if (!options.skipCache) {
+          const cachedData = cacheService.get<T[]>(cacheKey);
+          if (cachedData) {
+            console.log(`Cache hit for query on ${collectionPath}`);
+            return cachedData;
+          }
+          console.log(`Cache miss for query on ${collectionPath}`);
         }
 
-        const snapshot = await query.get();
+        let snapshot;
+        // Apply field selection to the query if specified
+        if (options.select && options.select.length > 0) {
+          console.log(`Applying field selection: ${options.select.join(', ')}`);
+          snapshot = await query.select(...options.select).get();
+        } else {
+          snapshot = await query.get();
+        }
+
+        console.log(`Query returned ${snapshot.docs.length} documents from ${collectionPath}`);
+        
         const results = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as unknown as T[];
 
-        // Cache the results if caching is enabled
-        if (enableCache) {
-          this.cache.set(cacheKey, results);
+        // Cache the results unless explicitly skipped
+        if (!options.skipCache) {
+          cacheService.set(cacheKey, results, options.cacheTtl);
+          console.log(`Cached ${results.length} results from ${collectionPath}`);
         }
 
         return results;
       } catch (error) {
-        console.error(`Error querying collection ${collectionPath}:`, error);
-        throw new Error(`Failed to query documents: ${error instanceof Error ? error.message : String(error)}`);
+        // Enhanced error logging
+        console.error(`Error querying collection ${collectionPath}:`, 
+          error instanceof Error ? 
+            { message: error.message, stack: error.stack, name: error.name } : 
+            error
+        );
+        
+        // Additional debugging for where clauses
+        if (options.where) {
+          console.error('Query where clauses:', options.where);
+        }
+        
+        // Format the error message with more context
+        let errorMessage = 'Failed to query documents';
+        
+        if (error instanceof Error) {
+          // Check for common Firestore errors
+          if (error.message.includes('index')) {
+            errorMessage = `Missing Firestore index for query on ${collectionPath}: ${error.message}`;
+          } else if (error.message.includes('permission')) {
+            errorMessage = `Permission denied for query on ${collectionPath}: ${error.message}`;
+          } else if (error.message.includes('exist')) {
+            errorMessage = `Collection ${collectionPath} does not exist: ${error.message}`;
+          } else {
+            errorMessage = `Error querying ${collectionPath}: ${error.message}`;
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
     });
   }
 
   /**
-   * Create a new document
-   * @param collectionPath Collection path
-   * @param data Document data (without ID)
-   * @returns Created document ID
+   * Query with cursor-based pagination
+   * Returns a PaginationResult containing items and the last document for cursor continuity
+   */
+  async queryWithPagination<T>(
+    collectionPath: string,
+    options: FirestoreQueryOptions & { pageSize?: number } = {}
+  ): Promise<PaginationResult<T>> {
+    await this.ensureInitialized();
+
+    return await timeOperation('query', collectionPath, async () => {
+      try {
+        // Make sure we have a limit for pagination
+        const pageSize = options.pageSize || options.limit || 20;
+        const paginationOptions = { ...options, limit: pageSize + 1 }; // Request one more item to check if there's more
+        
+        const query = this.buildQuery(collectionPath, paginationOptions);
+        
+        // Apply field selection to the query if specified
+        let snapshot;
+        if (options.select && options.select.length > 0) {
+          snapshot = await query.select(...options.select).get();
+        } else {
+          snapshot = await query.get();
+        }
+        
+        // Check if there are more results
+        const hasMore = snapshot.docs.length > pageSize;
+        
+        // Get the actual items for this page
+        const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+        
+        // Get the last document for cursor continuation
+        const lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+        
+        // Map documents to data
+        const results = docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as unknown as T[];
+
+        return {
+          items: results,
+          lastDoc,
+          hasMore
+        };
+      } catch (error) {
+        console.error(`Error paginating collection ${collectionPath}:`, error);
+        throw new Error(`Failed to paginate documents: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+  }
+
+  /**
+   * Create a new document with automatic ID
    */
   async create<T extends Record<string, any>>(
     collectionPath: string,
-    data: Omit<T, 'id'>
+    data: Omit<T, 'id'>,
+    options: { useBatch?: boolean } = {}
   ): Promise<string> {
     await this.ensureInitialized();
 
     return await timeOperation('write', collectionPath, async () => {
       try {
-        const collectionRef = this.db.collection(collectionPath);
-        
-        // Add timestamps if not present
-        const dataToSave = {
+        // Add server timestamp for createdAt and updatedAt if not provided
+        const documentData = {
           ...data,
-          createdAt: data.createdAt || new Date(),
-          updatedAt: data.updatedAt || new Date()
-        };
+          createdAt: data.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: data.updatedAt || FieldValue.serverTimestamp()
+        } as DocumentData;
+
+        let docRef: DocumentReference;
         
-        const docRef = await collectionRef.add(dataToSave);
-        
-        // Invalidate any cache entries for this collection
-        this.cache.invalidatePattern(`^query:${collectionPath}`);
-        
+        // Use batch write if enabled for better atomicity
+        if (this.useBatchWrite && options.useBatch !== false) {
+          const batch = this.db.batch();
+          docRef = this.db.collection(collectionPath).doc();
+          batch.set(docRef, documentData);
+          await batch.commit();
+        } else {
+          docRef = await this.db.collection(collectionPath).add(documentData);
+        }
+
+        // Invalidate collection cache
+        cacheService.invalidateCollection(collectionPath);
+
         return docRef.id;
       } catch (error) {
         console.error(`Error creating document in ${collectionPath}:`, error);
@@ -275,73 +443,91 @@ export class FirestoreService {
 
   /**
    * Create a document with a specific ID
-   * @param collectionPath Collection path
-   * @param id Document ID
-   * @param data Document data
-   * @returns True if successful
    */
   async createWithId<T extends Record<string, any>>(
     collectionPath: string,
     id: string,
-    data: Omit<T, 'id'>
+    data: Omit<T, 'id'>,
+    options: { merge?: boolean; useBatch?: boolean } = {}
   ): Promise<boolean> {
     await this.ensureInitialized();
 
     return await timeOperation('write', collectionPath, async () => {
       try {
+        // Add server timestamp for createdAt and updatedAt if not provided
+        const documentData = {
+          ...data,
+          createdAt: data.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: data.updatedAt || FieldValue.serverTimestamp()
+        } as DocumentData;
+
         const docRef = this.db.collection(collectionPath).doc(id);
         
-        // Add timestamps if not present
-        const dataToSave = {
-          ...data,
-          createdAt: data.createdAt || new Date(),
-          updatedAt: data.updatedAt || new Date()
-        };
-        
-        await docRef.set(dataToSave);
-        
-        // Invalidate cache
-        this.cache.delete(`${collectionPath}:${id}`);
-        this.cache.invalidatePattern(`^query:${collectionPath}`);
-        
+        // Use batch write if enabled for better atomicity
+        if (this.useBatchWrite && options.useBatch !== false) {
+          const batch = this.db.batch();
+          
+          if (options.merge) {
+            batch.set(docRef, documentData, { merge: true });
+          } else {
+            batch.set(docRef, documentData);
+          }
+          
+          await batch.commit();
+        } else {
+          if (options.merge) {
+            await docRef.set(documentData, { merge: true });
+          } else {
+            await docRef.set(documentData);
+          }
+        }
+
+        // Invalidate specific document and collection caches
+        cacheService.delete(`${collectionPath}:${id}`);
+        cacheService.invalidatePattern(`query:${collectionPath}`);
+
         return true;
       } catch (error) {
-        console.error(`Error creating document with ID ${id} in ${collectionPath}:`, error);
-        throw new Error(`Failed to create document: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`Error creating document ${id} in ${collectionPath}:`, error);
+        throw new Error(`Failed to create document with ID: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
   }
 
   /**
-   * Update a document
-   * @param collectionPath Collection path
-   * @param id Document ID
-   * @param data Document data to update
-   * @returns True if successful
+   * Update a document with optimized invalidation
    */
   async update<T extends Record<string, any>>(
     collectionPath: string,
     id: string,
-    data: Partial<T>
+    data: Partial<T>,
+    options: { useBatch?: boolean } = {}
   ): Promise<boolean> {
     await this.ensureInitialized();
 
     return await timeOperation('write', collectionPath, async () => {
       try {
+        // Always update the updatedAt timestamp
+        const updateData = {
+          ...data,
+          updatedAt: FieldValue.serverTimestamp()
+        } as DocumentData;
+
         const docRef = this.db.collection(collectionPath).doc(id);
         
-        // Always update the updatedAt timestamp
-        const dataToUpdate = {
-          ...data,
-          updatedAt: new Date()
-        };
-        
-        await docRef.update(dataToUpdate);
-        
-        // Invalidate cache
-        this.cache.delete(`${collectionPath}:${id}`);
-        this.cache.invalidatePattern(`^query:${collectionPath}`);
-        
+        // Use batch write if enabled for better atomicity
+        if (this.useBatchWrite && options.useBatch !== false) {
+          const batch = this.db.batch();
+          batch.update(docRef, updateData);
+          await batch.commit();
+        } else {
+          await docRef.update(updateData);
+        }
+
+        // Invalidate specific document and collection caches
+        cacheService.delete(`${collectionPath}:${id}`);
+        cacheService.invalidatePattern(`query:${collectionPath}`);
+
         return true;
       } catch (error) {
         console.error(`Error updating document ${id} in ${collectionPath}:`, error);
@@ -351,26 +537,32 @@ export class FirestoreService {
   }
 
   /**
-   * Delete a document
-   * @param collectionPath Collection path
-   * @param id Document ID
-   * @returns True if successful
+   * Delete a document with cache invalidation
    */
   async delete(
     collectionPath: string,
-    id: string
+    id: string,
+    options: { useBatch?: boolean } = {}
   ): Promise<boolean> {
     await this.ensureInitialized();
 
     return await timeOperation('delete', collectionPath, async () => {
       try {
         const docRef = this.db.collection(collectionPath).doc(id);
-        await docRef.delete();
         
-        // Invalidate cache
-        this.cache.delete(`${collectionPath}:${id}`);
-        this.cache.invalidatePattern(`^query:${collectionPath}`);
-        
+        // Use batch write if enabled for better atomicity
+        if (this.useBatchWrite && options.useBatch !== false) {
+          const batch = this.db.batch();
+          batch.delete(docRef);
+          await batch.commit();
+        } else {
+          await docRef.delete();
+        }
+
+        // Invalidate specific document and collection caches
+        cacheService.delete(`${collectionPath}:${id}`);
+        cacheService.invalidatePattern(`query:${collectionPath}`);
+
         return true;
       } catch (error) {
         console.error(`Error deleting document ${id} from ${collectionPath}:`, error);
@@ -381,8 +573,6 @@ export class FirestoreService {
 
   /**
    * Run a transaction
-   * @param updateFunction Function to execute in the transaction
-   * @returns Result of the transaction
    */
   async runTransaction<T>(
     updateFunction: (transaction: Transaction) => Promise<T>
@@ -390,40 +580,154 @@ export class FirestoreService {
     await this.ensureInitialized();
 
     try {
-      return await this.db.runTransaction(updateFunction);
+      const result = await this.db.runTransaction(updateFunction);
+      return result;
     } catch (error) {
-      console.error('Transaction failed:', error);
+      console.error('Error running transaction:', error);
       throw new Error(`Transaction failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+
   }
 
   /**
-   * Create a batch operation
-   * @returns Firestore WriteBatch
+   * Create a batch write operation
    */
   createBatch(): WriteBatch {
-    if (!this.initialized) {
-      throw new Error('Firestore service not initialized');
-    }
     return this.db.batch();
   }
 
   /**
-   * Clear the cache
+   * Clear all caches
    */
   clearCache(): void {
-    this.cache.clear();
+    cacheService.clear();
+  }
+
+  /**
+   * Build a query from options
+   * Private helper method to construct Firestore queries
+   */
+  private buildQuery(
+    collectionPath: string, 
+    options: FirestoreQueryOptions
+  ): Query<DocumentData> {
+    let query: Query<DocumentData> = this.db.collection(collectionPath);
+    
+    // Apply where clauses
+    if (options.where) {
+      for (const whereClause of options.where) {
+        query = query.where(whereClause.field, whereClause.operator, whereClause.value);
+      }
+    }
+    
+    // Apply order by
+    if (options.orderBy) {
+      for (const orderByClause of options.orderBy) {
+        query = query.orderBy(orderByClause.field, orderByClause.direction || 'asc');
+      }
+    }
+    
+    // Apply pagination via cursor
+    if (options.startAfter) {
+      query = query.startAfter(options.startAfter);
+    }
+    
+    if (options.endBefore) {
+      query = query.endBefore(options.endBefore);
+    }
+    
+    // Apply limit (important for pagination and performance)
+    if (options.limit) {
+      query = query.limit(options.limit);
+    } else {
+      // Default limit to prevent accidental large reads
+      query = query.limit(100);
+    }
+    
+    return query;
+  }
+  
+  /**
+   * Preload common data into the cache
+   * @param collections Collections to preload
+   */
+  async preloadCommonData(collections: string[] = []): Promise<void> {
+    await this.ensureInitialized();
+    
+    const preloadData: Record<string, any> = {};
+    
+    for (const collection of collections) {
+      try {
+        // Get the first 20 documents from each collection for quick access
+        const snapshot = await this.db.collection(collection).limit(20).get();
+        
+        snapshot.docs.forEach(doc => {
+          const id = doc.id;
+          const data = { id, ...doc.data() };
+          preloadData[`${collection}:${id}`] = data;
+        });
+        
+        // Also cache the collection query result
+        preloadData[`query:${collection}:{"limit":20}`] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.error(`Error preloading collection ${collection}:`, error);
+      }
+    }
+    
+    // Preload the data into cache
+    await cacheService.preloadData(async () => preloadData);
+  }
+
+  /**
+   * Query documents in a collection
+   * @param collectionPath Path to the collection
+   * @param queryFn Function to build the query
+   * @returns Promise resolving to an array of document data
+   */
+  async queryDocuments<T = DocumentData>(
+    collectionPath: string,
+    queryFn: (collectionRef: CollectionReference<T>) => Query<T>
+  ): Promise<T[]> {
+    try {
+      const collection = await this.getCollection<T>(collectionPath);
+      const query = queryFn(collection);
+      const snapshot = await query.get();
+      
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Add the document ID to the data object
+        return {
+          ...data,
+          id: doc.id
+        } as T;
+      });
+    } catch (error) {
+      throw new FirestoreServiceError(
+        FIRESTORE_ERROR_CODES.QUERY_ERROR,
+        `Failed to query documents in '${collectionPath}': ${error instanceof Error ? error.message : String(error)}`,
+        { collectionPath, originalError: error }
+      );
+    }
+  }
+
+  /**
+   * Get a collection reference by path
+   * @param collectionPath Path to the Firestore collection
+   * @returns Promise resolving to a collection reference
+   */
+  async getCollection<T = DocumentData>(collectionPath: string): Promise<CollectionReference<T>> {
+    await this.ensureInitialized();
+    // Cast the collection reference to the generic type
+    return this.db.collection(collectionPath) as CollectionReference<T>;
   }
 }
 
-// Singleton instance
+// Export a singleton instance
 let firestoreServiceInstance: FirestoreService | null = null;
 
-/**
- * Get the Firestore service instance (singleton)
- * @param cacheConfig Optional cache configuration
- * @returns FirestoreService instance
- */
 export function getFirestoreService(cacheConfig?: CacheConfig): FirestoreService {
   if (!firestoreServiceInstance) {
     firestoreServiceInstance = new FirestoreService(cacheConfig);

@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
-import { FiUsers, FiShield, FiCpu, FiClock } from 'react-icons/fi';
+import { useState, useEffect, useRef } from "react";
+import { FiUsers, FiShield, FiCpu, FiClock } from "react-icons/fi";
 import {
   LineChart,
   Line,
@@ -11,8 +11,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
-} from 'recharts';
+  ResponsiveContainer,
+} from "recharts";
 
 interface Statistic {
   icon: any;
@@ -28,40 +28,50 @@ const statistics: Statistic[] = [
     icon: FiUsers,
     value: 0,
     target: 1000000,
-    label: 'Records Generated',
-    suffix: '+'
+    label: "Records Generated",
+    suffix: "+",
   },
   {
     icon: FiShield,
     value: 0,
     target: 99.9,
-    label: 'Privacy Score',
-    suffix: '%'
+    label: "Privacy Score",
+    suffix: "%",
   },
   {
     icon: FiCpu,
     value: 0,
     target: 50,
-    label: 'Processing Speed',
-    suffix: 'x'
+    label: "Processing Speed",
+    suffix: "x",
   },
   {
     icon: FiClock,
     value: 0,
     target: 100,
-    label: 'Time Saved',
-    suffix: '%'
-  }
+    label: "Time Saved",
+    suffix: "%",
+  },
 ];
 
 // Sample data for charts
 const generateTimeSeriesData = () => {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
   ];
-  
-  return months.map(month => ({
+
+  return months.map((month) => ({
     month,
     synthetic: Math.floor(Math.random() * 1000) + 500,
     original: Math.floor(Math.random() * 800) + 200,
@@ -84,18 +94,21 @@ const EnterpriseDemo = () => {
   const [stats, setStats] = useState<Statistic[]>(statistics);
   const [timeSeriesData] = useState(generateTimeSeriesData());
   const [distributionData] = useState(generateDistributionData());
-  const [activeTab, setActiveTab] = useState<'timeSeries' | 'distribution'>('timeSeries');
+  const [activeTab, setActiveTab] = useState<"timeSeries" | "distribution">(
+    "timeSeries",
+  );
 
   useEffect(() => {
     // Animate statistics
     const interval = setInterval(() => {
-      setStats(currentStats =>
-        currentStats.map(stat => ({
+      setStats((currentStats) =>
+        currentStats.map((stat) => ({
           ...stat,
-          value: stat.value < stat.target
-            ? Math.min(stat.value + (stat.target / 50), stat.target)
-            : stat.target
-        }))
+          value:
+            stat.value < stat.target
+              ? Math.min(stat.value + stat.target / 50, stat.target)
+              : stat.target,
+        })),
       );
     }, 50);
 
@@ -110,7 +123,8 @@ const EnterpriseDemo = () => {
             Enterprise-Grade Performance
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Experience unmatched speed, privacy, and accuracy in synthetic data generation
+            Experience unmatched speed, privacy, and accuracy in synthetic data
+            generation
           </p>
         </div>
 
@@ -143,21 +157,21 @@ const EnterpriseDemo = () => {
           {/* Chart Navigation */}
           <div className="flex gap-4 mb-8">
             <button
-              onClick={() => setActiveTab('timeSeries')}
+              onClick={() => setActiveTab("timeSeries")}
               className={`px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'timeSeries'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                activeTab === "timeSeries"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               Time Series Analysis
             </button>
             <button
-              onClick={() => setActiveTab('distribution')}
+              onClick={() => setActiveTab("distribution")}
               className={`px-4 py-2 rounded-lg transition-colors ${
-                activeTab === 'distribution'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                activeTab === "distribution"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
               }`}
             >
               Distribution Comparison
@@ -166,27 +180,28 @@ const EnterpriseDemo = () => {
 
           {/* Charts */}
           <div className="h-[400px]">
-            {activeTab === 'timeSeries' ? (
+            {activeTab === "timeSeries" ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={timeSeriesData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="month" 
+
+                  <XAxis
+                    dataKey="month"
                     stroke="#9CA3AF"
-                    tick={{ fill: '#9CA3AF' }}
+                    tick={{ fill: "#9CA3AF" }}
                   />
-                  <YAxis 
-                    stroke="#9CA3AF"
-                    tick={{ fill: '#9CA3AF' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1F2937',
-                      border: 'none',
-                      borderRadius: '0.5rem',
-                      color: '#F3F4F6'
+
+                  <YAxis stroke="#9CA3AF" tick={{ fill: "#9CA3AF" }} />
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1F2937",
+                      border: "none",
+                      borderRadius: "0.5rem",
+                      color: "#F3F4F6",
                     }}
                   />
+
                   <Line
                     type="monotone"
                     dataKey="synthetic"
@@ -194,6 +209,7 @@ const EnterpriseDemo = () => {
                     strokeWidth={2}
                     name="Synthetic Data"
                   />
+
                   <Line
                     type="monotone"
                     dataKey="original"
@@ -207,24 +223,30 @@ const EnterpriseDemo = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={distributionData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="category" 
+
+                  <XAxis
+                    dataKey="category"
                     stroke="#9CA3AF"
-                    tick={{ fill: '#9CA3AF' }}
+                    tick={{ fill: "#9CA3AF" }}
                   />
-                  <YAxis 
-                    stroke="#9CA3AF"
-                    tick={{ fill: '#9CA3AF' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1F2937',
-                      border: 'none',
-                      borderRadius: '0.5rem',
-                      color: '#F3F4F6'
+
+                  <YAxis stroke="#9CA3AF" tick={{ fill: "#9CA3AF" }} />
+
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#1F2937",
+                      border: "none",
+                      borderRadius: "0.5rem",
+                      color: "#F3F4F6",
                     }}
                   />
-                  <Bar dataKey="synthetic" fill="#3B82F6" name="Synthetic Data" />
+
+                  <Bar
+                    dataKey="synthetic"
+                    fill="#3B82F6"
+                    name="Synthetic Data"
+                  />
+
                   <Bar dataKey="original" fill="#6366F1" name="Original Data" />
                 </BarChart>
               </ResponsiveContainer>
@@ -236,4 +258,4 @@ const EnterpriseDemo = () => {
   );
 };
 
-export default EnterpriseDemo; 
+export default EnterpriseDemo;

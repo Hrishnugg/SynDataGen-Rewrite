@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { motion } from 'framer-motion';
-import { ReactNode, useEffect, useState } from 'react';
-import { useInView } from 'framer-motion';
-import { useRef } from 'react';
+import { motion } from "framer-motion";
+import { ReactNode, useEffect, useState } from "react";
+import { useInView } from "framer-motion";
+import { useRef } from "react";
 
 interface SectionTransitionProps {
   children: ReactNode;
@@ -11,7 +11,11 @@ interface SectionTransitionProps {
   delay?: number;
 }
 
-const SectionTransition = ({ children, className = '', delay = 0 }: SectionTransitionProps) => {
+const SectionTransition = ({
+  children,
+  className = "",
+  delay = 0,
+}: SectionTransitionProps) => {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [hasAnimated, setHasAnimated] = useState(false);
@@ -39,4 +43,4 @@ const SectionTransition = ({ children, className = '', delay = 0 }: SectionTrans
   );
 };
 
-export default SectionTransition; 
+export default SectionTransition;
