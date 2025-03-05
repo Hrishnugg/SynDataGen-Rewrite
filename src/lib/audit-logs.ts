@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { getFirebaseFirestore } from './firebase';
 import { logger } from './logger';
 
 export interface AuditLogEntry {
@@ -7,6 +7,15 @@ export interface AuditLogEntry {
   userId: string;
   timestamp?: string;
   metadata?: Record<string, any>;
+}
+
+// Helper function to get Firestore instance
+async function getDb() {
+  const db = getFirebaseFirestore();
+  if (!db) {
+    throw new Error('Firestore is not initialized');
+  }
+  return db;
 }
 
 /**
@@ -21,17 +30,15 @@ export async function createAuditLog(logEntry: AuditLogEntry): Promise<string> {
       logEntry.timestamp = new Date().toISOString();
     }
 
-    // Create the audit log entry
-    const docRef = await db.collection('audit_logs').add({
-      ...logEntry,
-      createdAt: new Date(), // Firestore timestamp for indexing/querying
-    });
-
-    logger.info(`Created audit log entry: ${docRef.id}`, { 
+    const db = await getDb();
+    const docRef = await db.collection('audit_logs').add(logEntry);
+    
+    logger.info(`Created audit log entry: ${docRef.id}`, {
       action: logEntry.action,
-      resource: logEntry.resource 
+      resource: logEntry.resource,
+      userId: logEntry.userId
     });
-
+    
     return docRef.id;
   } catch (error) {
     logger.error('Error creating audit log entry:', error);

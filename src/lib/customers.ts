@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { getFirebaseFirestore } from './firebase';
 import { logger } from './logger';
 
 export interface Customer {
@@ -25,6 +25,15 @@ export interface Customer {
   metadata?: Record<string, any>;
 }
 
+// Helper function to get Firestore instance
+async function getDb() {
+  const db = getFirebaseFirestore();
+  if (!db) {
+    throw new Error('Firestore is not initialized');
+  }
+  return db;
+}
+
 /**
  * Creates a new customer in the database
  * @param customerData The customer data to create
@@ -32,27 +41,18 @@ export interface Customer {
  */
 export async function createCustomer(customerData: Omit<Customer, 'id'>): Promise<Customer> {
   try {
-    const now = new Date().toISOString();
-    
-    // Add timestamps
-    const customer: Customer = {
+    const db = await getDb();
+    const customerRef = await db.collection('customers').add({
       ...customerData,
-      createdAt: now,
-      updatedAt: now,
-      status: customerData.status || 'pending',
-    };
-    
-    // Create in Firestore
-    const docRef = await db.collection('customers').add(customer);
-    
-    logger.info(`Created customer: ${docRef.id}`, { 
-      name: customer.name, 
-      organization: customer.organization 
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
-    
+
     return {
-      ...customer,
-      id: docRef.id,
+      id: customerRef.id,
+      ...customerData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
   } catch (error) {
     logger.error('Error creating customer:', error);
@@ -67,6 +67,7 @@ export async function createCustomer(customerData: Omit<Customer, 'id'>): Promis
  */
 export async function getCustomerById(id: string): Promise<Customer | null> {
   try {
+    const db = await getDb();
     const doc = await db.collection('customers').doc(id).get();
     
     if (!doc.exists) {
@@ -94,6 +95,7 @@ export async function updateCustomer(
   updateData: Partial<Customer>
 ): Promise<Customer> {
   try {
+    const db = await getDb();
     // Update the timestamp
     const dataToUpdate = {
       ...updateData,
@@ -125,6 +127,7 @@ export async function updateCustomer(
  */
 export async function deleteCustomer(id: string): Promise<boolean> {
   try {
+    const db = await getDb();
     await db.collection('customers').doc(id).delete();
     
     logger.info(`Deleted customer: ${id}`);
@@ -148,6 +151,7 @@ export async function listCustomers(options?: {
   planId?: string;
 }): Promise<Customer[]> {
   try {
+    const db = await getDb();
     let query = db.collection('customers');
     
     // Apply filters if provided
@@ -194,6 +198,7 @@ export async function searchCustomers(
   limit: number = 10
 ): Promise<Customer[]> {
   try {
+    const db = await getDb();
     // Normalize search term
     const normalizedTerm = searchTerm.toLowerCase().trim();
     

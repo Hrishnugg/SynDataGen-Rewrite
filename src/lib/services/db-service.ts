@@ -6,6 +6,7 @@
 
 import { getFirestoreService, FirestoreService } from './firestore-service';
 import { cacheService, CacheConfig } from './cache-service';
+import { getFirebaseInitStatus } from '@/lib/firebase';
 
 // Collections to preload for better performance
 const PRELOAD_COLLECTIONS = [
@@ -46,118 +47,96 @@ export function getBackendForCollection(): 'firestore' {
 }
 
 /**
- * Get the Firestore service with retry logic
+ * Get the Firestore service with retry logic and comprehensive error handling
  */
 export async function getFirestore(preloadCommonData = false): Promise<any> {
-  console.log(`🔍 getFirestore called with preloadCommonData=${preloadCommonData} at ${new Date().toISOString()}`);
-  console.log(`🔍 Current state - initialized: ${_isInitialized}, service exists: ${!!_firestoreService}, last init time: ${new Date(_lastInitTime).toISOString()}`);
-  
-  // If already initialized and recently, return immediately
-  const now = Date.now();
-  if (_isInitialized && _firestoreService && now - _lastInitTime < 3600000) { // 1 hour
-    console.log('🔍 Using existing initialized FirestoreService instance');
+  // Check if already initialized
+  if (_isInitialized && _firestoreService) {
     return _firestoreService;
   }
 
-  // If we have a service, but it's not initialized or it's been a while
-  if (!_firestoreService) {
-    // Get or create the FirestoreService instance
-    try {
-      console.log('🔍 Creating new FirestoreService instance');
-      _firestoreService = getFirestoreService(DB_CACHE_CONFIG);
-      console.log('🔍 Created new FirestoreService instance successfully');
-    } catch (error) {
-      console.error('🔥 Failed to create FirestoreService instance:', error);
+  // Check for Firebase initialization status first
+  const firebaseStatus = getFirebaseInitStatus();
+  if (!firebaseStatus.initialized && firebaseStatus.error) {
+    console.warn(`Firebase initialization issue detected: ${firebaseStatus.error.message}`);
+  }
+    
+  try {
+    // Get service with retry logic
+    const currentTime = Date.now();
+    const timeSinceLastInit = currentTime - _lastInitTime;
+    
+    // Implement backoff if there was a recent error
+    if (_lastInitError && timeSinceLastInit < 5000) {
+      console.warn(`Throttling Firestore initialization after recent error (${timeSinceLastInit}ms ago): ${_lastInitError.message}`);
+      
+      // Check if we're in a development environment where we can use mock data
+      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+        console.info('Using mock data in development environment due to Firestore initialization issues');
+        // Return mock service for development
+        return getMockFirestoreService();
+      }
+      
+      // In production, still attempt to retry after throttle
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    _lastInitTime = currentTime;
+    _lastInitError = null;
+    
+    // Initialize or retrieve Firestore service
+    _firestoreService = await getFirestoreService(DB_CACHE_CONFIG);
+    
+    // Preload common collections if requested
+    if (preloadCommonData && _firestoreService) {
+      await preloadCommonData();
+    }
+    
+    _isInitialized = true;
+    return _firestoreService;
+  } catch (error: any) {
+    _lastInitError = error;
+    
+    console.error(`Failed to initialize Firestore service: ${error.message}`, error);
+    
+    // Check if we're in development or test
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      console.warn('Using mock data service in development due to Firestore error');
+      return getMockFirestoreService();
+    } else {
+      // In production, report but still throw the error
       throw error;
     }
   }
+}
 
-  // Initialize with retries
-  const maxRetries = 2;
-  let retryCount = 0;
+/**
+ * Get a mock Firestore service for development or when real service fails
+ */
+function getMockFirestoreService(): FirestoreService {
+  console.info('Using mock Firestore service with generated data');
   
-  while (retryCount <= maxRetries) {
-    try {
-      // Call init() on the service
-      console.log(`🔍 Attempting to initialize FirestoreService (attempt ${retryCount + 1}/${maxRetries + 1})`);
-      await _firestoreService.init();
-      _isInitialized = true;
-      _lastInitTime = now;
-      _lastInitError = null;
-      console.log('✅ FirestoreService initialized successfully');
-
-      // Preload data if requested
-      if (preloadCommonData && _firestoreService.preloadCommonData && 
-          typeof _firestoreService.preloadCommonData === 'function') {
-        try {
-          console.log('🔍 Preloading common data collections:', PRELOAD_COLLECTIONS);
-          await _firestoreService.preloadCommonData(PRELOAD_COLLECTIONS);
-          console.log('✅ Successfully preloaded common data');
-        } catch (preloadError) {
-          console.warn('⚠️ Failed to preload common data:', preloadError);
-          // Continue even if preload fails
-        }
-      }
-
-      return _firestoreService;
-    } catch (error) {
-      retryCount++;
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`🔥 Failed to initialize Firestore service (attempt ${retryCount}/${maxRetries + 1}): ${errorMessage}`);
-      
-      if (error instanceof Error && error.stack) {
-        console.error('Stack trace:', error.stack);
-      }
-      
-      _lastInitError = error instanceof Error ? error : new Error(errorMessage);
-      
-      // Wait before retry
-      if (retryCount <= maxRetries) {
-        console.log(`⏱️ Retrying Firestore initialization in ${1000 * retryCount}ms (attempt ${retryCount + 1}/${maxRetries + 1})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Incremental backoff
-      } else {
-        break;
-      }
-    }
-  }
-  
-  // All initialization attempts failed
-  console.error('❌ All Firestore initialization attempts failed, using mock data fallback');
-  _isInitialized = false;
-  
-  // Generate mock data as fallback
-  console.log('📊 Creating mock service implementation');
-  const mockService = {
-    // Basic mock implementation with common methods
+  return {
+    init: async () => true,
     getById: async (collection: string, id: string) => {
-      console.log(`📊 Mock getById called for ${collection}/${id}`);
-      return null;
+      return generateMockData(collection, 1)[0];
     },
     query: async (collection: string) => {
-      console.log(`📊 Mock query called for ${collection}`);
-      return [];
+      return generateMockData(collection, 10);
     },
-    create: async () => {
-      console.log(`📊 Mock create called`);
-      return 'mock-id';
+    queryWithPagination: async (collection: string) => {
+      const items = generateMockData(collection, 10);
+      return { items, lastDoc: null, hasMore: false };
     },
-    update: async () => {
-      console.log(`📊 Mock update called`);
-      return true;
-    },
-    delete: async () => {
-      console.log(`📊 Mock delete called`);
-      return true;
-    },
-    // Return mock data for common collections
-    getMockData: (collectionName: string, count = 10) => {
-      console.log(`📊 Mock getMockData called for ${collectionName} (count: ${count})`);
-      return generateMockData(collectionName, count);
-    }
-  };
-  
-  console.log('📊 Returning mock service implementation');
-  return mockService;
+    create: async () => 'mock-id',
+    createWithId: async () => true,
+    update: async () => true,
+    delete: async () => true,
+    runTransaction: async (fn: any) => fn({}),
+    createBatch: () => ({}),
+    clearCache: () => {},
+    preloadCommonData: async () => {}
+  } as unknown as FirestoreService;
 }
 
 /**

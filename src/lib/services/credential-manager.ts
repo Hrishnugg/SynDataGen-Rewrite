@@ -39,8 +39,51 @@ export interface ServiceAccountCredentials {
   useAppDefault?: boolean;
 }
 
+// Track the results of our credential attempts
+export interface CredentialCheckResult {
+  source: string;
+  available: boolean;
+  isValid: boolean;
+  error?: string;
+  credentials?: ServiceAccountCredentials;
+}
+
 /**
- * Get Firebase credentials from all possible sources
+ * Check if Firebase credentials are available
+ */
+export function areFirebaseCredentialsAvailable(): boolean {
+  // Check for base64 encoded service account
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return true;
+  }
+  
+  // Check for environment variable with path to service account file
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    try {
+      if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+        return true;
+      }
+    } catch (error) {
+      // File access error, but we'll just return false
+    }
+  }
+
+  // Check for local service account file
+  try {
+    const localServiceAccountPath = path.join(process.cwd(), 'service-account.json');
+    if (fs.existsSync(localServiceAccountPath)) {
+      return true;
+    }
+  } catch (error) {
+    // File access error, but we'll just return false
+  }
+
+  // Fallback - credentials are not available
+  return false;
+}
+
+/**
+ * Get Firebase credentials from all possible sources with detailed results
  */
 export async function getFirebaseCredentials(): Promise<ServiceAccountCredentials> {
   credLogger.info('Attempting to retrieve Firebase credentials');

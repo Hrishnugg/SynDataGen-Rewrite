@@ -1,12 +1,21 @@
 import { google } from 'googleapis';
 import { v4 as uuidv4 } from 'uuid';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
-import { db } from './firebase';
+import { getFirebaseFirestore } from './firebase';
 import { logger } from './logger';
 
 // Initialize Google APIs and Secret Manager
 const iam = google.iam('v1');
 const secretManager = new SecretManagerServiceClient();
+
+// Helper function to get Firestore instance
+async function getDb() {
+  const db = getFirebaseFirestore();
+  if (!db) {
+    throw new Error('Firestore is not initialized');
+  }
+  return db;
+}
 
 /**
  * Creates a service account for a customer
@@ -19,46 +28,43 @@ export async function createServiceAccount(customerId: string, customerName: str
     // Normalize customer name for use in service account
     const normalizedName = customerName
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-')
-      .substring(0, 20);
-    
-    // Create a unique service account ID
-    const serviceAccountId = `customer-${normalizedName}-${customerId.substring(0, 6)}`;
-    
-    // Project ID from environment variable
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
-    if (!projectId) {
-      throw new Error('GOOGLE_CLOUD_PROJECT environment variable is not set');
-    }
-    
-    // Create the service account
-    const createResponse = await iam.projects.serviceAccounts.create({
-      name: `projects/${projectId}`,
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    const serviceAccountId = `customer-${normalizedName}-${uuidv4().slice(0, 8)}`;
+    const serviceAccountEmail = `${serviceAccountId}@${process.env.FIREBASE_PROJECT_ID}.iam.gserviceaccount.com`;
+
+    // Create service account in GCP
+    const [serviceAccount] = await iam.projects.serviceAccounts.create({
+      name: `projects/${process.env.FIREBASE_PROJECT_ID}`,
       requestBody: {
         accountId: serviceAccountId,
-        serviceAccount: {
-          displayName: `Customer: ${customerName}`,
-          description: `Service account for customer ${customerName} (ID: ${customerId})`,
-        },
-      },
+        displayName: `Service Account for ${customerName}`,
+        description: `Service account for customer ${customerId}`
+      }
     });
-    
-    if (!createResponse.data.email) {
-      throw new Error('Failed to create service account: email not returned');
-    }
-    
-    const serviceAccountEmail = createResponse.data.email;
-    
-    // Create key for the service account
+
+    // Create initial key
     const keyReference = await createServiceAccountKey(serviceAccountEmail);
-    
-    logger.info(`Created service account ${serviceAccountEmail} for customer ${customerId}`);
-    
+
+    // Store service account info in Firestore
+    const db = await getDb();
+    await db.collection('service_accounts').doc(customerId).set({
+      email: serviceAccountEmail,
+      keyReference,
+      created: new Date().toISOString(),
+      lastRotated: new Date().toISOString()
+    });
+
+    logger.info(`Created service account for customer ${customerId}`, {
+      serviceAccountEmail,
+      keyReference
+    });
+
     return {
       email: serviceAccountEmail,
-      keyReference: keyReference,
-      created: new Date().toISOString(),
-      lastRotated: new Date().toISOString(),
+      keyReference
     };
   } catch (error) {
     logger.error('Error creating service account:', error);

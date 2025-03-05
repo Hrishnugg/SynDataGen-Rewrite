@@ -7,7 +7,8 @@
 import * as admin from 'firebase-admin';
 import { getApps, initializeApp, cert, applicationDefault, AppOptions, App } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore, Firestore, Settings } from 'firebase-admin/firestore';
-import { getFirebaseCredentials, ServiceAccountCredentials } from '@/lib/services/credential-manager';
+import { getFirebaseCredentials, ServiceAccountCredentials, areFirebaseCredentialsAvailable } from '@/lib/services/credential-manager';
+import { getFirebaseFirestore, getFirebaseInitStatus } from '@/lib/firebase';
 // Import dotenv using require syntax instead of ES modules
 const dotenv = require('dotenv');
 
@@ -49,7 +50,7 @@ declare global {
   var __firestoreState: FirestoreState;
 }
 
-// Initialize state object if it doesn't exist
+// Initialize state only if it doesn't exist
 if (!global.__firestoreState) {
   global.__firestoreState = {
     instance: null,
@@ -64,94 +65,132 @@ if (!global.__firestoreState) {
 }
 
 /**
- * Initialize Firestore connection with improved error handling and state tracking
- * @returns A Firestore instance
+ * Initialize or retrieve the Firestore instance
  */
 export async function initializeFirestore(): Promise<Firestore> {
-  // Set state to initializing and record attempt time
-  if (global.__firestoreState.initializing) {
-    logger.warn('Concurrent Firestore initialization detected. Waiting for existing initialization to complete.');
-    return waitForInitialization();
-  }
-  
-  // Check if we already have an initialized instance
+  // Check if already initialized and return instance
   if (global.__firestoreState.initialized && global.__firestoreState.instance) {
-    logger.debug('Using existing Firestore instance');
     return global.__firestoreState.instance;
   }
-  
-  // Set initializing state
-  global.__firestoreState.initializing = true;
-  global.__firestoreState.lastInitAttempt = Date.now();
-  global.__firestoreState.error = null;
-  
+
+  // Check if initialization in progress
+  if (global.__firestoreState.initializing) {
+    logger.debug('Firestore initialization in progress, waiting for completion');
+    return waitForInitialization();
+  }
+
   try {
-    logger.info('Initializing Firestore connection... Attempt time: ' + new Date().toISOString());
+    // Set initializing flag
+    global.__firestoreState.initializing = true;
+    global.__firestoreState.lastInitAttempt = Date.now();
     
-    // Get credentials using our centralized credential manager
-    logger.debug('Calling getFirebaseCredentials from credential manager at ' + new Date().toISOString());
-    const credentials = await getFirebaseCredentials();
+    // First, check if we can use the centralized Firebase initialization
+    const firebaseStatus = getFirebaseInitStatus();
     
-    if (!credentials) {
-      logger.error('NO CREDENTIALS RETURNED from getFirebaseCredentials');
-      throw new Error('Failed to retrieve Firebase credentials from any source');
+    if (firebaseStatus.initialized) {
+      logger.info('Using centralized Firebase initialization');
+      const firestoreDb = getFirebaseFirestore();
+      
+      // Apply settings to the instance
+      await applyFirestoreSettings(firestoreDb);
+      
+      // Verify connection to ensure it's working
+      await verifyFirestoreConnection(firestoreDb);
+      
+      // Update state with successful initialization
+      global.__firestoreState.instance = firestoreDb;
+      global.__firestoreState.initialized = true;
+      global.__firestoreState.initializing = false;
+      global.__firestoreState.error = null;
+      global.__firestoreState.settingsApplied = true;
+      global.__firestoreState.connectionVerified = true;
+      
+      logger.info('Successfully initialized Firestore using centralized Firebase');
+      return firestoreDb;
+    } else if (firebaseStatus.error) {
+      // If there was an error in the centralized initialization, log it but try our own approach
+      logger.warn('Centralized Firebase initialization failed, attempting standalone Firestore initialization', 
+        firebaseStatus.error);
     }
     
-    logger.debug('Credentials received from getFirebaseCredentials:', 
-      credentials.useAppDefault 
-        ? 'Using application default credentials' 
-        : `Project ID: ${credentials.project_id}, Client email present: ${!!credentials.client_email}, Private key present: ${!!credentials.private_key}`
-    );
+    // If centralized initialization is not available or failed, proceed with direct initialization
+    // Check if credentials are available
+    if (!areFirebaseCredentialsAvailable()) {
+      throw new Error('Firebase credentials not available');
+    }
     
-    // Store credentials in global state for diagnostics
+    // Get credentials
+    const credentials = await getFirebaseCredentials();
     global.__firestoreState.credentials = credentials;
     
-    // Get or initialize Firebase app
-    logger.debug('Attempting to get or create Firebase app at ' + new Date().toISOString());
+    // Get or create Firebase app
     const app = await getOrCreateFirebaseApp(credentials);
-    if (!app) {
-      throw new Error('Failed to initialize or retrieve Firebase app');
-    }
-    
-    // Apply Firestore settings if not already done
-    await applyFirestoreSettings();
     
     // Get Firestore instance
-    logger.debug('Getting Firestore instance from app at ' + new Date().toISOString());
-    const db = getAdminFirestore(app);
-    if (!db) {
-      throw new Error('Failed to get Firestore instance');
-    }
+    const firestoreDb = getAdminFirestore(app);
     
-    // Update state
-    global.__firestoreState.instance = db;
+    // Apply settings to the instance
+    await applyFirestoreSettings(firestoreDb);
+    
+    // Verify connection to ensure it's working
+    await verifyFirestoreConnection(firestoreDb);
+    
+    // Update state with successful initialization
+    global.__firestoreState.instance = firestoreDb;
     global.__firestoreState.initialized = true;
-    global.__firestoreState.error = null;
-    
-    // Verify connection if in development mode
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug('Starting Firestore connection verification at ' + new Date().toISOString());
-      await verifyFirestoreConnection(db);
-    }
-    
-    logger.info('Firestore initialized successfully at ' + new Date().toISOString());
-    return db;
-  } catch (error) {
-    // Record detailed error information
-    const finalError = error instanceof Error ? error : new Error(String(error));
-    logger.error('Firestore initialization failed:', {
-      message: finalError.message,
-      stack: finalError.stack
-    });
-    
-    // Update state with error
-    global.__firestoreState.error = finalError;
-    global.__firestoreState.initialized = false;
-    
-    throw finalError;
-  } finally {
-    // Always reset initializing state
     global.__firestoreState.initializing = false;
+    global.__firestoreState.error = null;
+    global.__firestoreState.settingsApplied = true;
+    global.__firestoreState.connectionVerified = true;
+    
+    logger.info('Successfully initialized Firestore');
+    return firestoreDb;
+  } catch (error: any) {
+    // Handle initialization error
+    global.__firestoreState.initializing = false;
+    global.__firestoreState.error = error;
+    
+    // Check if we're in development or test
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    
+    // For development/test environments, connect to emulator if credentials not available
+    if (isDev && (!areFirebaseCredentialsAvailable() || error.message.includes('credentials'))) {
+      try {
+        logger.warn('Using Firestore emulator due to credential issues in development environment');
+        
+        // Initialize empty app if needed
+        let app: App;
+        const existingApps = getApps();
+        
+        if (existingApps.length === 0) {
+          app = initializeApp({
+            projectId: 'demo-project-id'
+          });
+        } else {
+          app = existingApps[0];
+        }
+        
+        // Get Firestore instance
+        const firestoreDb = getAdminFirestore(app);
+        
+        // Connect to emulator
+        connectFirestoreEmulator(firestoreDb);
+        
+        // Update state
+        global.__firestoreState.instance = firestoreDb;
+        global.__firestoreState.initialized = true;
+        global.__firestoreState.error = null;
+        
+        return firestoreDb;
+      } catch (emulatorError) {
+        logger.error('Failed to connect to Firestore emulator', emulatorError);
+        throw error; // Throw original error
+      }
+    } else {
+      // In production, just throw the error
+      logger.error('Failed to initialize Firestore', error);
+      throw error;
+    }
   }
 }
 
@@ -266,26 +305,18 @@ async function getOrCreateFirebaseApp(credentials: ServiceAccountCredentials): P
 /**
  * Apply Firestore settings
  */
-async function applyFirestoreSettings(): Promise<void> {
+async function applyFirestoreSettings(db: Firestore): Promise<void> {
   try {
     // Use the default settings
     const settings = DEFAULT_FIRESTORE_SETTINGS;
     logger.debug('Applying Firestore settings:', JSON.stringify(settings));
     
-    // Get the current Firestore instance
-    const db = global.__firestoreState.instance;
-    if (!db) {
-      throw new Error('Cannot apply settings, Firestore is not initialized');
-    }
-    
     // Correctly access the settings method
     if (typeof db.settings === 'function') {
       db.settings(settings);
-      global.__firestoreState.settingsApplied = true;
       logger.info('Firestore settings applied successfully');
     } else {
       logger.warn('Firestore settings method not available, using default settings');
-      global.__firestoreState.settingsApplied = true; // Mark as applied anyway to continue
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -295,15 +326,12 @@ async function applyFirestoreSettings(): Promise<void> {
     // we'll just mark it as applied and continue
     if (errorMessage.includes('settings is not defined')) {
       logger.warn('Using default Firestore settings (settings method not available)');
-      global.__firestoreState.settingsApplied = true;
     } else if (errorMessage.includes('settings() can only be called once')) {
       logger.info('Firestore settings already applied in this instance');
-      global.__firestoreState.settingsApplied = true;
     } else {
       // For other errors, we'll still mark settings as applied to allow the app to continue
       // This prevents the initialization from failing completely due to settings issues
       logger.warn(`Unable to apply Firestore settings: ${errorMessage}. Continuing with defaults.`);
-      global.__firestoreState.settingsApplied = true;
     }
   }
 }

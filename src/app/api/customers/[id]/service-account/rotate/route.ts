@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/firebase";
+import { getFirebaseFirestore } from "@/lib/firebase";
 import { getCustomerById } from "@/lib/customers";
 import { rotateServiceAccountKey } from "@/lib/service-accounts";
 import { createAuditLog } from "@/lib/audit-logs";
@@ -19,31 +19,16 @@ export async function POST(
   try {
     // Check if user is authenticated and is an admin
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user?.isAdmin) {
       return NextResponse.json(
-        { error: "Unauthorized access" },
-        { status: 401 }
-      );
-    }
-
-    if (session.user.role !== "admin") {
-      return NextResponse.json(
-        { error: "Admin permissions required" },
+        { error: "Unauthorized - Admin access required" },
         { status: 403 }
       );
     }
 
-    // Await the params to get the ID
-    const { id: customerId } = await params;
-    if (!customerId) {
-      return NextResponse.json(
-        { error: "Customer ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Get customer from Firestore
-    const customer = await getCustomerById(customerId);
+    const { id } = await params;
+    const customer = await getCustomerById(id);
+    
     if (!customer) {
       return NextResponse.json(
         { error: "Customer not found" },
@@ -51,42 +36,21 @@ export async function POST(
       );
     }
 
-    // Check if customer has a service account
-    if (!customer.serviceAccount) {
-      return NextResponse.json(
-        { error: "No service account found for this customer" },
-        { status: 404 }
-      );
-    }
-
     // Rotate the service account key
-    const newKeyReference = await rotateServiceAccountKey(customer.serviceAccount.email);
+    const result = await rotateServiceAccountKey(id);
 
-    // Update customer record with new key reference
-    const customerRef = db.collection("customers").doc(customerId);
-    await customerRef.update({
-      "serviceAccount.keyReference": newKeyReference,
-      "serviceAccount.lastRotated": new Date().toISOString(),
-    });
-
-    // Create audit log
+    // Create audit log entry
     await createAuditLog({
-      action: "service_account_key_rotated",
-      resource: `customers/${customerId}/service-account`,
+      action: "SERVICE_ACCOUNT_KEY_ROTATED",
+      resource: `customers/${id}`,
       userId: session.user.id,
       metadata: {
-        customerName: customer.name,
-        serviceAccountEmail: customer.serviceAccount.email,
-      },
+        customerId: id,
+        serviceAccountEmail: result.email
+      }
     });
 
-    return NextResponse.json(
-      { 
-        message: "Service account key rotated successfully",
-        keyReference: newKeyReference,
-      },
-      { status: 200 }
-    );
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Error rotating service account key:", error);
     return NextResponse.json(
