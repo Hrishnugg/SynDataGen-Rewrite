@@ -93,9 +93,8 @@ export async function getFirestore(preloadData = false): Promise<any> {
     
     // Check if we should enforce using real Firestore
     const forceRealFirestore = process.env.FORCE_REAL_FIRESTORE === 'true';
-    const mockFirebaseDisabled = process.env.MOCK_FIREBASE !== 'true' && process.env.USE_MOCK_DATA !== 'true';
     
-    // MODIFIED: Only use mock data if explicitly enabled or we're in dev/test AND we're not forcing real Firestore
+    // Define the shouldUseMockData variable properly before using it
     const shouldUseMockData = 
       (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && 
       (process.env.MOCK_FIREBASE === 'true' || process.env.USE_MOCK_DATA === 'true') && 
@@ -154,6 +153,12 @@ export async function getFirestore(preloadData = false): Promise<any> {
     _lastInitError = error;
     
     console.error(`Failed to initialize Firestore service: ${error.message}`, error);
+    
+    // Define shouldUseMockData again here to avoid the reference error
+    const shouldUseMockData = 
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && 
+      (process.env.MOCK_FIREBASE === 'true' || process.env.USE_MOCK_DATA === 'true') && 
+      process.env.FORCE_REAL_FIRESTORE !== 'true';
     
     // Check if we're in development or test and should use mock data
     if (shouldUseMockData) {

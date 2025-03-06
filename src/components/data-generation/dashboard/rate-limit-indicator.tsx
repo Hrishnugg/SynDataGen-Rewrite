@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { RateLimitStatus } from '@/lib/models/data-generation/types';
 import { format } from 'date-fns';
@@ -37,48 +37,41 @@ export function RateLimitIndicator({ status, isLoading = false }: RateLimitIndic
   const formattedResetTime = format(resetTime, 'MMM d, yyyy h:mm a');
   
   return (
-    <Card className="w-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-lg flex items-center justify-between">
-          <span>Rate Limit Status</span>
-          {isApproachingLimit && (
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="h-24 flex items-center justify-center">
-            <p className="text-muted-foreground">Loading rate limit data...</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-sm font-medium">Usage</span>
-                <span className="text-sm font-medium">{Math.round(usagePercent)}%</span>
-              </div>
-              <Progress value={usagePercent} className="h-2" />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-muted/30 p-3 rounded-md">
-                <div className="text-sm text-muted-foreground">Current Usage</div>
-                <div className="text-2xl font-semibold">{status.currentUsage.toLocaleString()}</div>
-              </div>
-              <div className="bg-muted/30 p-3 rounded-md">
-                <div className="text-sm text-muted-foreground">Limit</div>
-                <div className="text-2xl font-semibold">{status.limit.toLocaleString()}</div>
-              </div>
-            </div>
-            
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Clock className="h-4 w-4 mr-1" />
-              <span>Resets on {formattedResetTime}</span>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <div>
+        <div className="flex justify-between mb-1">
+          <span className="text-sm font-medium">Usage</span>
+          <span className="text-sm font-medium">{Math.round(usagePercent)}%</span>
+        </div>
+        <Progress 
+          value={usagePercent} 
+          className={`h-2`}
+          indicatorColor={usagePercent > 75 ? "bg-destructive" : usagePercent > 50 ? "bg-warning" : "bg-primary"}
+        />
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-muted p-3 rounded-md">
+          <div className="text-sm text-muted-foreground">Current Usage</div>
+          <div className="text-2xl font-semibold">{status.currentUsage.toLocaleString()}</div>
+        </div>
+        <div className="bg-muted p-3 rounded-md">
+          <div className="text-sm text-muted-foreground">Limit</div>
+          <div className="text-2xl font-semibold">{status.limit.toLocaleString()}</div>
+        </div>
+      </div>
+      
+      <div className="flex items-center text-sm text-muted-foreground">
+        <Clock className="h-4 w-4 mr-1" />
+        <span>Resets on {formattedResetTime}</span>
+      </div>
+      
+      {isApproachingLimit && (
+        <div className="flex items-center gap-2 text-sm text-warning">
+          <AlertTriangle className="h-4 w-4" />
+          <span>Approaching rate limit</span>
+        </div>
+      )}
+    </div>
   );
 } 

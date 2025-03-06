@@ -107,41 +107,85 @@ export class FirestoreService {
     try {
       console.log('[FirestoreService] Attempting to initialize Firestore...');
       
-      // Try getFirestoreInstance() first - this should give us an instance if one exists
-      let db = getFirestoreInstance();
-      
-      if (!db) {
-        console.log('[FirestoreService] No existing instance found, calling initializeFirestore directly');
-        try {
-          db = await initializeFirestore();
-        } catch (initError) {
-          console.error('[FirestoreService] Error during initializeFirestore call:', initError);
-          throw initError;
+      // Check global Firestore state first
+      // @ts-ignore - Global state might exist
+      if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
+        console.log('[Firestore:DEBUG] Using existing Firestore instance from global state');
+        // @ts-ignore
+        this.db = global.__firestoreState.instance;
+        this.initialized = true;
+        
+        // Initialize the cache if configured
+        if (this.cacheConfig?.enabled) {
+          console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
+          try {
+            cacheService.init(this.cacheConfig);
+          } catch (cacheError) {
+            // Don't let cache initialization failure stop Firestore initialization
+            console.warn('[FirestoreService] Cache initialization failed, continuing without cache:', cacheError);
+          }
         }
-      } else {
-        console.log('[FirestoreService] Using existing Firestore instance from getFirestoreInstance');
+        
+        console.log('[FirestoreService] Successfully initialized from global state');
+        return;
       }
       
-      if (!db) {
-        throw new Error('Failed to initialize Firestore: null instance returned');
-      }
-      
-      // Store the initialized Firestore instance
-      this.db = db;
-      this.initialized = true;
-      
-      // Initialize the cache if configured
-      if (this.cacheConfig?.enabled) {
-        console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
-        try {
-          cacheService.init(this.cacheConfig);
-        } catch (cacheError) {
-          // Don't let cache initialization failure stop Firestore initialization
-          console.warn('[FirestoreService] Cache initialization failed, continuing without cache:', cacheError);
+      // Try getFirestoreInstance() next - this should give us an instance if one exists
+      try {
+        let db = getFirestoreInstance();
+        
+        if (db) {
+          console.log('[FirestoreService] Using existing Firestore instance from getFirestoreInstance');
+          this.db = db;
+          this.initialized = true;
+          
+          // Initialize the cache if configured
+          if (this.cacheConfig?.enabled) {
+            console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
+            try {
+              cacheService.init(this.cacheConfig);
+            } catch (cacheError) {
+              // Don't let cache initialization failure stop Firestore initialization
+              console.warn('[FirestoreService] Cache initialization failed, continuing without cache:', cacheError);
+            }
+          }
+          
+          console.log('[FirestoreService] Successfully initialized');
+          return;
         }
+      } catch (instanceError) {
+        // Log but continue to try initializing directly
+        console.warn('[FirestoreService] Error getting existing instance:', instanceError);
       }
       
-      console.log('[FirestoreService] Successfully initialized');
+      // If we get here, we need to initialize Firestore directly
+      console.log('[FirestoreService] No existing instance found, calling initializeFirestore directly');
+      try {
+        const db = await initializeFirestore();
+        if (!db) {
+          throw new Error('Failed to initialize Firestore: null instance returned');
+        }
+        
+        // Store the initialized Firestore instance
+        this.db = db;
+        this.initialized = true;
+        
+        // Initialize the cache if configured
+        if (this.cacheConfig?.enabled) {
+          console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
+          try {
+            cacheService.init(this.cacheConfig);
+          } catch (cacheError) {
+            // Don't let cache initialization failure stop Firestore initialization
+            console.warn('[FirestoreService] Cache initialization failed, continuing without cache:', cacheError);
+          }
+        }
+        
+        console.log('[FirestoreService] Successfully initialized');
+      } catch (initError) {
+        console.error('[FirestoreService] Error during initializeFirestore call:', initError);
+        throw initError;
+      }
     } catch (error) {
       console.error('[FirestoreService] Initialization failed:', error instanceof Error ? error.message : String(error));
       
@@ -266,88 +310,91 @@ export class FirestoreService {
   }
 
   /**
-   * Query documents with enhanced features and cursor-based pagination
+   * Helper to extract Firestore index URL from error messages
+   * @private
+   */
+  private extractIndexUrl(error: any): string | null {
+    if (!error) return null;
+    
+    const message = error.message || error.toString();
+    
+    // Check if the error message contains an index URL
+    const urlRegex = /https:\/\/console\.firebase\.google\.com\/v1\/r\/project\/[^?]+\?create_composite=[a-zA-Z0-9_\-%]+/;
+    const match = message.match(urlRegex);
+    
+    if (match) {
+      return match[0];
+    }
+    
+    return null;
+  }
+
+  /**
+   * Query documents with advanced filtering and ordering
    */
   async query<T>(
     collectionPath: string,
     options: FirestoreQueryOptions = {}
   ): Promise<T[]> {
     await this.ensureInitialized();
-
+    
+    // Generate cache key based on collection and query options
+    const cacheKey = `query:${collectionPath}:${JSON.stringify(options)}`;
+    
+    // Check cache first unless skipped
+    if (!options.skipCache) {
+      const cachedResults = cacheService.get<T[]>(cacheKey);
+      if (cachedResults) {
+        console.log(`Cache hit for query on ${collectionPath}`);
+        return cachedResults;
+      }
+      
+      console.log(`Cache miss for query on ${collectionPath}`);
+    }
+    
+    console.log(`Executing query on collection: ${collectionPath} with options: ${JSON.stringify(options, null, 2)}`);
+    
     return await timeOperation('query', collectionPath, async () => {
       try {
-        console.log(`Executing query on collection: ${collectionPath} with options:`, 
-          JSON.stringify({
-            where: options.where,
-            orderBy: options.orderBy,
-            limit: options.limit,
-            select: options.select
-          }, null, 2));
-          
+        // Build the query
         const query = this.buildQuery(collectionPath, options);
         
-        // Generate a cache key based on the query options
-        const cacheKey = `query:${collectionPath}:${JSON.stringify(options)}`;
+        // Execute the query
+        const snapshot = await query.get();
         
-        // Check cache first unless explicitly skipped
-        if (!options.skipCache) {
-          const cachedData = cacheService.get<T[]>(cacheKey);
-          if (cachedData) {
-            console.log(`Cache hit for query on ${collectionPath}`);
-            return cachedData;
-          }
-          console.log(`Cache miss for query on ${collectionPath}`);
-        }
-
-        let snapshot;
-        // Apply field selection to the query if specified
-        if (options.select && options.select.length > 0) {
-          console.log(`Applying field selection: ${options.select.join(', ')}`);
-          snapshot = await query.select(...options.select).get();
-        } else {
-          snapshot = await query.get();
-        }
-
-        console.log(`Query returned ${snapshot.docs.length} documents from ${collectionPath}`);
+        // Convert the documents to the expected format
+        const results = snapshot.docs.map(doc => {
+          return { 
+            id: doc.id, 
+            ...doc.data() 
+          } as unknown as T;
+        });
         
-        const results = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as unknown as T[];
-
+        console.log(`Query returned ${results.length} documents from ${collectionPath}`);
+        
         // Cache the results unless explicitly skipped
         if (!options.skipCache) {
-          cacheService.set(cacheKey, results, options.cacheTtl);
+          const ttl = options.cacheTtl || undefined; // Use default TTL if not specified
+          cacheService.set(cacheKey, results, ttl);
           console.log(`Cached ${results.length} results from ${collectionPath}`);
         }
-
+        
         return results;
-      } catch (error) {
-        // Enhanced error logging
-        console.error(`Error querying collection ${collectionPath}:`, 
-          error instanceof Error ? 
-            { message: error.message, stack: error.stack, name: error.name } : 
-            error
-        );
+      } catch (error: any) {
+        const errorMessage = `Error querying ${collectionPath}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMessage);
         
-        // Additional debugging for where clauses
-        if (options.where) {
-          console.error('Query where clauses:', options.where);
-        }
-        
-        // Format the error message with more context
-        let errorMessage = 'Failed to query documents';
-        
-        if (error instanceof Error) {
-          // Check for common Firestore errors
-          if (error.message.includes('index')) {
-            errorMessage = `Missing Firestore index for query on ${collectionPath}: ${error.message}`;
-          } else if (error.message.includes('permission')) {
-            errorMessage = `Permission denied for query on ${collectionPath}: ${error.message}`;
-          } else if (error.message.includes('exist')) {
-            errorMessage = `Collection ${collectionPath} does not exist: ${error.message}`;
+        // Check if this is a missing index error and extract the URL
+        const indexUrl = this.extractIndexUrl(error);
+        if (indexUrl) {
+          console.error(`Missing Firestore index detected. Create it here: ${indexUrl}`);
+          
+          if (process.env.NODE_ENV === 'development') {
+            // In development, create a friendly error with the index URL
+            throw new Error(`Missing Firestore index for query on ${collectionPath}: ${error.message}`);
           } else {
-            errorMessage = `Error querying ${collectionPath}: ${error.message}`;
+            // In production, just log the error but don't expose details
+            throw new Error(`Database query error: Missing required index (see logs for details)`);
           }
         }
         
@@ -625,15 +672,71 @@ export class FirestoreService {
     
     // Apply where clauses
     if (options.where) {
+      console.log("Query where clauses before processing:", JSON.stringify(options.where, null, 2));
+      
       for (const whereClause of options.where) {
-        query = query.where(whereClause.field, whereClause.operator, whereClause.value);
+        console.log("Processing where clause:", whereClause);
+        
+        const [fieldPath, operator, value] = whereClause;
+        
+        // Special handling for array-contains with objects
+        if (operator === 'array-contains' && typeof value === 'object' && value !== null) {
+          console.log(`⚠️ Special handling for array-contains with object value:`, value);
+          
+          // Remove any undefined properties from the object to prevent query issues
+          if (value && typeof value === 'object') {
+            Object.keys(value).forEach(key => {
+              if (value[key] === undefined) {
+                console.log(`🔧 Removing undefined property "${key}" from query object`);
+                delete value[key];
+              }
+            });
+          }
+          
+          // Try to adapt query based on environment variable
+          if (process.env.ADAPT_ARRAY_CONTAINS_QUERY === 'true') {
+            // For array-contains with {userId: 'xyz'}, try to optimize the query
+            if (fieldPath === 'teamMembers' && value && 'userId' in value) {
+              const userId = value.userId;
+              console.log(`🔄 Adapting array-contains query for teamMembers with userId: ${userId}`);
+              
+              try {
+                // Try to use a query that checks for userId inside teamMembers array objects
+                query = query.where(`${fieldPath}.userId`, '==', userId);
+                console.log(`✅ Successfully adapted query to ${fieldPath}.userId == ${userId}`);
+                continue; // Skip the original query attempt
+              } catch (adaptError) {
+                console.error(`❌ Error adapting query:`, adaptError);
+                // Fall through to original query
+              }
+            }
+          }
+        }
+        
+        // Original query logic
+        try {
+          query = query.where(fieldPath, operator, value);
+        } catch (error) {
+          console.error(`❌ Error in where clause:`, whereClause, error);
+          throw error;
+        }
       }
     }
     
     // Apply order by
     if (options.orderBy) {
       for (const orderByClause of options.orderBy) {
-        query = query.orderBy(orderByClause.field, orderByClause.direction || 'asc');
+        // Check if orderByClause is an array or an object and handle accordingly
+        if (Array.isArray(orderByClause)) {
+          // Array format: [fieldName, direction]
+          const [field, direction] = orderByClause;
+          console.log(`Applying orderBy with array format: field=${field}, direction=${direction || 'asc'}`);
+          query = query.orderBy(field, direction || 'asc');
+        } else {
+          // Object format: { field, direction }
+          console.log(`Applying orderBy with object format: field=${orderByClause.field}, direction=${orderByClause.direction || 'asc'}`);
+          query = query.orderBy(orderByClause.field, orderByClause.direction || 'asc');
+        }
       }
     }
     

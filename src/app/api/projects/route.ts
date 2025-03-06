@@ -4,6 +4,7 @@ import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from
 import { getFirestore } from '@/lib/services/db-service';
 import { FirestoreQueryOptions } from '@/lib/services/firestore-service';
 import { authOptions } from '@/lib/auth';
+import { initializeStorage, createProjectBucket, setupBucketLifecycle } from '@/lib/gcp/storage';
 
 // Helper function to generate a unique bucket name
 function generateBucketName(projectName: string, userId: string): string {
@@ -73,10 +74,140 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate a unique bucket name
-    const bucketName = generateBucketName(body.name, session.user.id);
+    console.log('[PROJECTS-API] Creating project:', body.name);
+    
+    // Check if we should use mock mode (for testing/development without GCP)
+    const useMockMode = process.env.MOCK_GCP_STORAGE === 'true';
+    
+    if (!useMockMode) {
+      // Initialize storage service
+      try {
+        await initializeStorage();
+        console.log('[PROJECTS-API] GCP Storage initialized successfully');
+      } catch (error) {
+        console.error('[PROJECTS-API] Failed to initialize GCP Storage:', error);
+        
+        // Use mock mode if explicitly allowed when GCP fails
+        if (process.env.ALLOW_MOCK_FALLBACK !== 'true') {
+          return NextResponse.json(
+            { 
+              error: 'Failed to initialize storage service',
+              details: error instanceof Error ? error.message : String(error)
+            },
+            { status: 500 }
+          );
+        } else {
+          console.log('[PROJECTS-API] Falling back to mock mode due to GCP initialization failure');
+        }
+      }
+    } else {
+      console.log('[PROJECTS-API] Using mock GCP mode - will not create actual storage buckets');
+    }
+    
+    // Create a draft project with a temporary ID to get the project ID
+    const firestoreService = await getFirestore(true);
+    
+    // Add a timestamp to the draft status for debugging
+    const draftProjectId = await firestoreService.create(
+      PROJECT_COLLECTION, 
+      {
+        name: body.name,
+        description: body.description,
+        customerId: body.customerId || session.user.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: 'draft',
+        draftCreatedAt: new Date().toISOString(),
+        teamMembers: [
+          {
+            userId: session.user.id,
+            role: 'owner',
+            addedAt: new Date()
+          }
+        ]
+      }
+    );
+    
+    console.log(`[PROJECTS-API] Created draft project with ID: ${draftProjectId}`);
+    
+    // Placeholder for the bucket information
+    let bucketInfo = {
+      bucketName: '',
+      region: body.region || 'us-central1',
+      bucketUri: '',
+      isMock: useMockMode
+    };
+    
+    // Create the actual GCP storage bucket
+    if (!useMockMode) {
+      try {
+        console.log('[PROJECTS-API] Creating GCP storage bucket for project');
+        
+        const bucketResult = await createProjectBucket({
+          projectId: draftProjectId,
+          customerId: body.customerId || session.user.id,
+          region: body.region || 'us-central1',
+          storageClass: 'STANDARD'
+        });
+        
+        console.log(`[PROJECTS-API] Created GCP bucket: ${bucketResult.name} in region ${bucketResult.region}`);
+        
+        // Store the bucket information
+        bucketInfo = {
+          bucketName: bucketResult.name,
+          region: bucketResult.region,
+          bucketUri: bucketResult.uri,
+          isMock: false
+        };
+        
+        // Set up bucket lifecycle rules based on data retention settings
+        const dataRetentionDays = body.settings?.dataRetentionDays || DEFAULT_PROJECT_SETTINGS.dataRetentionDays;
+        await setupBucketLifecycle(bucketResult.name, [
+          {
+            action: { type: 'Delete' },
+            condition: { age: dataRetentionDays }
+          }
+        ]);
+        
+        console.log(`[PROJECTS-API] Set up bucket lifecycle rules with ${dataRetentionDays} day retention`);
+      } catch (error) {
+        console.error('[PROJECTS-API] Failed to create GCP storage bucket:', error);
+        
+        // Don't delete the draft project if fallback is allowed
+        if (process.env.ALLOW_MOCK_FALLBACK !== 'true') {
+          // Clean up the draft project entry
+          await firestoreService.delete(PROJECT_COLLECTION, draftProjectId);
+          
+          return NextResponse.json(
+            { 
+              error: 'Failed to create storage bucket for project',
+              details: error instanceof Error ? error.message : String(error),
+              code: error.code || 500
+            },
+            { status: 500 }
+          );
+        } else {
+          // Use a mock bucket name instead
+          console.log('[PROJECTS-API] Falling back to mock bucket due to GCP bucket creation failure');
+          bucketInfo = {
+            bucketName: `mock-bucket-${draftProjectId.toLowerCase()}`,
+            region: body.region || 'us-central1',
+            bucketUri: `gs://mock-bucket-${draftProjectId.toLowerCase()}`,
+            isMock: true
+          };
+        }
+      }
+    } else {
+      // For mock mode, create a mock bucket name
+      bucketInfo = {
+        bucketName: `mock-bucket-${draftProjectId.toLowerCase()}`,
+        region: body.region || 'us-central1',
+        bucketUri: `gs://mock-bucket-${draftProjectId.toLowerCase()}`,
+        isMock: true
+      };
+    }
 
-    // Create project with default settings
+    // Update the project with the bucket information
     const projectData = {
       name: body.name,
       description: body.description,
@@ -93,32 +224,41 @@ export async function POST(request: NextRequest) {
       ],
       status: 'active',
       storage: {
-        bucketName,
-        region: body.region || 'us-central1',
-        usedStorage: 0
+        bucketName: bucketInfo.bucketName,
+        region: bucketInfo.region,
+        bucketUri: bucketInfo.bucketUri,
+        usedStorage: 0,
+        isMock: bucketInfo.isMock
       },
-      metadata: body.metadata || {}
+      metadata: {
+        ...(body.metadata || {}),
+        bucketCreationCompleted: new Date().toISOString(),
+        usedMockBucket: bucketInfo.isMock
+      }
     };
 
-    // Get Firestore service
-    const firestoreService = await getFirestore(true); // Enable data preloading
-    
-    // Create project with optimized write
-    const projectId = await firestoreService.create(
-      PROJECT_COLLECTION, 
-      projectData,
-      { useBatch: true } // Use batch write for better atomicity
+    // Update the project with the real bucket information
+    await firestoreService.update(
+      PROJECT_COLLECTION,
+      draftProjectId,
+      projectData
     );
+    
+    console.log(`[PROJECTS-API] Updated project ${draftProjectId} with bucket information`);
     
     // Return the created project with ID
     return NextResponse.json({
       ...projectData,
-      id: projectId
+      id: draftProjectId
     });
   } catch (error) {
     console.error('Project creation error:', error);
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { 
+        error: 'Failed to create project',
+        details: error instanceof Error ? error.message : String(error),
+        code: error.code || 500
+      },
       { status: 500 }
     );
   }
@@ -248,127 +388,95 @@ export async function GET(request: NextRequest) {
       console.log('[PROJECTS-API] Firebase credentials not found and not forcing real Firestore. Using mock data for development.');
       debugInfo.usedMockData = true;
       
-      // Generate mock project data
-      const mockProjects = generateMockProjects(session.user.id, status, limit);
+      // ENHANCED: Generate mock projects with consistent IDs based on user ID
+      const mockProjects = generateMockProjects(session.user.id, status);
       
+      // Return mock projects
       return NextResponse.json({
-        projects: mockProjects,
-        debug: {
-          ...debugInfo,
-          projectsCount: mockProjects.length,
-          mockDataUsed: true
-        }
-      });
-    }
-    
-    // Try to get Firestore service - this may fail if credentials are missing
-    let firestoreService;
-    let mockDataUsed = false;
-    try {
-      console.log('Attempting to initialize Firestore service...');
-      firestoreService = await getFirestore(true);
-      console.log('Firestore service initialized successfully');
-    } catch (firestoreInitError) {
-      console.error('Failed to initialize Firestore service:', firestoreInitError);
-      debugInfo.errors.push(`Firestore init error: ${firestoreInitError instanceof Error ? firestoreInitError.message : String(firestoreInitError)}`);
-      
-      // MODIFIED: Only use mock data fallback if not forcing real Firestore
-      if (!forceRealFirestore) {
-        console.log('Using mock data as fallback due to Firestore initialization failure');
-        const mockProjects = generateMockProjects(session.user.id, status, limit);
-        return NextResponse.json({
-          projects: mockProjects,
-          count: mockProjects.length,
-          debug: {
-            ...debugInfo,
-            projectsCount: mockProjects.length,
-            mockDataUsed: true
-          }
-        });
-      } else {
-        // If forcing real Firestore but it failed, return a proper error
-        return NextResponse.json({
-          error: 'Firestore connection required but failed',
-          debug: debugInfo
-        }, { status: 500 });
-      }
-    }
-    
-    // MODIFIED: Check if we got a mock service and are forcing real Firestore
-    if (firestoreService.getMockData && forceRealFirestore) {
-      return NextResponse.json({
-        error: 'Received mock Firestore service but real Firestore is required',
-        debug: {
-          ...debugInfo,
-          forceRealFirestore: true
-        }
-      }, { status: 500 });
-    }
-    
-    // Check if we got a mock service with getMockData method
-    if (firestoreService.getMockData && !forceRealFirestore) {
-      console.log('Using mock data from FirestoreService fallback');
-      const mockProjects = firestoreService.getMockData('projects', 20);
-      mockDataUsed = true;
-      
-      return NextResponse.json({
-        projects: mockProjects,
+        projects: mockProjects, 
         count: mockProjects.length,
-        debug: {
-          ...debugInfo,
-          projectsCount: mockProjects.length,
-          mockDataUsed: true,
-          source: 'firestore-service-fallback'
-        }
+        debug: debugInfo
       });
     }
+
+    console.log('[PROJECTS-API] Attempting to use real Firestore for projects');
     
-    // Continue with normal query workflow if Firestore is initialized
+    // Initialize Firestore connection
+    const firestoreService = await getFirestore();
+    await firestoreService.init();
+    
+    console.log('[PROJECTS-API] Firestore initialized');
+    
+    // Get user projects 
     let userProjects = [];
     
-    // Step 1: Try direct teamMembers query (using our composite index)
-    try {
-      console.log('Executing query with teamMembers filter...');
-      userProjects = await firestoreService.queryDocuments(
-        PROJECT_COLLECTION,
-        (query) => {
-          let q = query;
-          // Apply status filter
-          q = q.where('status', '==', status);
-          // Apply team members filter
-          q = q.where('teamMembers', 'array-contains', { userId: session.user.id });
-          // Apply ordering
-          q = q.orderBy('createdAt', 'desc');
-          // Apply limit
-          q = q.limit(50);
-          return q;
-        }
-      );
-      
-      console.log(`Found ${userProjects.length} projects for user ${session.user.id} using direct query`);
-    } 
-    catch (directQueryError) {
-      console.error('Direct team member query failed:', directQueryError);
-      debugInfo.errors.push(`Team member query error: ${directQueryError instanceof Error ? directQueryError.message : String(directQueryError)}`);
-      
-      // Step 2: Fallback to simpler query using just status and createdAt
+    console.log('👤 User ID for query:', session.user.id);
+    
+    // Define the fallback strategy as a function
+    const fallbackLoop = async (): Promise<boolean> => {
+      // Fallback 1: Try dot notation approach first (should work now with index)
       try {
-        console.log('Falling back to simple status query...');
-        const allProjects = await firestoreService.queryDocuments(
-          PROJECT_COLLECTION,
-          (query) => {
-            let q = query;
-            // Apply status filter
-            q = q.where('status', '==', status);
-            // Apply ordering
-            q = q.orderBy('createdAt', 'desc');
-            // Apply limit
-            q = q.limit(100);
-            return q;
-          }
-        );
+        console.log('[FALLBACK-1] Trying teamMembers.userId query (should work with index)');
+        const dotNotationQuery = {
+          where: [["teamMembers.userId", "==", session.user.id]],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit
+        };
         
-        console.log(`Found ${allProjects.length} total projects with status ${status}`);
+        userProjects = await firestoreService.query(PROJECT_COLLECTION, dotNotationQuery);
+        console.log(`[FALLBACK-1] Found ${userProjects.length} projects with dot notation query`);
+        
+        if (userProjects.length > 0) {
+          debugInfo.usedQuery = 'fallback-dot-notation';
+          return true; // Success
+        }
+      } catch (fallback1Error) {
+        // Only show detailed errors in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[FALLBACK-1] Error with dot notation query:', fallback1Error);
+        } else {
+          console.error('[FALLBACK-1] Error with dot notation query');
+        }
+        debugInfo.errors.push(`Fallback 1 error: ${fallback1Error instanceof Error ? fallback1Error.message : String(fallback1Error)}`);
+      }
+      
+      // Fallback 2: Try simplified teamMembers array-contains query
+      try {
+        console.log('[FALLBACK-2] Trying simplified teamMembers query');
+        const simplifiedTeamQuery = {
+          where: [["teamMembers", "array-contains", { userId: session.user.id }]],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit
+        };
+        
+        userProjects = await firestoreService.query(PROJECT_COLLECTION, simplifiedTeamQuery);
+        console.log(`[FALLBACK-2] Found ${userProjects.length} projects with simplified team query`);
+        
+        if (userProjects.length > 0) {
+          debugInfo.usedQuery = 'fallback-simplified-team';
+          return true; // Success
+        }
+      } catch (fallback2Error) {
+        // Only show detailed errors in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[FALLBACK-2] Error with simplified team query:', fallback2Error);
+        } else {
+          console.error('[FALLBACK-2] Error with simplified team query');
+        }
+        debugInfo.errors.push(`Fallback 2 error: ${fallback2Error instanceof Error ? fallback2Error.message : String(fallback2Error)}`);
+      }
+      
+      // Fallback 3: Original status query with client-side filtering
+      try {
+        console.log('[FALLBACK-3] Using original status query');
+        const statusQuery = {
+          where: [["status", "==", "active"]],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit: limit * 2 // Get more to allow for filtering
+        };
+        
+        const allProjects = await firestoreService.query(PROJECT_COLLECTION, statusQuery);
+        console.log(`Found ${allProjects.length} total projects with status active`);
         
         // Filter client-side for the user's projects
         userProjects = allProjects.filter(project => {
@@ -384,42 +492,221 @@ export async function GET(request: NextRequest) {
         });
         
         console.log(`After filtering, found ${userProjects.length} projects for user ${session.user.id}`);
-      } 
-      catch (simpleQueryError) {
-        console.error('Simple query also failed:', simpleQueryError);
-        debugInfo.errors.push(`Simple query error: ${simpleQueryError instanceof Error ? simpleQueryError.message : String(simpleQueryError)}`);
+        debugInfo.usedQuery = 'fallback-status-client-filter';
         
-        // Use mock data as a last resort in development
-        if (process.env.NODE_ENV === 'development') {
-          userProjects = generateMockProjects(session.user.id, status, limit);
-          debugInfo.usedMockData = true;
-          console.log(`Using ${userProjects.length} mock projects as fallback`);
-        } else {
-          throw simpleQueryError; // In production, propagate the error
+        if (userProjects.length > 0) {
+          return true; // Success
         }
+      } catch (fallback3Error) {
+        console.error('[FALLBACK-3] Error with status query:', fallback3Error);
+        debugInfo.errors.push(`Fallback 3 error: ${fallback3Error instanceof Error ? fallback3Error.message : String(fallback3Error)}`);
+      }
+      
+      // Fallback 4: Raw Firestore query
+      try {
+        console.log('[FALLBACK-4] Using raw Firestore query');
+        
+        // Use the direct queryDocuments method which takes a query builder function
+        const rawProjects = await firestoreService.queryDocuments(PROJECT_COLLECTION, (collectionRef) => {
+          // Build the query manually
+          return collectionRef
+            .where('status', '==', 'active')
+            .orderBy('createdAt', 'desc')
+            .limit(limit * 2);
+        });
+        
+        console.log(`[FALLBACK-4] Found ${rawProjects.length} projects with raw query`);
+        
+        // Filter client-side for the user's projects
+        userProjects = rawProjects.filter(project => {
+          if (!project.teamMembers || !Array.isArray(project.teamMembers)) {
+            return false;
+          }
+          
+          return project.teamMembers.some(member => 
+            member && 
+            typeof member === 'object' && 
+            member.userId === session.user.id
+          );
+        });
+        
+        console.log(`[FALLBACK-4] After filtering, found ${userProjects.length} projects for user ${session.user.id}`);
+        debugInfo.usedQuery = 'fallback-raw-query';
+        
+        if (userProjects.length > 0) {
+          return true; // Success
+        }
+      } catch (fallback4Error) {
+        console.error('[FALLBACK-4] Error with raw query:', fallback4Error);
+        debugInfo.errors.push(`Fallback 4 error: ${fallback4Error instanceof Error ? fallback4Error.message : String(fallback4Error)}`);
+      }
+      
+      return false; // All fallbacks failed
+    };
+    
+    // For now, stick with the original query format but be ready to switch
+    const userTeamQuery = process.env.USE_ALT_QUERY_FORMAT === 'true' || process.env.NODE_ENV === 'production'
+      ? {
+          // Alternative query format using dot notation - should work now that index is created
+          where: [["teamMembers.userId", "==", session.user.id]],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit
+        }
+      : {
+          // Original query format - Fixed to work with Firestore array-contains
+          // When using array-contains with objects, we must match the EXACT object structure
+          // So we should include all fields that we expect to match
+          where: [
+            ["teamMembers", "array-contains", { 
+              userId: session.user.id,
+              // We don't include role now to make it more flexible
+            }]
+          ],
+          orderBy: [{ field: "createdAt", direction: "desc" }],
+          limit
+        };
+    
+    // Try direct query first
+    try {
+      console.log('[PROJECTS-API] Querying projects with team member filter');
+      
+      // Only do diagnostic logging in development
+      if (process.env.NODE_ENV === 'development' && process.env.DEBUG_QUERIES === 'true') {
+        // 🔍 DIAGNOSTIC: Try to fetch a single project to examine structure
+        try {
+          const simpleQuery = {
+            limit: 1,
+            orderBy: [{ field: "createdAt", direction: "desc" }]
+          };
+          
+          console.log('[DIAGNOSTIC] Fetching a sample project to examine structure');
+          const sampleProjects = await firestoreService.query(PROJECT_COLLECTION, simpleQuery);
+          
+          if (sampleProjects.length > 0) {
+            console.log('[DIAGNOSTIC] Sample project structure:');
+            console.log(JSON.stringify({
+              id: sampleProjects[0].id,
+              hasTeamMembers: !!sampleProjects[0].teamMembers,
+              teamMembersType: sampleProjects[0].teamMembers ? typeof sampleProjects[0].teamMembers : 'undefined',
+              isArray: Array.isArray(sampleProjects[0].teamMembers),
+              teamMembersPreview: Array.isArray(sampleProjects[0].teamMembers) 
+                ? sampleProjects[0].teamMembers.slice(0, 2) 
+                : sampleProjects[0].teamMembers,
+              fields: Object.keys(sampleProjects[0])
+            }, null, 2));
+          } else {
+            console.log('[DIAGNOSTIC] No sample projects found.');
+          }
+        } catch (sampleError) {
+          console.error('[DIAGNOSTIC] Error fetching sample project:', sampleError);
+        }
+      }
+      
+      // Continue with original query
+      userProjects = await firestoreService.query(PROJECT_COLLECTION, userTeamQuery);
+      console.log(`[PROJECTS-API] Found ${userProjects.length} projects through direct team member query`);
+      
+      // If we didn't find any projects with the direct query, try the fallback approaches
+      if (userProjects.length === 0) {
+        console.log('No projects found with direct query, trying fallback approaches...');
+        
+        // First, do a direct query for all projects to see what's actually in the database
+        try {
+          console.log('[DIAGNOSTIC] Checking what projects exist in the database');
+          const allProjectsQuery = {
+            limit: 10
+          };
+          
+          const allProjects = await firestoreService.query(PROJECT_COLLECTION, allProjectsQuery);
+          console.log(`[DIAGNOSTIC] Found ${allProjects.length} total projects in database`);
+          
+          if (allProjects.length > 0) {
+            // Log the first project structure to help debug
+            const sampleProject = allProjects[0];
+            console.log('[DIAGNOSTIC] Sample project structure:', JSON.stringify({
+              id: sampleProject.id,
+              name: sampleProject.name,
+              hasTeamMembers: !!sampleProject.teamMembers,
+              teamMembersType: sampleProject.teamMembers ? typeof sampleProject.teamMembers : 'undefined',
+              isArray: Array.isArray(sampleProject.teamMembers),
+              teamMembersPreview: Array.isArray(sampleProject.teamMembers) 
+                ? sampleProject.teamMembers
+                : sampleProject.teamMembers,
+              fields: Object.keys(sampleProject)
+            }, null, 2));
+          }
+        } catch (diagError) {
+          console.error('[DIAGNOSTIC] Error checking all projects:', diagError);
+        }
+        
+        // Step 2: Fallback query mechanism using multiple attempts
+        const fallbackSuccess = await fallbackLoop();
+        
+        if (fallbackSuccess) {
+          console.log('[PROJECTS-API] Successfully found projects using fallback mechanisms');
+        } else {
+          console.log('[PROJECTS-API] All fallback approaches failed to find projects');
+        }
+      }
+    } 
+    catch (directQueryError) {
+      console.error('Direct team member query failed:', directQueryError);
+      debugInfo.errors.push(`Team member query error: ${directQueryError instanceof Error ? directQueryError.message : String(directQueryError)}`);
+      
+      // Step 2: Fallback query mechanism using multiple attempts
+      const fallbackSuccess = await fallbackLoop();
+      
+      if (fallbackSuccess) {
+        console.log('[PROJECTS-API] Successfully found projects using fallback mechanisms');
+      } else {
+        console.log('[PROJECTS-API] All fallback approaches failed to find projects');
       }
     }
     
-    // Return the projects with debug information
-    return NextResponse.json({
-      projects: userProjects,
-      debug: {
-        ...debugInfo,
-        projectsCount: userProjects.length
-      }
+    // Final fallback - just return some mock data if we couldn't get real data
+    if (userProjects.length === 0 && process.env.NODE_ENV === 'development') {
+      console.log('No projects found, using mock projects for development');
+      userProjects = generateMockProjects(session.user.id, status);
+      debugInfo.usedMockData = true;
+    }
+    
+    // Format the projects to match the expected type
+    const projects = userProjects.map(project => {
+      // Ensure dates are serialized properly
+      const formatDate = (date: any) => {
+        if (!date) return undefined;
+        if (date instanceof Date) return date.toISOString();
+        if (typeof date === 'object' && date.toDate) return date.toDate().toISOString();
+        return String(date);
+      };
+      
+      return {
+        id: project.id,
+        name: project.name || 'Untitled Project',
+        description: project.description || '',
+        status: project.status || 'active',
+        createdAt: formatDate(project.createdAt) || new Date().toISOString(),
+        updatedAt: formatDate(project.updatedAt),
+        storage: project.storage || {},
+        settings: project.settings || {},
+        teamMembers: project.teamMembers || [],
+        metadata: project.metadata || {}
+      };
     });
     
-  } catch (error) {
-    console.error('Project fetch error:', error instanceof Error ? {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    } : error);
+    console.log(`[PROJECTS-API] Returning ${projects.length} projects`);
     
+    return NextResponse.json({ 
+      projects, 
+      count: projects.length,
+      debug: debugInfo
+    });
+  } catch (error) {
+    console.error('Projects fetch error:', error);
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Failed to fetch projects',
-        details: error instanceof Error ? error.stack : undefined
+        error: 'Failed to fetch projects',
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );

@@ -435,33 +435,59 @@ async function getOrCreateFirebaseApp(credentials: ServiceAccountCredentials): P
  * Apply Firestore settings
  */
 async function applyFirestoreSettings(db: Firestore): Promise<void> {
+  // Only apply settings if we haven't already done so
+  if (global.__firestoreState && global.__firestoreState.settingsApplied) {
+    logger.debug('Firestore settings already applied, skipping');
+    return;
+  }
+  
   try {
-    // Use the default settings
-    const settings = DEFAULT_FIRESTORE_SETTINGS;
-    logger.debug('Applying Firestore settings:', JSON.stringify(settings));
+    // Apply default settings
+    const settings = {
+      ...DEFAULT_FIRESTORE_SETTINGS
+    };
     
-    // Correctly access the settings method
-    if (typeof db.settings === 'function') {
+    // Check for custom settings in environment
+    if (process.env.FIRESTORE_IGNORE_UNDEFINED === 'false') {
+      settings.ignoreUndefinedProperties = false;
+    }
+    
+    if (process.env.FIRESTORE_TIMESTAMPS_IN_SNAPSHOTS === 'false') {
+      settings.timestampsInSnapshots = false;
+    }
+    
+    // Capture original settings for logging
+    const originalSettings = { ...settings };
+    
+    logger.debug('Applying Firestore settings:', settings);
+    
+    try {
       db.settings(settings);
-      logger.info('Firestore settings applied successfully');
-    } else {
-      logger.warn('Firestore settings method not available, using default settings');
+      // Mark settings as applied in state
+      if (global.__firestoreState) {
+        global.__firestoreState.settingsApplied = true;
+      }
+      logger.debug('Firestore settings applied successfully');
+    } catch (settingsError: any) {
+      // If settings have already been applied, this might throw an error
+      // If the error is about settings already being applied, we can safely continue
+      if (settingsError.message.includes('already been initialized') || 
+          settingsError.message.includes('settings() once')) {
+        logger.warn('Firestore settings already applied (caught error):', settingsError.message);
+        // Mark settings as applied in state
+        if (global.__firestoreState) {
+          global.__firestoreState.settingsApplied = true;
+        }
+      } else {
+        // If it's a different error, rethrow
+        throw settingsError;
+      }
     }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error('Error applying Firestore settings:', errorMessage);
     
-    // If settings are already applied (which can happen in certain Firebase SDK versions),
-    // we'll just mark it as applied and continue
-    if (errorMessage.includes('settings is not defined')) {
-      logger.warn('Using default Firestore settings (settings method not available)');
-    } else if (errorMessage.includes('settings() can only be called once')) {
-      logger.info('Firestore settings already applied in this instance');
-    } else {
-      // For other errors, we'll still mark settings as applied to allow the app to continue
-      // This prevents the initialization from failing completely due to settings issues
-      logger.warn(`Unable to apply Firestore settings: ${errorMessage}. Continuing with defaults.`);
-    }
+    return;
+  } catch (error) {
+    logger.error('Error applying Firestore settings:', error);
+    throw error;
   }
 }
 
@@ -589,100 +615,191 @@ export function getFirestoreStatus(): Record<string, any> {
 }
 
 /**
- * Get Firestore credentials from environment
+ * Resolve the service account file path, handling relative paths correctly
+ */
+function resolveServiceAccountPath(filePath: string): string {
+  if (!filePath) return '';
+  
+  // If it's an absolute path, use it directly
+  if (path.isAbsolute(filePath)) {
+    return filePath;
+  }
+  
+  // Try multiple base directories for relative paths
+  const possiblePaths = [
+    // Standard paths relative to CWD
+    path.resolve(process.cwd(), filePath),
+    
+    // Remove leading ./ if present
+    path.resolve(process.cwd(), filePath.replace(/^\.\//, '')),
+    
+    // Try from project root regardless of CWD
+    path.resolve(process.cwd(), filePath),
+    
+    // Try non-normalized path for Windows compatibility
+    filePath
+  ];
+  
+  for (const possiblePath of possiblePaths) {
+    try {
+      if (fs.existsSync(possiblePath)) {
+        console.log(`[Firestore:PATH] Found service account at: ${possiblePath}`);
+        return possiblePath;
+      }
+    } catch (e) {
+      // Ignore errors checking paths
+    }
+  }
+  
+  // Debugging info
+  console.error(`[Firestore:PATH] Could not resolve path: ${filePath}`);
+  console.error(`[Firestore:PATH] Current working directory: ${process.cwd()}`);
+  console.error(`[Firestore:PATH] Tried paths:`, possiblePaths);
+  
+  // Return the original path as fallback
+  return filePath;
+}
+
+/**
+ * Get Firebase credentials from various sources with priority:
+ * 1. Environment variables (best for production/Vercel)
+ * 2. Application default credentials
+ * 3. Service account file
  */
 export function getFirestoreCredentials() {
-  console.log('Checking for Firebase credentials in environment variables');
+  console.log('[Firestore:CREDS] Checking for Firebase credentials');
+  console.log('[Firestore:CREDS] Current working directory:', process.cwd());
   
-  // Check for environment variables
+  // PRIORITY 1: Check for environment variables (best for Vercel)
   let private_key = process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
   const client_email = process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
   const project_id = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GCP_PROJECT_ID;
 
-  // Handle escaped newlines in private key
+  // Handle escaped newlines in private key (important for Vercel env vars)
   if (private_key && private_key.includes('\\n')) {
-    console.log('Processing escaped newlines in private key');
+    console.log('[Firestore:CREDS] Processing escaped newlines in private key');
     private_key = private_key.replace(/\\n/g, '\n');
   }
 
-  // Return credentials if we have the minimum requirements
+  // Return credentials if we have the minimum requirements from env vars
   if (private_key && client_email && project_id) {
-    console.log('Found complete set of environment credentials');
+    console.log('[Firestore:CREDS] Found complete set of environment credentials');
     return {
       private_key,
       client_email,
-      project_id
+      project_id,
+      source: 'environment-variables'
     };
   }
 
-  // Look for alternative credential sources
-  if (!private_key || !client_email || !project_id) {
-    // Check if we can use application default credentials
-    try {
-      console.log('Attempting to use application default credentials');
-      // Using the imported applicationDefault instead of requiring it
-      console.log('Application default credentials found');
+  // PRIORITY 2: Check if we can use application default credentials
+  try {
+    console.log('[Firestore:CREDS] Attempting to use application default credentials');
+    // Using the imported applicationDefault instead of requiring it
+    console.log('[Firestore:CREDS] Application default credentials found');
+    
+    // If we have application default but missing project ID
+    if (!project_id) {
+      console.log('[Firestore:CREDS] Using application default credentials without explicit project_id');
+      return { useAppDefault: true, source: 'application-default' };
+    }
+  } catch (error) {
+    console.log('[Firestore:CREDS] Application default credentials not available', error.message);
+  }
+  
+  // PRIORITY 3: Check for JSON credentials file (for development)
+  try {
+    // Using the imported fs module instead of requiring it
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.log('[Firestore:CREDS] Attempting to load credentials from GOOGLE_APPLICATION_CREDENTIALS file');
+      const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
       
-      // If we have application default but missing project ID
-      if (!project_id) {
-        console.log('Using application default credentials without explicit project_id');
-        return { useAppDefault: true };
-      }
-    } catch (error) {
-      console.log('Application default credentials not available', error.message);
-    }
-    
-    // Check for JSON credentials file
-    try {
-      // Using the imported fs module instead of requiring it
-      if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        console.log('Attempting to load credentials from GOOGLE_APPLICATION_CREDENTIALS file');
-        const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-        if (fs.existsSync(credPath)) {
-          const serviceAccount = JSON.parse(fs.readFileSync(credPath, 'utf8'));
-          console.log('Loaded credentials from file successfully');
-          return serviceAccount;
+      // Resolve the path properly
+      const resolvedPath = resolveServiceAccountPath(credPath);
+      console.log(`[Firestore:CREDS] Resolved credentials path: ${resolvedPath}`);
+      
+      if (fs.existsSync(resolvedPath)) {
+        try {
+          const serviceAccount = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
+          
+          // Process the private key to ensure correct format
+          if (serviceAccount.private_key && serviceAccount.private_key.includes('\\n')) {
+            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+          }
+          
+          console.log('[Firestore:CREDS] Loaded credentials from file successfully');
+          return {
+            ...serviceAccount,
+            source: 'service-account-file'
+          };
+        } catch (parseError) {
+          console.error('[Firestore:CREDS] Failed to parse service account file:', parseError.message);
         }
+      } else {
+        console.error(`[Firestore:CREDS] Service account file does not exist at resolved path: ${resolvedPath}`);
       }
-    } catch (error) {
-      console.log('Failed to load credentials from file', error.message);
     }
-    
-    // For development environment, attempt to use local credentials
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        console.log('Development environment: checking for local service account file');
-        // Using the imported fs and path modules instead of requiring them
-        const localPaths = [
-          path.join(process.cwd(), 'service-account.json'),
-          path.join(process.cwd(), 'firebase-service-account.json'),
-          path.join(process.cwd(), '.firebase', 'service-account.json'),
-          path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
-        ];
-        
-        for (const localPath of localPaths) {
-          if (fs.existsSync(localPath)) {
-            console.log(`Found local service account file at: ${localPath}`);
-            try {
-              const serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-              if (serviceAccount.project_id && serviceAccount.client_email && serviceAccount.private_key) {
-                console.log('Successfully loaded local service account');
-                return serviceAccount;
-              } else {
-                console.log('Local service account file is missing required fields');
+  } catch (error) {
+    console.log('[Firestore:CREDS] Failed to load credentials from file', error.message);
+  }
+  
+  // For development environment, attempt to use local credentials
+  if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    try {
+      console.log('[Firestore:CREDS] Development environment: checking for local service account file');
+      // Using the imported fs and path modules instead of requiring them
+      const localPaths = [
+        path.join(process.cwd(), 'service-account.json'),
+        path.join(process.cwd(), 'firebase-service-account.json'),
+        path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
+        path.join(process.cwd(), '.firebase', 'service-account.json'),
+        path.join(process.cwd(), 'credentials', 'valid-song-450602-m7-firebase-adminsdk-fbsvc-61ecba6d18.json')
+      ];
+      
+      for (const localPath of localPaths) {
+        if (fs.existsSync(localPath)) {
+          console.log(`[Firestore:CREDS] Found local service account file at: ${localPath}`);
+          try {
+            const serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+            if (serviceAccount.project_id && serviceAccount.client_email && serviceAccount.private_key) {
+              console.log('[Firestore:CREDS] Successfully loaded local service account');
+              
+              // Process private key if needed
+              if (serviceAccount.private_key.includes('\\n')) {
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
               }
-            } catch (readError) {
-              console.log(`Error reading service account from ${localPath}:`, readError.message);
+              
+              return {
+                ...serviceAccount,
+                source: 'local-service-account-file'
+              };
+            } else {
+              console.log('[Firestore:CREDS] Local service account file is missing required fields');
             }
+          } catch (readError) {
+            console.log(`[Firestore:CREDS] Error reading service account from ${localPath}:`, readError.message);
           }
         }
-      } catch (error) {
-        console.log('Error checking for local service account files:', error.message);
       }
+    } catch (error) {
+      console.log('[Firestore:CREDS] Error checking for local service account files:', error.message);
     }
   }
   
+  // If FORCE_MOCK_DATA is true or we're in development, use mock data
+  if (process.env.FORCE_MOCK_DATA === 'true' || 
+      (process.env.NODE_ENV === 'development' && process.env.FORCE_REAL_FIRESTORE !== 'true')) {
+    console.log('[Firestore:CREDS] Using mock credentials for development');
+    return {
+      project_id: 'mock-project',
+      client_email: 'mock@example.com',
+      private_key: 'mock-key',
+      source: 'mock'
+    };
+  }
+  
   // No valid credentials found
+  console.error('[Firestore:CREDS] No valid Firebase credentials found from any source');
   return null;
 }
 

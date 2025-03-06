@@ -8,9 +8,9 @@ type ActivityLog = {
   action: string;
   resource: string;
   timestamp: string;
-  user: string;
-  status: "success" | "warning" | "error";
-  details?: string;
+  userId: string;
+  status?: "success" | "warning" | "error";
+  metadata?: Record<string, any>;
 };
 
 export default function ActivityPage() {
@@ -18,70 +18,47 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulated data loading - in a real app, this would fetch from an API
-    const loadData = async () => {
+    const fetchActivityLogs = async () => {
       setLoading(true);
       try {
-        // Mock data for initial development
-        const mockActivities: ActivityLog[] = [
-          {
-            id: "act-1",
-            action: "Created",
-            resource: "Project: Marketing Data",
-            timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-            user: "Current User",
-            status: "success",
-          },
-          {
-            id: "act-2",
-            action: "Generated",
-            resource: "Dataset: Customer Records",
-            timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
-            user: "Current User",
-            status: "success",
-            details: "1,000 records created successfully",
-          },
-          {
-            id: "act-3",
-            action: "Attempted",
-            resource: "Authentication",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
-            user: "Unknown User",
-            status: "error",
-            details: "Failed login attempt from unusual IP",
-          },
-          {
-            id: "act-4",
-            action: "Updated",
-            resource: "Project: Sales Analytics",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-            user: "Current User",
-            status: "success",
-          },
-          {
-            id: "act-5",
-            action: "Deleted",
-            resource: "Dataset: Test Data",
-            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-            user: "Current User",
-            status: "warning",
-          },
-        ];
-
-        // Sort by timestamp (newest first)
-        mockActivities.sort((a, b) => 
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-
-        setActivities(mockActivities);
+        // Fetch real activity logs from the API
+        const response = await fetch('/api/system/audit-logs');
+        
+        if (response.ok) {
+          const data = await response.json();
+          
+          // Transform the data to match our ActivityLog type
+          const formattedLogs = data.logs.map((log: any) => ({
+            id: log.id || `log-${Math.random().toString(36).substr(2, 9)}`,
+            action: log.action,
+            resource: log.resource,
+            timestamp: log.timestamp || new Date().toISOString(),
+            userId: log.userId || 'Unknown User',
+            status: log.metadata?.status || 'success',
+            metadata: log.metadata
+          }));
+          
+          // Sort by timestamp (newest first)
+          formattedLogs.sort((a: ActivityLog, b: ActivityLog) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+          
+          setActivities(formattedLogs);
+        } else {
+          console.error("Failed to fetch activity logs:", await response.text());
+          // Fall back to empty array if fetch fails
+          setActivities([]);
+        }
       } catch (error) {
         console.error("Error loading activity data:", error);
+        // Fall back to empty array if fetch fails
+        setActivities([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
+    fetchActivityLogs();
   }, []);
 
   // Format timestamp in a human-readable way
@@ -149,9 +126,9 @@ export default function ActivityPage() {
                       <p className="font-medium">
                         {activity.action} {activity.resource}
                       </p>
-                      {activity.details && (
+                      {activity.metadata?.details && (
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                          {activity.details}
+                          {activity.metadata.details}
                         </p>
                       )}
                     </div>
@@ -168,7 +145,7 @@ export default function ActivityPage() {
                             activity.status
                           )}`}
                         >
-                          {activity.status}
+                          {activity.status || "info"}
                         </span>
                       </div>
                     </div>

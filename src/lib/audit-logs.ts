@@ -7,6 +7,7 @@ export interface AuditLogEntry {
   userId: string;
   timestamp?: string;
   metadata?: Record<string, any>;
+  id?: string;
 }
 
 // Helper function to get Firestore instance
@@ -57,9 +58,10 @@ export async function getAuditLogsForResource(
   limit: number = 100
 ): Promise<AuditLogEntry[]> {
   try {
+    const db = await getDb();
     const snapshot = await db.collection('audit_logs')
       .where('resource', '==', resource)
-      .orderBy('createdAt', 'desc')
+      .orderBy('timestamp', 'desc')
       .limit(limit)
       .get();
 
@@ -87,9 +89,10 @@ export async function getAuditLogsForUser(
   limit: number = 100
 ): Promise<AuditLogEntry[]> {
   try {
+    const db = await getDb();
     const snapshot = await db.collection('audit_logs')
       .where('userId', '==', userId)
-      .orderBy('createdAt', 'desc')
+      .orderBy('timestamp', 'desc')
       .limit(limit)
       .get();
 
@@ -115,8 +118,9 @@ export async function getRecentAuditLogs(
   limit: number = 100
 ): Promise<AuditLogEntry[]> {
   try {
+    const db = await getDb();
     const snapshot = await db.collection('audit_logs')
-      .orderBy('createdAt', 'desc')
+      .orderBy('timestamp', 'desc')
       .limit(limit)
       .get();
 

@@ -97,6 +97,41 @@ export function getStorageInstance(): Storage {
 }
 
 /**
+ * Generate a valid bucket name according to GCP requirements
+ * 
+ * @param projectId Project ID
+ * @param customerId Customer ID
+ * @returns Valid bucket name
+ */
+function generateValidBucketName(projectId: string, customerId: string): string {
+  // Sanitize inputs:
+  // 1. Convert to lowercase
+  // 2. Remove invalid characters
+  // 3. Replace consecutive hyphens with a single hyphen
+  const sanitizedCustomerId = customerId
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '')
+    .substring(0, 8);
+  
+  const sanitizedProjectId = projectId
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '')
+    .substring(0, 8);
+  
+  // Add timestamp for uniqueness
+  const timestamp = Date.now().toString(36).toLowerCase();
+  
+  // Generate a random portion for added uniqueness
+  const random = Math.random().toString(36).substring(2, 6).toLowerCase();
+  
+  // Combine parts
+  const bucketName = `syndatagen-${sanitizedCustomerId}-${sanitizedProjectId}-${timestamp}-${random}`;
+  
+  // Ensure length is within limits (max 63 chars)
+  return bucketName.substring(0, 63);
+}
+
+/**
  * Create a new storage bucket for a project
  * 
  * @param params Bucket creation parameters
@@ -109,17 +144,18 @@ export async function createProjectBucket(
   
   const { projectId, customerId, region = 'us-central1', storageClass = 'STANDARD' } = params;
   
-  // Generate a unique bucket name using project ID and customer ID
-  // Bucket names must be globally unique across all of Google Cloud
-  const bucketName = `syndatagen-${customerId.substring(0, 8)}-${projectId.substring(0, 8)}-${Date.now().toString(36)}`;
+  // Generate a valid bucket name according to GCP requirements
+  const bucketName = generateValidBucketName(projectId, customerId);
   
   try {
+    console.log(`Attempting to create bucket with name: ${bucketName}`);
+    
     const [bucket] = await storageInstance!.createBucket(bucketName, {
       location: region,
       storageClass,
       labels: {
-        projectId,
-        customerId,
+        projectid: projectId.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+        customerid: customerId.toLowerCase().replace(/[^a-z0-9-]/g, ''),
         managed: 'true'
       }
     });
@@ -134,6 +170,15 @@ export async function createProjectBucket(
   } catch (error: any) {
     console.error(`Error creating bucket for project ${projectId}:`, error);
     throw error;
+  }
+}
+
+/**
+ * Ensure the storage instance is initialized
+ */
+async function ensureInitialized(): Promise<void> {
+  if (!isInitialized) {
+    await initializeStorage();
   }
 }
 
@@ -311,14 +356,5 @@ export async function backupBucketMetadata(
   } catch (error: any) {
     console.error(`Error backing up metadata for bucket ${bucketName}:`, error);
     throw error;
-  }
-}
-
-/**
- * Ensure Storage is initialized
- */
-async function ensureInitialized(): Promise<void> {
-  if (!isInitialized) {
-    await initializeStorage();
   }
 } 

@@ -8,7 +8,7 @@
 import React from 'react';
 import { JobStatus } from '@/lib/models/data-generation/types';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   BarChart, 
@@ -23,11 +23,30 @@ import {
   Cell
 } from 'recharts';
 import { Separator } from '@/components/ui/separator';
+import { 
+  Calendar, 
+  CheckCircle2, 
+  Clock, 
+  Database, 
+  FileText, 
+  HardDrive, 
+  AlertCircle, 
+  BarChart as BarChartIcon,
+  Clock4
+} from 'lucide-react';
 
 interface JobSummaryStatsProps {
-  jobs: JobStatus[];
+  jobs: any[];
   isLoading?: boolean;
   period?: 'day' | 'week' | 'month' | 'all';
+}
+
+// New interface for the simple stats card
+interface StatCardProps {
+  title: string;
+  value: number | string;
+  icon: string;
+  description?: string;
 }
 
 const STATUS_COLORS = {
@@ -39,7 +58,51 @@ const STATUS_COLORS = {
   paused: '#8b5cf6',    // purple
 };
 
-export function JobSummaryStats({ jobs, isLoading = false, period = 'all' }: JobSummaryStatsProps) {
+// Simple stat card component for individual metrics
+export function StatCard({ title, value, icon, description }: StatCardProps) {
+  const getIcon = () => {
+    switch (icon) {
+      case 'total':
+        return <Database className="h-5 w-5 text-blue-500" />;
+      case 'completed':
+        return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+      case 'inProgress':
+        return <Clock className="h-5 w-5 text-yellow-500" />;
+      case 'failed':
+        return <AlertCircle className="h-5 w-5 text-red-500" />;
+      case 'queued':
+        return <Clock4 className="h-5 w-5 text-purple-500" />;
+      case 'dataSize':
+        return <HardDrive className="h-5 w-5 text-gray-500" />;
+      case 'records':
+        return <FileText className="h-5 w-5 text-indigo-500" />;
+      default:
+        return <BarChartIcon className="h-5 w-5 text-gray-500" />;
+    }
+  };
+  
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            {description && (
+              <p className="text-xs text-muted-foreground mt-1">{description}</p>
+            )}
+          </div>
+          <div className="p-2 bg-muted rounded-full">
+            {getIcon()}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Original component renamed to JobSummaryChart
+export function JobSummaryChart({ jobs, isLoading = false, period = 'all' }: JobSummaryStatsProps) {
   // Count jobs by status
   const statusCounts = jobs.reduce((acc, job) => {
     acc[job.status] = (acc[job.status] || 0) + 1;
@@ -89,7 +152,7 @@ export function JobSummaryStats({ jobs, isLoading = false, period = 'all' }: Job
   }));
   
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-lg">Job Summary</CardTitle>
       </CardHeader>
@@ -189,4 +252,7 @@ export function JobSummaryStats({ jobs, isLoading = false, period = 'all' }: Job
       </CardContent>
     </Card>
   );
-} 
+}
+
+// Export JobSummaryStats as both the original component (for backward compatibility) and the new simpler one
+export const JobSummaryStats = StatCard; 

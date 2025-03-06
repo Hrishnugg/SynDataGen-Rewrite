@@ -6,13 +6,13 @@
  */
 
 import React from 'react';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { JobStatus } from '@/lib/models/data-generation/types';
 import { formatDistanceToNow, format } from 'date-fns';
-import { PlayCircle, StopCircle, FileDown, MoreHorizontal, Clock } from 'lucide-react';
+import { PlayCircle, StopCircle, FileDown, MoreHorizontal, Clock, ExternalLink } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,252 +24,248 @@ import {
 import { toast } from '@/components/ui/use-toast';
 
 interface JobStatusCardProps {
-  job: JobStatus;
+  job: any;
+  onClick?: (jobId: string) => void;
   onCancel?: (jobId: string) => Promise<void>;
   onResume?: (jobId: string) => Promise<void>;
-  onView?: (jobId: string) => void;
   onDownload?: (jobId: string) => void;
   compact?: boolean;
 }
 
-const statusColors = {
-  queued: 'bg-blue-100 text-blue-800',
-  running: 'bg-yellow-100 text-yellow-800',
-  completed: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
-  paused: 'bg-purple-100 text-purple-800',
-};
-
-const progressColors = {
-  queued: 'bg-blue-500',
-  running: 'bg-yellow-500',
-  completed: 'bg-green-500',
-  failed: 'bg-red-500',
-  cancelled: 'bg-gray-500',
-  paused: 'bg-purple-500',
-};
-
 export function JobStatusCard({ 
   job, 
+  onClick,
   onCancel, 
   onResume, 
-  onView, 
   onDownload,
   compact = false 
 }: JobStatusCardProps) {
+  if (!job) return null;
+  
   const handleCancel = async () => {
-    if (!onCancel) return;
+    if (!onCancel) {
+      toast({
+        title: "Operation not supported",
+        description: "Cancel operation is not available.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
-      await onCancel(job.jobId);
+      await onCancel(job.id);
       toast({
-        title: 'Job cancelled',
-        description: `Job ${job.jobId.slice(0, 8)} has been cancelled.`,
+        title: "Job cancelled",
+        description: `Job ${job.name} has been cancelled.`,
       });
     } catch (error) {
       toast({
-        title: 'Failed to cancel job',
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
-        variant: 'destructive',
+        title: "Failed to cancel job",
+        description: `An error occurred: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
       });
     }
   };
   
   const handleResume = async () => {
-    if (!onResume) return;
+    if (!onResume) {
+      toast({
+        title: "Operation not supported",
+        description: "Resume operation is not available.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
-      await onResume(job.jobId);
+      await onResume(job.id);
       toast({
-        title: 'Job resumed',
-        description: `Job ${job.jobId.slice(0, 8)} has been resumed.`,
+        title: "Job resumed",
+        description: `Job ${job.name} has been resumed.`,
       });
     } catch (error) {
       toast({
-        title: 'Failed to resume job',
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
-        variant: 'destructive',
+        title: "Failed to resume job",
+        description: `An error occurred: ${error instanceof Error ? error.message : String(error)}`,
+        variant: "destructive",
       });
     }
   };
   
-  // Format the timestamp
-  const startTimeFormatted = format(new Date(job.startTime), 'MMM d, yyyy h:mm a');
-  const timeAgo = formatDistanceToNow(new Date(job.startTime), { addSuffix: true });
+  const handleView = () => {
+    if (onClick) {
+      onClick(job.id);
+    }
+  };
   
-  // Calculate active time
-  const activeTime = job.endTime
-    ? formatDistanceToNow(new Date(job.startTime), { end: new Date(job.endTime) })
-    : formatDistanceToNow(new Date(job.startTime));
+  const handleDownload = () => {
+    if (!onDownload) {
+      toast({
+        title: "Operation not supported",
+        description: "Download operation is not available.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    onDownload(job.id);
+  };
   
-  // Determine if job can be resumed
-  const canResume = job.status === 'paused' || job.status === 'failed';
+  // Format the created date
+  const createdDate = job.createdAt ? new Date(job.createdAt) : null;
+  const formattedCreatedDate = createdDate
+    ? `${formatDistanceToNow(createdDate, { addSuffix: true })} (${format(createdDate, 'MMM d, yyyy')})`
+    : 'Unknown';
   
-  // Determine if job can be cancelled
-  const canCancel = job.status === 'queued' || job.status === 'running';
+  // Format the completed date if applicable
+  const completedDate = job.completedAt ? new Date(job.completedAt) : null;
+  const formattedCompletedDate = completedDate
+    ? `${formatDistanceToNow(completedDate, { addSuffix: true })} (${format(completedDate, 'MMM d, yyyy')})`
+    : job.status === 'completed' ? 'Just now' : 'N/A';
   
-  // Determine if job data can be downloaded
-  const canDownload = job.status === 'completed';
+  // Determine the status badge style
+  const getBadgeVariant = () => {
+    switch (job.status) {
+      case 'completed':
+        return 'success';
+      case 'failed':
+        return 'destructive';
+      case 'in_progress':
+        return 'default';
+      case 'queued':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
+  };
   
-  return (
-    <Card className={`overflow-hidden ${compact ? 'w-full' : 'w-full md:w-96'}`}>
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-lg truncate" title={job.jobId}>
-            {job.dataType || 'Data Generation'} Job
-          </CardTitle>
-          <Badge 
-            className={`${statusColors[job.status]} capitalize`}
-            variant="outline"
-          >
-            {job.status}
+  // Format the status text for display
+  const getStatusText = () => {
+    switch (job.status) {
+      case 'in_progress':
+        return 'In Progress';
+      default:
+        return job.status.charAt(0).toUpperCase() + job.status.slice(1);
+    }
+  };
+
+  if (compact) {
+    return (
+      <div 
+        className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        onClick={handleView}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-medium">{job.name}</h3>
+            <p className="text-sm text-muted-foreground">Created {formattedCreatedDate}</p>
+          </div>
+          <Badge variant={getBadgeVariant()}>
+            {getStatusText()}
           </Badge>
         </div>
-        <p className="text-sm text-muted-foreground">
-          ID: {job.jobId.slice(0, 8)}...
-        </p>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <div className="space-y-4">
-          {/* Progress bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span>Progress</span>
-              <span>{job.progress}%</span>
-            </div>
-            <Progress 
-              value={job.progress} 
-              className={`h-2 ${progressColors[job.status]}`} 
-            />
+        {job.status === 'in_progress' && (
+          <Progress value={job.progress} className="mt-2 h-2" />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+      onClick={handleView}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium">{job.name}</h3>
+            <Badge variant={getBadgeVariant()}>
+              {getStatusText()}
+            </Badge>
           </div>
           
-          {/* Additional info */}
-          {!compact && (
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-muted-foreground">Started</p>
-                <p title={startTimeFormatted}>{timeAgo}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Duration</p>
-                <p className="flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  <span>{activeTime}</span>
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Size</p>
-                <p>{job.configuration.dataSize.toLocaleString()} records</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Format</p>
-                <p>{job.configuration.outputFormat}</p>
-              </div>
+          <div className="flex flex-col sm:flex-row gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Started {formattedCreatedDate}
             </div>
-          )}
-          
-          {/* Stage information (only in non-compact mode) */}
-          {!compact && job.stages.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Stages</p>
-              <div className="space-y-1">
-                {job.stages.map((stage) => (
-                  <div key={stage.name} className="flex justify-between items-center text-xs">
-                    <span>{stage.name}</span>
-                    <Badge 
-                      variant="outline" 
-                      className={`${
-                        stage.status === 'completed'
-                          ? 'bg-green-100 text-green-800'
-                          : stage.status === 'running'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : stage.status === 'failed'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
-                      } capitalize`}
-                    >
-                      {stage.status}
-                    </Badge>
-                  </div>
-                ))}
+            {job.completedAt && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Completed {formattedCompletedDate}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </CardContent>
-      <CardFooter className="pt-2">
-        <div className="flex justify-between w-full">
-          {canResume && onResume && (
-            <Button
+        
+        <div className="flex items-center space-x-2">
+          {job.status === 'in_progress' && onCancel && (
+            <Button 
+              variant="outline" 
               size="sm"
-              onClick={handleResume}
-              className="flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); handleCancel(); }}
             >
-              <PlayCircle className="h-4 w-4" />
-              <span>Resume</span>
+              <StopCircle className="w-4 h-4 mr-1" />
+              Cancel
             </Button>
           )}
           
-          {canCancel && onCancel && (
-            <Button
+          {(job.status === 'failed' || job.status === 'cancelled') && onResume && (
+            <Button 
+              variant="outline" 
               size="sm"
-              variant="outline"
-              onClick={handleCancel}
-              className="flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); handleResume(); }}
             >
-              <StopCircle className="h-4 w-4" />
-              <span>Cancel</span>
+              <PlayCircle className="w-4 h-4 mr-1" />
+              Resume
             </Button>
           )}
           
-          {canDownload && onDownload && (
-            <Button
+          {job.status === 'completed' && onDownload && (
+            <Button 
+              variant="outline" 
               size="sm"
-              variant="outline"
-              onClick={() => onDownload(job.jobId)}
-              className="flex items-center gap-1"
+              onClick={(e) => { e.stopPropagation(); handleDownload(); }}
             >
-              <FileDown className="h-4 w-4" />
-              <span>Download</span>
+              <FileDown className="w-4 h-4 mr-1" />
+              Download
             </Button>
           )}
           
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              
-              <DropdownMenuItem onClick={() => onView && onView(job.jobId)}>
-                View Details
-              </DropdownMenuItem>
-              
-              {canResume && onResume && (
-                <DropdownMenuItem onClick={handleResume}>
-                  Resume Job
-                </DropdownMenuItem>
-              )}
-              
-              {canCancel && onCancel && (
-                <DropdownMenuItem onClick={handleCancel}>
-                  Cancel Job
-                </DropdownMenuItem>
-              )}
-              
-              {canDownload && onDownload && (
-                <DropdownMenuItem onClick={() => onDownload(job.jobId)}>
-                  Download Results
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); handleView(); }}
+          >
+            <ExternalLink className="w-4 h-4 mr-1" />
+            View
+          </Button>
         </div>
-      </CardFooter>
-    </Card>
+      </div>
+      
+      {job.status === 'in_progress' && (
+        <div className="mt-3">
+          <div className="flex justify-between text-xs mb-1">
+            <span>{job.progress}% complete</span>
+            <span>{job.recordsGenerated?.toLocaleString()} / {job.config?.count?.toLocaleString()} records</span>
+          </div>
+          <Progress value={job.progress} className="h-2" />
+        </div>
+      )}
+      
+      {job.status === 'completed' && (
+        <div className="mt-3 text-sm">
+          <div className="font-medium">Generated {job.recordsGenerated?.toLocaleString()} records</div>
+          <div className="text-muted-foreground">Data size: {((job.dataSize || 0) / 1024 / 1024).toFixed(2)} MB</div>
+        </div>
+      )}
+      
+      {job.status === 'failed' && job.error && (
+        <div className="mt-3 text-sm text-destructive">
+          Error: {job.error}
+        </div>
+      )}
+    </div>
   );
 } 

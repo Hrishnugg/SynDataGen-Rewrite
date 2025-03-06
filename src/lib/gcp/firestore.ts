@@ -20,6 +20,16 @@ export async function initializeFirestore(): Promise<void> {
   }
 
   try {
+    // Check if there's already a global Firestore state
+    // @ts-ignore - Global state might exist from initFirestore.ts
+    if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
+      // @ts-ignore
+      firestoreInstance = global.__firestoreState.instance;
+      isInitialized = true;
+      console.log('Reusing already initialized Firestore instance from global state');
+      return;
+    }
+
     if (!admin.apps.length) {
       // Initialize Firebase Admin SDK
       admin.initializeApp({
@@ -28,9 +38,18 @@ export async function initializeFirestore(): Promise<void> {
     }
 
     firestoreInstance = getFirestore();
-    firestoreInstance.settings({
-      ignoreUndefinedProperties: true,
-    });
+    
+    // Only apply settings if we haven't already
+    // @ts-ignore - Check if settings have been applied in global state
+    if (!global.__firestoreState?.settingsApplied) {
+      firestoreInstance.settings({
+        ignoreUndefinedProperties: true,
+      });
+      // @ts-ignore - Mark settings as applied in global state if it exists
+      if (global.__firestoreState) {
+        global.__firestoreState.settingsApplied = true;
+      }
+    }
 
     isInitialized = true;
     console.log('Firestore initialized successfully');
@@ -45,6 +64,15 @@ export async function initializeFirestore(): Promise<void> {
  */
 export function getFirestoreInstance(): Firestore {
   if (!isInitialized || !firestoreInstance) {
+    // Check global state before throwing
+    // @ts-ignore - Global state might exist from initFirestore.ts
+    if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
+      // @ts-ignore
+      firestoreInstance = global.__firestoreState.instance;
+      isInitialized = true;
+      console.log('Retrieved initialized Firestore instance from global state');
+      return firestoreInstance;
+    }
     throw new Error('Firestore not initialized. Call initializeFirestore first.');
   }
   return firestoreInstance;
@@ -386,7 +414,25 @@ export async function exportCollectionToStorage(
  * Ensure Firestore is initialized
  */
 async function ensureInitialized(): Promise<void> {
-  if (!isInitialized) {
+  // Check if we're already initialized
+  if (isInitialized) {
+    return;
+  }
+  
+  // Check if there's a global Firestore state
+  // @ts-ignore - Global state might exist from initFirestore.ts
+  if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
+    // @ts-ignore
+    firestoreInstance = global.__firestoreState.instance;
+    isInitialized = true;
+    console.log('Retrieved initialized Firestore instance from global state in ensureInitialized');
+    return;
+  }
+  
+  try {
     await initializeFirestore();
+  } catch (error) {
+    console.error('Error during ensureInitialized:', error);
+    throw error;
   }
 } 

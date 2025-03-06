@@ -10,13 +10,15 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { JobStatusCard } from '@/components/data-generation/job-management/job-status-card';
-import { JobSummaryStats } from '@/components/data-generation/dashboard/job-summary-stats';
+import { StatCard, JobSummaryChart } from '@/components/data-generation/dashboard/job-summary-stats';
 import { RateLimitIndicator } from '@/components/data-generation/dashboard/rate-limit-indicator';
 import { Separator } from '@/components/ui/separator';
 import { JobStatus, RateLimitStatus } from '@/lib/models/data-generation/types';
 import { toast } from '@/components/ui/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Mock data for development
 const mockJobs = [
@@ -83,6 +85,7 @@ export default function DataGenerationDashboard() {
   const [recentJobs, setRecentJobs] = useState(mockJobs);
   const [rateLimitStatus, setRateLimitStatus] = useState<RateLimitStatus>(mockRateLimitStatus);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Fetch data on component mount
   useEffect(() => {
@@ -92,6 +95,7 @@ export default function DataGenerationDashboard() {
   // Fetch dashboard data
   const fetchDashboardData = async () => {
     setIsLoading(true);
+    setError(null);
     
     try {
       // Simulate API call
@@ -101,128 +105,178 @@ export default function DataGenerationDashboard() {
       // const jobsResponse = await fetch('/api/data-generation/jobs/recent');
       // const rateLimitResponse = await fetch('/api/data-generation/rate-limit');
       
-      // const jobs = await jobsResponse.json();
-      // const rateLimit = await rateLimitResponse.json();
-      
+      // For now, use mock data
       setRecentJobs(mockJobs);
       setRateLimitStatus(mockRateLimitStatus);
-    } catch (error) {
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError(`Failed to load data generation dashboard: ${err instanceof Error ? err.message : String(err)}`);
+      
       toast({
-        title: 'Error loading dashboard',
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
         variant: 'destructive',
+        title: 'Error loading dashboard',
+        description: 'There was a problem loading the data generation dashboard. Please try again.',
       });
     } finally {
       setIsLoading(false);
     }
   };
   
-  // Handle refresh
+  // Handle refresh button click
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchDashboardData();
-    setIsRefreshing(false);
+    setError(null);
+    
+    try {
+      await fetchDashboardData();
+      
+      toast({
+        title: 'Dashboard refreshed',
+        description: 'The data generation dashboard has been refreshed.',
+      });
+    } catch (err) {
+      console.error('Error refreshing dashboard:', err);
+      setError(`Failed to refresh dashboard: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
   
-  // Handle job cancellation
-  const handleCancelJob = async (jobId: string) => {
-    // In a real implementation, this would call the API to cancel the job
-    console.log(`Cancelling job ${jobId}`);
-    // Update the local state to reflect the cancellation
-    setRecentJobs(prevJobs => 
-      prevJobs.map(job => 
-        job.id === jobId ? { ...job, status: 'cancelled' as JobStatus } : job
-      )
-    );
-  };
-  
-  // Handle job resumption
-  const handleResumeJob = async (jobId: string) => {
-    // In a real implementation, this would call the API to resume the job
-    console.log(`Resuming job ${jobId}`);
-    // Update the local state to reflect the resumption
-    setRecentJobs(prevJobs => 
-      prevJobs.map(job => 
-        job.id === jobId ? { ...job, status: 'in_progress' as JobStatus } : job
-      )
-    );
-  };
-  
-  // Navigate to job details
-  const handleViewJob = (jobId: string) => {
-    // Navigate to the job details page
-    router.push(`/dashboard/data-generation/jobs/${jobId}`);
-  };
-  
-  // Navigate to job creation
+  // Navigate to create new job page
   const handleCreateJob = () => {
-    // Navigate to the job creation page
     router.push('/dashboard/data-generation/create');
   };
   
-  // Navigate to job download
-  const handleDownloadData = (jobId: string) => {
-    // Navigate to the data download page
-    router.push(`/dashboard/data-generation/jobs/${jobId}/download`);
+  // Navigate to job details page
+  const handleViewJob = (jobId: string) => {
+    router.push(`/dashboard/data-generation/jobs/${jobId}`);
+  };
+  
+  // Calculate job statistics
+  const jobStats = {
+    total: recentJobs.length,
+    completed: recentJobs.filter(job => job.status === 'completed').length,
+    inProgress: recentJobs.filter(job => job.status === 'in_progress').length,
+    failed: recentJobs.filter(job => job.status === 'failed').length,
+    queued: recentJobs.filter(job => job.status === 'queued').length,
+    recordsGenerated: recentJobs.reduce((sum, job) => sum + (job.recordsGenerated || 0), 0),
+    totalDataSize: recentJobs.reduce((sum, job) => sum + (job.dataSize || 0), 0),
   };
   
   return (
-    <div className="container mx-auto py-6 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Data Generation Dashboard</h1>
-        <div className="flex space-x-4">
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <h1 className="text-3xl font-bold">Data Generation</h1>
+        <div className="flex gap-2">
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={handleRefresh}
+            onClick={handleRefresh} 
             disabled={isRefreshing || isLoading}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Button onClick={handleCreateJob}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Job
+            <Plus className="mr-2 h-4 w-4" />
+            New Job
           </Button>
         </div>
       </div>
       
-      {/* Dashboard stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <JobSummaryStats jobs={recentJobs} isLoading={isLoading} />
-        <RateLimitIndicator status={rateLimitStatus} isLoading={isLoading} />
-      </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4 mr-2" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       
-      {/* Recent jobs */}
-      <div>
-        <h2 className="text-2xl font-bold mb-4">Recent Jobs</h2>
-        <div className="space-y-4">
-          {isLoading ? (
-            <div className="flex justify-center items-center h-40">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : recentJobs.length === 0 ? (
-            <div className="text-center py-8 bg-muted rounded-lg">
-              <p className="text-muted-foreground">No jobs found. Create your first job to get started.</p>
-              <Button onClick={handleCreateJob} className="mt-4">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Job
-              </Button>
-            </div>
-          ) : (
-            recentJobs.map(job => (
-              <JobStatusCard
-                key={job.id}
-                job={job}
-                onCancel={() => handleCancelJob(job.id)}
-                onResume={() => handleResumeJob(job.id)}
-                onView={() => handleViewJob(job.id)}
-                onDownload={() => handleDownloadData(job.id)}
-              />
-            ))
-          )}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard 
+              title="Total Jobs" 
+              value={jobStats.total} 
+              icon="total" 
+            />
+            <StatCard 
+              title="Completed" 
+              value={jobStats.completed} 
+              icon="completed" 
+            />
+            <StatCard 
+              title="In Progress" 
+              value={jobStats.inProgress} 
+              icon="inProgress" 
+            />
+            <StatCard 
+              title="Failed" 
+              value={jobStats.failed} 
+              icon="failed" 
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle>Recent Jobs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {recentJobs.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-gray-500 dark:text-gray-400 mb-4">No jobs found</p>
+                      <Button onClick={handleCreateJob}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Your First Job
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {recentJobs.map(job => (
+                        <JobStatusCard 
+                          key={job.id} 
+                          job={job} 
+                          onClick={() => handleViewJob(job.id)} 
+                        />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle>Usage</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RateLimitIndicator status={rateLimitStatus} />
+                  
+                  <Separator className="my-4" />
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Records Generated</span>
+                      <span className="font-medium">{jobStats.recordsGenerated.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">Total Data Size</span>
+                      <span className="font-medium">{(jobStats.totalDataSize / (1024 * 1024)).toFixed(2)} MB</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 } 
