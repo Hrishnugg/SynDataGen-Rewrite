@@ -49,7 +49,7 @@ export function getBackendForCollection(): 'firestore' {
 /**
  * Get the Firestore service with retry logic and comprehensive error handling
  */
-export async function getFirestore(preloadCommonData = false): Promise<any> {
+export async function getFirestore(preloadData = false): Promise<any> {
   // Check if already initialized
   if (_isInitialized && _firestoreService) {
     return _firestoreService;
@@ -71,7 +71,7 @@ export async function getFirestore(preloadCommonData = false): Promise<any> {
       console.warn(`Throttling Firestore initialization after recent error (${timeSinceLastInit}ms ago): ${_lastInitError.message}`);
       
       // Check if we're in a development environment where we can use mock data
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.MOCK_FIREBASE === 'true') {
         console.info('Using mock data in development environment due to Firestore initialization issues');
         // Return mock service for development
         return getMockFirestoreService();
@@ -84,23 +84,44 @@ export async function getFirestore(preloadCommonData = false): Promise<any> {
     _lastInitTime = currentTime;
     _lastInitError = null;
     
-    // Initialize or retrieve Firestore service
-    _firestoreService = await getFirestoreService(DB_CACHE_CONFIG);
-    
-    // Preload common collections if requested
-    if (preloadCommonData && _firestoreService) {
-      await preloadCommonData();
+    // Get firestore service (with initialization)
+    const serviceConfig = { ...DB_CACHE_CONFIG };
+    // Disable cache while debugging if needed
+    if (process.env.DISABLE_CACHE === 'true') {
+      serviceConfig.enabled = false;
     }
     
-    _isInitialized = true;
-    return _firestoreService;
+    try {
+      // Initialize or retrieve Firestore service with immediate initialization
+      _firestoreService = await getFirestoreService(serviceConfig, true);
+      
+      // Try to initialize if not already (belt and suspenders)
+      if (_firestoreService && !_isInitialized) {
+        await _firestoreService.init();
+      }
+      
+      // Preload common collections if requested
+      if (preloadData && _firestoreService) {
+        try {
+          await preloadCommonData();
+        } catch (preloadError) {
+          console.warn('Failed to preload common data:', preloadError);
+          // Continue without preloaded data
+        }
+      }
+      
+      _isInitialized = true;
+      return _firestoreService;
+    } catch (firestoreError) {
+      throw firestoreError;
+    }
   } catch (error: any) {
     _lastInitError = error;
     
     console.error(`Failed to initialize Firestore service: ${error.message}`, error);
     
     // Check if we're in development or test
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.MOCK_FIREBASE === 'true') {
       console.warn('Using mock data service in development due to Firestore error');
       return getMockFirestoreService();
     } else {
@@ -123,6 +144,40 @@ function getMockFirestoreService(): FirestoreService {
     },
     query: async (collection: string) => {
       return generateMockData(collection, 10);
+    },
+    // Add the missing queryDocuments method with proper query builder handling
+    queryDocuments: async (collection: string, queryBuilder: any) => {
+      console.log(`[MockFirestore] queryDocuments called for collection: ${collection}`);
+      
+      // Handle the queryBuilder function if it's provided
+      // This makes the mock more accurate and resilient
+      let mockData = generateMockData(collection, 10);
+      
+      // If queryBuilder is a function, we need to simulate what it might do
+      if (typeof queryBuilder === 'function') {
+        console.log('[MockFirestore] Query builder function detected');
+        
+        // Create a very basic mock query object with common query methods
+        const mockQuery = {
+          where: () => mockQuery,
+          orderBy: () => mockQuery,
+          limit: () => mockQuery,
+          startAfter: () => mockQuery,
+          endBefore: () => mockQuery
+        };
+        
+        // Call the queryBuilder with our mock query
+        // This won't actually filter the data, but it will prevent errors
+        // when the queryBuilder tries to call methods on the query object
+        try {
+          queryBuilder(mockQuery);
+          console.log('[MockFirestore] Query builder function executed successfully');
+        } catch (error) {
+          console.error('[MockFirestore] Error executing query builder function:', error);
+        }
+      }
+      
+      return mockData;
     },
     queryWithPagination: async (collection: string) => {
       const items = generateMockData(collection, 10);

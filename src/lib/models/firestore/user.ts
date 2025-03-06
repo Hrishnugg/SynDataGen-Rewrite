@@ -43,15 +43,37 @@ export const USER_COLLECTION = 'users';
  * @param id Document ID
  * @returns User object
  */
-export function firestoreToUser(doc: FirebaseFirestore.DocumentData, id: string): User {
+export function firestoreToUser(doc: FirebaseFirestore.DocumentData, id?: string): User {
+  // Check if doc already has an id property (which might be the case for mock data)
+  const userId = id || doc.id || 'unknown-id';
+  
+  // Handle different date formats - could be Date objects, Firestore Timestamps, or ISO strings
+  let createdAt = new Date();
+  if (doc.createdAt) {
+    createdAt = doc.createdAt instanceof Date 
+      ? doc.createdAt 
+      : (typeof doc.createdAt === 'string' 
+          ? new Date(doc.createdAt) 
+          : (doc.createdAt.toDate ? doc.createdAt.toDate() : new Date()));
+  }
+  
+  let updatedAt = new Date();
+  if (doc.updatedAt) {
+    updatedAt = doc.updatedAt instanceof Date 
+      ? doc.updatedAt 
+      : (typeof doc.updatedAt === 'string' 
+          ? new Date(doc.updatedAt) 
+          : (doc.updatedAt.toDate ? doc.updatedAt.toDate() : new Date()));
+  }
+  
   return {
-    id,
+    id: userId,
     name: doc.name || '',
     email: doc.email || '',
     password: doc.password || '',
     company: doc.company || '',
-    createdAt: doc.createdAt?.toDate() || new Date(),
-    updatedAt: doc.updatedAt?.toDate() || new Date(),
+    createdAt,
+    updatedAt,
   };
 }
 

@@ -97,7 +97,68 @@ export function initializeFirebaseAdmin(): boolean {
         // Continue to next method
       }
     } 
-    // Step 2: Try Google Application Default Credentials path
+    // Step 2: Try individual credential environment variables
+    else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      try {
+        logger.info('Found individual Firebase credential environment variables');
+        logger.info('=== CREDENTIAL DIAGNOSTIC LOGS ===');
+        logger.info('FIREBASE_PROJECT_ID:', process.env.FIREBASE_PROJECT_ID);
+        logger.info('FIREBASE_CLIENT_EMAIL:', process.env.FIREBASE_CLIENT_EMAIL);
+        
+        // Handle escaped newlines in private key - log details about the key format
+        let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+        logger.info('Private key original length:', privateKey.length);
+        logger.info('Private key contains \\n:', privateKey.includes('\\n'));
+        logger.info('Private key contains actual newlines:', privateKey.includes('\n'));
+        logger.info('Private key first 40 chars:', privateKey.substring(0, 40));
+        logger.info('Private key last 40 chars:', privateKey.substring(privateKey.length - 40));
+        
+        // Remove quotes if present
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+          privateKey = privateKey.slice(1, -1);
+          logger.info('Removed surrounding quotes from private key');
+        }
+        
+        // Process escaped newlines
+        if (privateKey.includes('\\n')) {
+          privateKey = privateKey.replace(/\\n/g, '\n');
+          logger.info('Processed escaped newlines in private key');
+        }
+        
+        // Verify key format after processing
+        logger.info('Private key after processing:');
+        logger.info('- Length:', privateKey.length);
+        logger.info('- Contains actual newlines:', privateKey.includes('\n'));
+        logger.info('- Starts with correct header:', privateKey.startsWith('-----BEGIN PRIVATE KEY-----'));
+        logger.info('- Ends with correct footer:', privateKey.endsWith('-----END PRIVATE KEY-----'));
+        logger.info('=== END CREDENTIAL DIAGNOSTIC LOGS ===');
+        
+        // Create credentials object for Firebase
+        const credentials = {
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: privateKey
+        };
+        
+        try {
+          appOptions = {
+            credential: cert(credentials),
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+            projectId: process.env.FIREBASE_PROJECT_ID
+          };
+          
+          logger.info('Successfully created Firebase credential certificate');
+          initializationMethod = 'environment-variables';
+        } catch (certError) {
+          logger.error('Failed to create cert from credentials:', certError);
+          throw certError;
+        }
+      } catch (error) {
+        logger.error('Failed to initialize with environment variables:', error);
+        // Continue to next method
+      }
+    }
+    // Step 3: Try Google Application Default Credentials path
     else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       appOptions = {
         storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
@@ -106,18 +167,20 @@ export function initializeFirebaseAdmin(): boolean {
       
       initializationMethod = 'application-default-credentials';
     } 
-    // Step 3: Development fallback
+    // Step 4: Development fallback
     else if (isDevelopment) {
+      // For development, try to use project ID if available
       appOptions = {
-        projectId: process.env.FIREBASE_PROJECT_ID || 'syndata-dev',
+        projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || 'syndata-dev',
       };
       
       initializationMethod = 'development-fallback';
+      logger.warn('Using development fallback with project ID:', appOptions.projectId);
     } 
     // No valid credentials found
     else {
       throw new Error(
-        'Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT or GOOGLE_APPLICATION_CREDENTIALS'
+        'Firebase credentials not found. Set FIREBASE_SERVICE_ACCOUNT, FIREBASE_PRIVATE_KEY+FIREBASE_CLIENT_EMAIL+FIREBASE_PROJECT_ID, or GOOGLE_APPLICATION_CREDENTIALS'
       );
     }
 

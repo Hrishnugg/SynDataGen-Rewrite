@@ -8,7 +8,7 @@ import {
   FiLock,
   FiZap,
 } from "react-icons/fi";
-import { Card } from "./ui/Card";
+import { Card } from "./ui/ui-card";
 import { motion } from "framer-motion";
 
 const features = [

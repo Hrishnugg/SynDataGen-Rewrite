@@ -5,7 +5,7 @@
  * with enhanced caching, cursor-based pagination, and batch operations.
  */
 
-import { getFirestoreInstance } from '../gcp/firestore/initFirestore';
+import { getFirestoreInstance, initializeFirestore } from '../gcp/firestore/initFirestore';
 import { 
   DocumentReference, 
   CollectionReference, 
@@ -112,7 +112,12 @@ export class FirestoreService {
       
       if (!db) {
         console.log('[FirestoreService] No existing instance found, calling initializeFirestore directly');
-        db = await initializeFirestore();
+        try {
+          db = await initializeFirestore();
+        } catch (initError) {
+          console.error('[FirestoreService] Error during initializeFirestore call:', initError);
+          throw initError;
+        }
       } else {
         console.log('[FirestoreService] Using existing Firestore instance from getFirestoreInstance');
       }
@@ -128,7 +133,12 @@ export class FirestoreService {
       // Initialize the cache if configured
       if (this.cacheConfig?.enabled) {
         console.log('[FirestoreService] Initializing cache with config:', this.cacheConfig);
-        cacheService.init(this.cacheConfig);
+        try {
+          cacheService.init(this.cacheConfig);
+        } catch (cacheError) {
+          // Don't let cache initialization failure stop Firestore initialization
+          console.warn('[FirestoreService] Cache initialization failed, continuing without cache:', cacheError);
+        }
       }
       
       console.log('[FirestoreService] Successfully initialized');
@@ -728,9 +738,25 @@ export class FirestoreService {
 // Export a singleton instance
 let firestoreServiceInstance: FirestoreService | null = null;
 
-export function getFirestoreService(cacheConfig?: CacheConfig): FirestoreService {
+/**
+ * Get a FirestoreService instance with optional initialization
+ * @param cacheConfig Optional cache configuration
+ * @param initializeNow Whether to initialize the service immediately (default false)
+ * @returns FirestoreService instance
+ */
+export async function getFirestoreService(cacheConfig?: CacheConfig, initializeNow: boolean = false): Promise<FirestoreService> {
   if (!firestoreServiceInstance) {
     firestoreServiceInstance = new FirestoreService(cacheConfig);
+    
+    // Initialize immediately if requested
+    if (initializeNow) {
+      try {
+        await firestoreServiceInstance.init();
+      } catch (error) {
+        console.warn('Failed to initialize Firestore service:', error);
+        // Continue with uninitialized service - ensureInitialized will retry later
+      }
+    }
   }
   return firestoreServiceInstance;
 } 

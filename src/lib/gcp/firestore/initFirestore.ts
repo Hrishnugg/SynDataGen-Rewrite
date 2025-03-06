@@ -155,6 +155,25 @@ export async function initializeFirestore(): Promise<Firestore> {
     
     // For development/test environments, connect to emulator if credentials not available
     if (isDev && (!areFirebaseCredentialsAvailable() || error.message.includes('credentials'))) {
+      // DIAGNOSTIC: Add detailed logging about why we're using emulator mode
+      logger.warn('=== DIAGNOSTIC: EMULATOR MODE TRIGGER ===');
+      logger.warn('NODE_ENV:', process.env.NODE_ENV);
+      logger.warn('MOCK_FIREBASE:', process.env.MOCK_FIREBASE);
+      logger.warn('areFirebaseCredentialsAvailable():', areFirebaseCredentialsAvailable());
+      logger.warn('Error message includes "credentials":', error.message.includes('credentials'));
+      logger.warn('Original error message:', error.message);
+      logger.warn('Using FIREBASE_SERVICE_ACCOUNT:', !!process.env.FIREBASE_SERVICE_ACCOUNT);
+      logger.warn('Using FIREBASE_PRIVATE_KEY:', !!process.env.FIREBASE_PRIVATE_KEY ? 'YES (length: ' + process.env.FIREBASE_PRIVATE_KEY.length + ')' : 'NO');
+      logger.warn('Using FIREBASE_CLIENT_EMAIL:', !!process.env.FIREBASE_CLIENT_EMAIL);
+      logger.warn('Using FIREBASE_PROJECT_ID:', !!process.env.FIREBASE_PROJECT_ID);
+      logger.warn('=== END DIAGNOSTIC LOGS ===');
+      
+      // Force production mode if MOCK_FIREBASE is explicitly set to false
+      if (process.env.MOCK_FIREBASE === 'false') {
+        logger.warn('MOCK_FIREBASE is explicitly set to false, but we still hit emulator mode. This indicates a credential processing issue.');
+        throw new Error('Firebase credentials could not be processed despite MOCK_FIREBASE=false: ' + error.message);
+      }
+      
       try {
         logger.warn('Using Firestore emulator due to credential issues in development environment');
         
@@ -256,10 +275,94 @@ async function getOrCreateFirebaseApp(credentials: ServiceAccountCredentials): P
       initOptions.credential = applicationDefault();
     } else if (credentials.private_key && credentials.client_email) {
       logger.info('Initializing Firebase app with service account credentials');
+      
+      // Process the private key to ensure it's properly formatted
+      let privateKey = credentials.private_key;
+      
+      try {
+        // Instead of trying to import the module, implement key fixing inline
+        const fixPrivateKey = (key) => {
+          if (!key) {
+            console.error('[KeyFixer] Key is undefined or empty');
+            throw new Error('Cannot fix an undefined or empty private key');
+          }
+          
+          // Start with the original key
+          let processedKey = key;
+          
+          // Remove surrounding quotes if present
+          if (processedKey.startsWith('"') && processedKey.endsWith('"')) {
+            logger.debug('Removing surrounding quotes from private key');
+            processedKey = processedKey.slice(1, -1);
+          }
+          
+          // Replace escaped newlines with actual newlines
+          if (processedKey.includes('\\n')) {
+            logger.debug('Replacing escaped newlines in private key');
+            processedKey = processedKey.replace(/\\n/g, '\n');
+          }
+          
+          // Check if key is properly formatted
+          const isFormatted = processedKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
+                            processedKey.endsWith('-----END PRIVATE KEY-----') &&
+                            processedKey.includes('\n');
+                            
+          // Return if already properly formatted
+          if (isFormatted) {
+            return processedKey;
+          }
+          
+          // Try to reformat the key
+          logger.debug('Key not properly formatted, attempting to reformat');
+          // Extract base64 content
+          const base64Content = processedKey.replace(/[^A-Za-z0-9+/=]/g, '');
+          // Create properly formatted key
+          return `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
+        };
+        privateKey = fixPrivateKey(privateKey);
+        logger.debug('Private key processed successfully with key-fixer');
+      } catch (keyFixError) {
+        logger.error('Error processing private key with key-fixer:', keyFixError);
+        
+        // Fallback to manual processing if key-fixer fails
+        logger.debug('Falling back to manual key processing');
+        
+        // Remove surrounding quotes if present
+        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+          logger.debug('Removing surrounding quotes from private key');
+          privateKey = privateKey.slice(1, -1);
+        }
+        
+        // Replace escaped newlines with actual newlines
+        if (privateKey.includes('\\n')) {
+          logger.debug('Replacing escaped newlines in private key');
+          privateKey = privateKey.replace(/\\n/g, '\n');
+        }
+        
+        // Check if key is properly formatted
+        const isFormatted = privateKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
+                           privateKey.endsWith('-----END PRIVATE KEY-----') &&
+                           privateKey.includes('\n');
+                           
+        // Try to reformat the key if it's not properly formatted
+        if (!isFormatted) {
+          logger.warn('Private key is not properly formatted, attempting to reformat');
+          
+          // Check if we just have the base64 part without the markers and newlines
+          const base64Content = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
+          privateKey = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
+          
+          // Log reformatting result
+          logger.debug('Key reformatted. Now starts with:', privateKey.substring(0, 30));
+          logger.debug('Key ends with:', privateKey.substring(privateKey.length - 30));
+        }
+      }
+      
+      // Use the processed private key
       initOptions.credential = cert({
         projectId: credentials.project_id,
         clientEmail: credentials.client_email,
-        privateKey: credentials.private_key
+        privateKey: privateKey
       });
     } else {
       throw new Error('Invalid credentials: missing required fields');
@@ -650,6 +753,10 @@ export function validateFirebaseCredentials() {
   // Try to load dotenv again to make sure it's loaded
   dotenv.config();
   
+  console.log('[FIREBASE-DIAGNOSTIC] Starting credential validation');
+  console.log('[FIREBASE-DIAGNOSTIC] Environment:', process.env.NODE_ENV);
+  console.log('[FIREBASE-DIAGNOSTIC] MOCK_FIREBASE:', process.env.MOCK_FIREBASE);
+  
   // Log available environment variables (filtered for security)
   const envKeys = Object.keys(process.env);
   const firebaseKeys = envKeys.filter(
@@ -684,15 +791,127 @@ export function validateFirebaseCredentials() {
     // Check if private key is properly formatted
     if (!process.env.FIREBASE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || 
         !process.env.FIREBASE_PRIVATE_KEY.includes('END PRIVATE KEY')) {
-      console.error('FIREBASE_PRIVATE_KEY appears to be malformed - missing BEGIN/END markers');
+      console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY appears to be malformed - missing BEGIN/END markers');
+      
+      // If the key might be surrounded by quotes, log that
+      if (process.env.FIREBASE_PRIVATE_KEY.startsWith('"') && process.env.FIREBASE_PRIVATE_KEY.endsWith('"')) {
+        console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY appears to be surrounded by quotes, which can cause issues');
+      }
     }
     
     // Check if private key has escaped newlines
     if (process.env.FIREBASE_PRIVATE_KEY.includes('\\n')) {
-      console.log('FIREBASE_PRIVATE_KEY contains escaped newlines (\\n)');
+      console.log('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY contains escaped newlines (\\n)');
+    } else if (process.env.FIREBASE_PRIVATE_KEY.includes('\n')) {
+      console.log('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY contains actual newlines');
+    } else {
+      console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY does not contain any newlines, which is likely invalid');
     }
   } else {
     console.log('FIREBASE_PRIVATE_KEY is NOT present');
+  }
+  
+  // Try to manually process the key just as a test
+  console.log('[FIREBASE-DIAGNOSTIC] Attempting to manually process private key...');
+  try {
+    if (process.env.FIREBASE_PRIVATE_KEY) {
+      let testKey = process.env.FIREBASE_PRIVATE_KEY;
+      
+      // Try using our key fixer utility first
+      try {
+        // We need to require the module in a way that doesn't rely on '@/' paths
+        // since those are Next.js specific and might not be available in all contexts
+        const path = require('path');
+        const keyFixerPath = path.join(process.cwd(), 'src', 'lib', 'key-fixer.ts');
+        
+        // Try to dynamically load the module
+        // This is a bit tricky because we're in a TypeScript context
+        console.log('[FIREBASE-DIAGNOSTIC] Attempting to load key-fixer module');
+        
+        let keyFixer;
+        try {
+          // Try TypeScript path first
+          keyFixer = require(keyFixerPath);
+        } catch (tsImportError) {
+          // Try JavaScript path as fallback
+          try {
+            keyFixer = require(keyFixerPath.replace('.ts', '.js'));
+          } catch (jsImportError) {
+            // Both attempts failed, rethrow first error
+            throw tsImportError;
+          }
+        }
+        
+        if (keyFixer && typeof keyFixer.fixPrivateKey === 'function') {
+          testKey = keyFixer.fixPrivateKey(testKey);
+          console.log('[FIREBASE-DIAGNOSTIC] Successfully used key-fixer to process private key');
+          
+          // Patch the environment variable if successful
+          process.env.FIREBASE_PRIVATE_KEY = testKey;
+        } else {
+          throw new Error('key-fixer module loaded but fixPrivateKey function not found');
+        }
+      } catch (importError) {
+        console.log('[FIREBASE-DIAGNOSTIC] Unable to use key-fixer module, falling back to manual processing:', importError.message);
+        
+        // Fallback to manual processing since key-fixer couldn't be loaded
+        // Remove quotes if present
+        if (testKey.startsWith('"') && testKey.endsWith('"')) {
+          testKey = testKey.slice(1, -1);
+          console.log('[FIREBASE-DIAGNOSTIC] Removed surrounding quotes from key test');
+        }
+        
+        // Replace escaped newlines
+        if (testKey.includes('\\n')) {
+          testKey = testKey.replace(/\\n/g, '\n');
+          console.log('[FIREBASE-DIAGNOSTIC] Replaced escaped newlines in key test');
+        }
+      }
+      
+      // Check key validity
+      const isValid = testKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
+                     testKey.endsWith('-----END PRIVATE KEY-----') &&
+                     testKey.includes('\n');
+                     
+      console.log('[FIREBASE-DIAGNOSTIC] Processed key validity check:', isValid);
+      
+      // Log the key structure
+      if (!isValid) {
+        console.log('[FIREBASE-DIAGNOSTIC] Key structural analysis:');
+        console.log('- Starts with BEGIN marker:', testKey.startsWith('-----BEGIN PRIVATE KEY-----'));
+        console.log('- Ends with END marker:', testKey.endsWith('-----END PRIVATE KEY-----'));
+        console.log('- Contains newlines:', testKey.includes('\n'));
+        console.log('- First 5 chars:', testKey.substring(0, 5));
+        console.log('- Last 5 chars:', testKey.substring(testKey.length - 5));
+      }
+      
+      // Try a last-resort fix
+      if (!isValid) {
+        // Sometimes keys are very badly formatted - try a complete reformat
+        // This fixes keys missing proper BEGIN/END markers or newlines
+        console.log('[FIREBASE-DIAGNOSTIC] Attempting last-resort key format fix...');
+        
+        // Strip all non-base64 characters
+        const base64Content = testKey.replace(/[^A-Za-z0-9+/=]/g, '');
+        // Reformat with proper BEGIN/END markers and newlines
+        const reformattedKey = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
+        
+        // Check validity of reformatted key
+        const reformattedValid = reformattedKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
+                                reformattedKey.endsWith('-----END PRIVATE KEY-----') &&
+                                reformattedKey.includes('\n');
+                                
+        console.log('[FIREBASE-DIAGNOSTIC] Last-resort reformatted key validity:', reformattedValid);
+        
+        // If this approach succeeded, patch the environment variable directly
+        if (reformattedValid) {
+          console.log('[FIREBASE-DIAGNOSTIC] Patching environment variable with correctly formatted key');
+          process.env.FIREBASE_PRIVATE_KEY = reformattedKey;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[FIREBASE-DIAGNOSTIC] Error processing test key:', error);
   }
   
   // Check required variables
@@ -727,8 +946,11 @@ export function validateFirebaseCredentials() {
   });
   
   if (hasCompleteSet) {
-    console.log('Found a complete set of Firebase credentials');
+    console.log('[FIREBASE-DIAGNOSTIC] Found a complete set of Firebase credentials');
     return true;
+  } else {
+    console.error('[FIREBASE-DIAGNOSTIC] No complete set of Firebase credentials found');
+    return false;
   }
   
   // If we don't have a complete set, but have service account file

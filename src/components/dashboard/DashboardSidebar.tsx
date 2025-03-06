@@ -62,9 +62,9 @@ const DashboardSidebar = () => {
     },
     {
       title: "Data Generation",
-      href: "/dashboard/jobs",
+      href: "/dashboard/data-generation",
       icon: <FiDatabase className="w-5 h-5" />,
-      active: pathname.startsWith("/dashboard/jobs"),
+      active: pathname.startsWith("/dashboard/data-generation"),
     },
     {
       title: "Activity",

@@ -74,6 +74,20 @@ export class CacheService {
   }
 
   /**
+   * Initialize the cache service with the given configuration
+   * This allows updating the configuration after the instance is created
+   */
+  public init(config: CacheConfig): void {
+    this.config = { ...DEFAULT_CACHE_CONFIG, ...config };
+    console.log(`Cache service initialized with config: enabled=${this.config.enabled}, ttl=${this.config.defaultTtlSeconds}s`);
+    
+    // Optionally clear the cache on re-initialization
+    if (config.enabled === false) {
+      this.clear();
+    }
+  }
+
+  /**
    * Private constructor (use getInstance instead)
    */
   private constructor(config: CacheConfig = DEFAULT_CACHE_CONFIG) {

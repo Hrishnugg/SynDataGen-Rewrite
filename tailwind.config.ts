@@ -34,6 +34,7 @@ const config: Config = {
       },
       animation: {
         'card-hover': 'card-hover 0.3s ease-out forwards',
+        'spin-slow': 'spin 15s linear infinite',
       },
       keyframes: {
         'card-hover': {

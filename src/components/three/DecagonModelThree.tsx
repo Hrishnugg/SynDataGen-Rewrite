@@ -1,156 +1,13 @@
 'use client';
 
-import { useRef, useState, useEffect, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Environment } from "@react-three/drei";
-import * as THREE from "three";
-import {
-  EffectComposer,
-  ChromaticAberration,
-  Bloom,
-} from "@react-three/postprocessing";
-import { BlendFunction } from "postprocessing";
-import { Vector2 } from "three";
+import { useRef, useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { ThreePlaceholder } from "./compat";
 
-// This component contains the actual 3D content
-function IcosahedronGeometry() {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const materialRef = useRef<THREE.MeshPhysicalMaterial>(null);
-  const [hovered, setHovered] = useState(false);
-  const { theme } = useTheme();
-
-  const rotationOffset = useRef({ x: 0, y: 0 });
-  const baseRotation = useRef({ x: 0, y: 0 });
-
-  // Create geometry with slight subdivision for smoother edges
-  const geometry = useMemo(() => {
-    return new THREE.IcosahedronGeometry(1, 0);
-  }, []);
-
-  // Animation
-  useFrame((state) => {
-    if (meshRef.current) {
-      // Continuous rotation
-      baseRotation.current.y += 0.002;
-
-      // Calculate target rotation including mouse influence
-      const mouse = state.mouse;
-      const targetX = mouse.y * 0.5 + baseRotation.current.x;
-      const targetY = mouse.x * 0.5 + baseRotation.current.y;
-
-      // Smooth interpolation
-      rotationOffset.current.x += (targetX - rotationOffset.current.x) * 0.1;
-      rotationOffset.current.y += (targetY - rotationOffset.current.y) * 0.1;
-
-      // Apply rotation
-      meshRef.current.rotation.x = rotationOffset.current.x;
-      meshRef.current.rotation.y = rotationOffset.current.y;
-    }
-
-    // Update material properties for subtle shine variation
-    if (materialRef.current) {
-      const time = state.clock.getElapsedTime();
-      materialRef.current.envMapIntensity =
-        (theme === "dark" ? 2.5 : 4) + Math.sin(time * 0.5) * 0.3;
-    }
-  });
-
-  return (
-    <mesh
-      ref={meshRef}
-      geometry={geometry}
-      position={[0, 0.5, 0]}
-      onPointerOver={() => setHovered(true)}
-      onPointerOut={() => setHovered(false)}
-    >
-      <meshPhysicalMaterial
-        ref={materialRef}
-        color={theme === "dark" ? "#080808" : "#2563eb"}
-        metalness={theme === "dark" ? 0.95 : 0.9}
-        roughness={theme === "dark" ? 0.85 : 0.1}
-        reflectivity={theme === "dark" ? 0.85 : 1}
-        clearcoat={theme === "dark" ? 0.95 : 1}
-        clearcoatRoughness={0.015}
-        envMapIntensity={theme === "dark" ? 2.5 : 4}
-        flatShading={false}
-        anisotropy={theme === "dark" ? 1 : 0.5}
-        anisotropyRotation={Math.PI / 2}
-      />
-    </mesh>
-  );
-}
-
-// The Three.js canvas component
-function DecagonModelCanvas() {
-  const { theme } = useTheme();
-  
-  return (
-    <Canvas
-      camera={{ position: [0, 0, 4.5], fov: 45 }}
-      style={{ background: "transparent" }}
-      gl={{
-        antialias: true,
-        toneMapping: THREE.ACESFilmicToneMapping,
-        alpha: true,
-      }}
-    >
-      <color
-        attach="background"
-        args={[theme === "dark" ? "rgb(17, 24, 39)" : "rgb(255, 255, 255)"]}
-      />
-
-      {/* Environment and Lighting */}
-      <Environment preset="studio" />
-      <ambientLight intensity={theme === "dark" ? 0.15 : 0.3} />
-
-      <pointLight
-        position={[10, 10, 10]}
-        intensity={theme === "dark" ? 1.8 : 2.5}
-        color={theme === "dark" ? "#FF3366" : "#3366FF"}
-      />
-
-      <pointLight
-        position={[-10, -10, -10]}
-        intensity={theme === "dark" ? 1.2 : 2}
-        color={theme === "dark" ? "#4A90E2" : "#2563eb"}
-      />
-
-      <spotLight
-        position={[5, 5, 5]}
-        angle={0.3}
-        penumbra={1}
-        intensity={theme === "dark" ? 2.5 : 3.5}
-        color={theme === "dark" ? "#50E3C2" : "#60A5FA"}
-        castShadow
-      />
-
-      {/* Main Geometry */}
-      <IcosahedronGeometry />
-
-      {/* Post Processing Effects */}
-      <EffectComposer>
-        <ChromaticAberration
-          blendFunction={BlendFunction.NORMAL}
-          offset={new Vector2(0.003, 0.003)}
-          radialModulation={false}
-          modulationOffset={0}
-        />
-
-        <Bloom
-          intensity={theme === "dark" ? 1.2 : 1.5}
-          luminanceThreshold={theme === "dark" ? 0.5 : 0.4}
-          luminanceSmoothing={0.4}
-          mipmapBlur={true}
-        />
-      </EffectComposer>
-    </Canvas>
-  );
-}
-
-// Main export component with client-side rendering safety
+// Main export component with placeholder for React 19 compatibility
 export default function DecagonModelThree() {
   const [isMounted, setIsMounted] = useState(false);
+  const { theme } = useTheme();
   
   // Explicit client-side only initialization
   useEffect(() => {
@@ -161,10 +18,39 @@ export default function DecagonModelThree() {
     return null; // Return nothing during SSR and initial client render
   }
   
-  // Only rendered on client after component is mounted
+  // Use a placeholder SVG animation for now
   return (
-    <div className="h-[900px] w-full translate-y-20">
-      <DecagonModelCanvas />
+    <div className="h-[900px] w-full translate-y-20 flex items-center justify-center">
+      <div 
+        className="w-full h-full flex items-center justify-center"
+        style={{
+          background: theme === "dark" ? "radial-gradient(circle at 50% 50%, #2563eb20 0%, #00000000 70%)" : "radial-gradient(circle at 50% 50%, #2563eb10 0%, #ffffff00 70%)"
+        }}
+      >
+        <svg 
+          width="400" 
+          height="400" 
+          viewBox="0 0 200 200" 
+          fill="none" 
+          xmlns="http://www.w3.org/2000/svg"
+          className="animate-spin-slow"
+          style={{ animationDuration: '20s' }}
+        >
+          <polygon 
+            points="100,10 129.4,19.1 153.2,40.8 165.5,70.1 165.5,103.3 153.2,132.6 129.4,154.3 100,163.4 70.6,154.3 46.8,132.6 34.5,103.3 34.5,70.1 46.8,40.8 70.6,19.1" 
+            fill="transparent" 
+            stroke={theme === "dark" ? "#2563eb" : "#2563eb"} 
+            strokeWidth="2" 
+          />
+          <circle 
+            cx="100" 
+            cy="100" 
+            r="40" 
+            fill={theme === "dark" ? "#2563eb" : "#2563eb"} 
+            fillOpacity="0.2" 
+          />
+        </svg>
+      </div>
     </div>
   );
-} 
+}
