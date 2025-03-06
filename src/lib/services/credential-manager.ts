@@ -7,9 +7,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { fixPrivateKey } from '@/lib/key-fixer';
 
 // Ensure environment variables are loaded
 dotenv.config();
+
+// Debug mode
+const DEBUG_CREDENTIALS = process.env.DEBUG_CREDENTIALS === 'true';
 
 // Define logger for credentials
 const credLogger = {
@@ -17,7 +21,7 @@ const credLogger = {
   warn: (message: string, ...args: any[]) => console.warn(`[CredentialManager] ${message}`, ...args),
   error: (message: string, ...args: any[]) => console.error(`[CredentialManager] ${message}`, ...args),
   debug: (message: string, ...args: any[]) => {
-    if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+    if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true' || DEBUG_CREDENTIALS) {
       console.log(`[CredentialManager:DEBUG] ${message}`, ...args);
     }
   }
@@ -36,6 +40,9 @@ export interface ServiceAccountCredentials {
   auth_provider_x509_cert_url?: string;
   client_x509_cert_url?: string;
   universe_domain?: string;
+  // For tracking credential source
+  source?: 'base64-env-var' | 'environment-variables' | 'application-credentials-file' | 'service-account-file' | 'gcp-metadata' | 'application-default' | 'mock' | 'forced-service-account-path';
+  // For using application default credentials
   useAppDefault?: boolean;
 }
 
@@ -83,19 +90,17 @@ export function areFirebaseCredentialsAvailable(): boolean {
 }
 
 /**
- * Get Firebase credentials from all possible sources with detailed results
- */
-/**
  * Get Firebase credentials from all possible sources
  * Follows a strict priority order with detailed logging
  * 
  * Priority order:
- * 1. FIREBASE_SERVICE_ACCOUNT environment variable (base64 encoded)
- * 2. FIREBASE_PRIVATE_KEY + FIREBASE_CLIENT_EMAIL + FIREBASE_PROJECT_ID environment variables
- * 3. GOOGLE_APPLICATION_CREDENTIALS file path
- * 4. Local service account files in common locations
- * 5. Application Default Credentials
- * 6. Emulator for development/testing
+ * 1. FORCE_SERVICE_ACCOUNT_PATH environment variable (highest priority override)
+ * 2. FIREBASE_SERVICE_ACCOUNT environment variable (base64 encoded)
+ * 3. FIREBASE_PRIVATE_KEY + FIREBASE_CLIENT_EMAIL + FIREBASE_PROJECT_ID environment variables
+ * 4. GOOGLE_APPLICATION_CREDENTIALS file path
+ * 5. Local service account files in common locations
+ * 6. Application Default Credentials
+ * 7. Emulator for development/testing
  */
 export async function getFirebaseCredentials(): Promise<ServiceAccountCredentials> {
   credLogger.info('Attempting to retrieve Firebase credentials');
@@ -116,6 +121,47 @@ export async function getFirebaseCredentials(): Promise<ServiceAccountCredential
   });
   
   credLogger.debug('Available Firebase-related environment variables:', firebaseEnvVars);
+  
+  // PRIORITY 0: Check for FORCE_SERVICE_ACCOUNT_PATH special override
+  if (process.env.FORCE_SERVICE_ACCOUNT_PATH && DEBUG_CREDENTIALS) {
+    credLogger.debug('Found FORCE_SERVICE_ACCOUNT_PATH override - this takes highest priority');
+    const forcedPath = process.env.FORCE_SERVICE_ACCOUNT_PATH;
+    
+    try {
+      if (fs.existsSync(forcedPath)) {
+        credLogger.debug(`Service account file exists at forced path: ${forcedPath}`);
+        
+        try {
+          const fileContent = fs.readFileSync(forcedPath, 'utf-8');
+          const serviceAccount = JSON.parse(fileContent);
+          
+          if (serviceAccount.project_id && serviceAccount.private_key && serviceAccount.client_email) {
+            credLogger.info('Successfully loaded service account from forced path');
+            
+            // Fix the private key if needed
+            try {
+              serviceAccount.private_key = fixPrivateKey(serviceAccount.private_key);
+            } catch (keyFixError) {
+              credLogger.warn('Warning: Could not fix private key format in forced service account', keyFixError);
+            }
+            
+            return {
+              ...serviceAccount,
+              source: 'forced-service-account-path'
+            };
+          } else {
+            credLogger.warn(`Forced service account file at ${forcedPath} is missing required fields`);
+          }
+        } catch (readError) {
+          credLogger.error(`Error reading forced service account file: ${readError.message}`);
+        }
+      } else {
+        credLogger.error(`Forced service account file not found at: ${forcedPath}`);
+      }
+    } catch (fileError) {
+      credLogger.error(`Error checking forced service account file: ${fileError.message}`);
+    }
+  }
   
   // PRIORITY 1: Check for base64 encoded service account in environment
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -296,130 +342,218 @@ export async function getFirebaseCredentials(): Promise<ServiceAccountCredential
  * Get Firebase credentials from environment variables
  */
 function getFirebaseCredentialsFromEnv(): ServiceAccountCredentials {
-  const credentials: ServiceAccountCredentials = {};
-  
-  // Log available environment variables (filtered for security)
-  const envKeys = Object.keys(process.env);
-  const firebaseKeys = envKeys.filter(
-    key => key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('GCP')
-  );
-  
-  credLogger.debug(`Found ${firebaseKeys.length} potential Firebase-related environment variables:`, 
-    firebaseKeys.map(k => `${k}: ${k.includes('KEY') ? '[REDACTED]' : (process.env[k] ? 'present' : 'empty')}`));
-  
-  // Check for private key
-  let private_key = process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
-  if (private_key) {
-    credLogger.debug('Private key found in environment variable, length:', private_key.length);
+  try {
+    credLogger.debug('Attempting to get Firebase credentials from environment variables');
+    const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    const result: ServiceAccountCredentials = {};
     
-    try {
-      // Use our key fixer utility to ensure proper formatting
-      const { fixPrivateKey } = require('@/lib/key-fixer');
-      private_key = fixPrivateKey(private_key);
-      credLogger.debug('Private key processed successfully with key-fixer');
-    } catch (keyFixError) {
-      credLogger.error('Error processing private key with key-fixer:', keyFixError);
+    // Add fields that are present
+    if (projectId) result.project_id = projectId;
+    if (clientEmail) result.client_email = clientEmail;
+    
+    // Only process private key if it exists
+    if (privateKey) {
+      // Log diagnostic information
+      credLogger.debug('Private key details:', {
+        length: privateKey.length,
+        hasNewlines: privateKey.includes('\n'),
+        hasEscapedNewlines: privateKey.includes('\\n'),
+        hasHeader: privateKey.includes('BEGIN PRIVATE KEY'),
+        hasFooter: privateKey.includes('END PRIVATE KEY')
+      });
       
-      // Fallback to manual processing if key-fixer fails
-      credLogger.debug('Falling back to manual key processing');
-      
-      // Handle surrounding quotes if present
-      if (private_key.startsWith('"') && private_key.endsWith('"')) {
-        credLogger.debug('Removing surrounding quotes from private key');
-        private_key = private_key.slice(1, -1);
-      }
-      
-      // Handle escaped newlines in private key
-      if (private_key.includes('\\n')) {
-        credLogger.debug('Processing escaped newlines in private key');
-        private_key = private_key.replace(/\\n/g, '\n');
-      }
-      
-      // Verify the key format
-      if (!private_key.includes('-----BEGIN PRIVATE KEY-----') || 
-          !private_key.includes('-----END PRIVATE KEY-----')) {
-        credLogger.warn('Private key appears to be malformed - missing BEGIN/END markers');
+      // Try to fix the private key using our key-fixer utility
+      try {
+        const originalKey = privateKey;
         
-        // Last resort fix - extract base64 and reformat
+        // First try using the dedicated key-fixer module
         try {
-          const base64Content = private_key.replace(/[^A-Za-z0-9+/=]/g, '');
-          private_key = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
-          credLogger.debug('Applied last-resort key fix with base64 extraction');
-        } catch (lastResortError) {
-          credLogger.error('Failed to apply last-resort key fix:', lastResortError);
+          privateKey = fixPrivateKey(privateKey);
+          credLogger.debug('Fixed private key using key-fixer utility');
+        } catch (fixError) {
+          credLogger.debug('Failed to use key-fixer, using manual processing:', fixError.message);
+          
+          // Manual processing if key-fixer fails
+          // Handle escaped newlines
+          if (privateKey.includes('\\n') && !privateKey.includes('\n')) {
+            credLogger.debug('Replacing escaped newlines in private key');
+            privateKey = privateKey.replace(/\\n/g, '\n');
+          }
+          
+          // Fix quotes if they're included in the environment variable
+          if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+            credLogger.debug('Removing surrounding quotes from private key');
+            privateKey = privateKey.slice(1, -1);
+          }
         }
+        
+        // Check if the key was modified
+        const wasFixed = privateKey !== originalKey;
+        if (wasFixed) {
+          credLogger.debug('Private key was fixed during processing');
+          
+          // Diagnostic info about the fixed key
+          credLogger.debug('Fixed private key details:', {
+            length: privateKey.length,
+            hasNewlines: privateKey.includes('\n'),
+            hasEscapedNewlines: privateKey.includes('\\n'),
+            hasHeader: privateKey.includes('BEGIN PRIVATE KEY'),
+            hasFooter: privateKey.includes('END PRIVATE KEY')
+          });
+          
+          // Update the environment variable with the fixed key for downstream consumers
+          if (DEBUG_CREDENTIALS) {
+            credLogger.debug('DEBUG_CREDENTIALS is enabled, updating FIREBASE_PRIVATE_KEY environment variable with fixed key');
+            process.env.FIREBASE_PRIVATE_KEY = privateKey;
+          }
+        }
+      } catch (keyProcessingError) {
+        credLogger.warn('Error processing private key:', keyProcessingError.message);
       }
+      
+      // Add to result
+      result.private_key = privateKey;
     }
     
-    credentials.private_key = private_key;
+    // Log whether we have all required fields
+    credLogger.debug('Credential extraction result:', {
+      hasProjectId: !!result.project_id,
+      hasClientEmail: !!result.client_email,
+      hasPrivateKey: !!result.private_key
+    });
+    
+    return result;
+  } catch (error) {
+    credLogger.error('Error getting credentials from environment:', error);
+    return {};
   }
-  
-  // Check for other required fields
-  const client_email = process.env.FIREBASE_CLIENT_EMAIL || process.env.GOOGLE_CLIENT_EMAIL;
-  if (client_email) {
-    credLogger.debug('Client email found in environment variable');
-    credentials.client_email = client_email;
-  }
-  
-  const project_id = process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_PROJECT_ID || process.env.GCP_PROJECT_ID;
-  if (project_id) {
-    credLogger.debug('Project ID found in environment variable:', project_id);
-    credentials.project_id = project_id;
-  }
-  
-  return credentials;
 }
 
 /**
  * Get Firebase credentials from service account JSON file
  */
 async function getFirebaseCredentialsFromFile(): Promise<ServiceAccountCredentials | null> {
-  // Check for credentials file path in environment
+  // First, check for credentials file path in environment
   const credentialPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  
   if (credentialPath) {
     credLogger.debug('GOOGLE_APPLICATION_CREDENTIALS environment variable found:', credentialPath);
     
     try {
       if (fs.existsSync(credentialPath)) {
         credLogger.debug(`Service account file exists at ${credentialPath}`);
-        const fileContent = fs.readFileSync(credentialPath, 'utf-8');
-        return JSON.parse(fileContent);
+        
+        try {
+          // Read the file content
+          const fileContent = fs.readFileSync(credentialPath, 'utf-8');
+          // Parse as JSON
+          const serviceAccount = JSON.parse(fileContent);
+          
+          // Check if it has the required fields
+          if (serviceAccount.project_id && serviceAccount.client_email && serviceAccount.private_key) {
+            credLogger.debug('Service account file has all required fields');
+            
+            // Process the private key using the key-fixer if available
+            try {
+              const { fixPrivateKey } = require('@/lib/key-fixer');
+              if (typeof fixPrivateKey === 'function') {
+                credLogger.debug('Fixing private key format using key-fixer');
+                serviceAccount.private_key = fixPrivateKey(serviceAccount.private_key);
+              }
+            } catch (keyFixerError) {
+              credLogger.debug('key-fixer not available or failed:', keyFixerError.message);
+              
+              // Fallback: Simple key format fixing if needed
+              if (serviceAccount.private_key.includes('\\n')) {
+                credLogger.debug('Replacing escaped newlines in private key');
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+              }
+            }
+            
+            // Log diagnostic info
+            credLogger.debug('Private key info:', {
+              length: serviceAccount.private_key.length,
+              hasNewlines: serviceAccount.private_key.includes('\n'),
+              hasHeader: serviceAccount.private_key.includes('BEGIN PRIVATE KEY'),
+              hasFooter: serviceAccount.private_key.includes('END PRIVATE KEY')
+            });
+            
+            return serviceAccount;
+          } else {
+            // List which fields are missing
+            const missingFields = [];
+            if (!serviceAccount.project_id) missingFields.push('project_id');
+            if (!serviceAccount.client_email) missingFields.push('client_email');
+            if (!serviceAccount.private_key) missingFields.push('private_key');
+            
+            credLogger.error(`Service account file is missing required fields: ${missingFields.join(', ')}`);
+          }
+        } catch (parseError) {
+          credLogger.error('Error parsing service account file:', parseError instanceof Error ? parseError.message : String(parseError));
+        }
       } else {
         credLogger.error(`Service account file does not exist at specified path: ${credentialPath}`);
       }
-    } catch (error) {
-      credLogger.error('Error reading service account file:', error instanceof Error ? error.message : String(error));
+    } catch (fileError) {
+      credLogger.error('Error accessing service account file:', fileError instanceof Error ? fileError.message : String(fileError));
     }
   }
   
-  // Check common locations for service account file in development
-  if (process.env.NODE_ENV === 'development') {
-    const possiblePaths = [
-      './firebase-service-account.json',
-      './service-account.json',
-      './.firebase/service-account.json',
-      './secrets/firebase-service-account.json',
-      path.join(process.cwd(), 'firebase-service-account.json'),
+  // Look for service account files in common locations
+  try {
+    const commonLocations = [
       path.join(process.cwd(), 'service-account.json'),
-      path.join(process.cwd(), '.firebase', 'service-account.json'),
-      path.join(process.cwd(), 'secrets', 'firebase-service-account.json')
+      path.join(process.cwd(), 'firebase-service-account.json'),
+      path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
+      path.join(process.cwd(), '.firebase', 'service-account.json')
     ];
     
-    credLogger.debug('Checking common locations for service account file in development mode');
-    
-    for (const filePath of possiblePaths) {
-      try {
-        if (fs.existsSync(filePath)) {
-          credLogger.debug(`Found service account file at ${filePath}`);
-          const fileContent = fs.readFileSync(filePath, 'utf-8');
-          return JSON.parse(fileContent);
+    for (const location of commonLocations) {
+      if (fs.existsSync(location)) {
+        credLogger.debug(`Found service account file at ${location}`);
+        
+        try {
+          // Read the file content
+          const fileContent = fs.readFileSync(location, 'utf-8');
+          // Parse as JSON
+          const serviceAccount = JSON.parse(fileContent);
+          
+          // Check if it has the required fields
+          if (serviceAccount.project_id && serviceAccount.client_email && serviceAccount.private_key) {
+            credLogger.debug(`Service account file at ${location} has all required fields`);
+            
+            // Process the private key using the key-fixer if available
+            try {
+              const { fixPrivateKey } = require('@/lib/key-fixer');
+              if (typeof fixPrivateKey === 'function') {
+                credLogger.debug('Fixing private key format using key-fixer');
+                serviceAccount.private_key = fixPrivateKey(serviceAccount.private_key);
+              }
+            } catch (keyFixerError) {
+              credLogger.debug('key-fixer not available or failed:', keyFixerError.message);
+              
+              // Fallback: Simple key format fixing if needed
+              if (serviceAccount.private_key.includes('\\n')) {
+                credLogger.debug('Replacing escaped newlines in private key');
+                serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+              }
+            }
+            
+            // Log the environment variable that could be set
+            credLogger.info(`Found valid service account file at ${location}. You can set GOOGLE_APPLICATION_CREDENTIALS=${location}`);
+            
+            return serviceAccount;
+          }
+        } catch (parseError) {
+          credLogger.debug(`Error parsing service account file at ${location}:`, parseError.message);
         }
-      } catch (error) {
-        credLogger.warn(`Error checking or reading file at ${filePath}:`, error instanceof Error ? error.message : String(error));
       }
     }
-    
-    credLogger.debug('No service account file found in common locations');
+  } catch (error) {
+    credLogger.error('Error searching for service account files:', error instanceof Error ? error.message : String(error));
   }
   
   return null;
@@ -463,50 +597,125 @@ function isRunningInGCP(): boolean {
  * Log available credential sources for troubleshooting
  */
 function logAvailableCredentialSources() {
-  credLogger.info('Available credential sources:');
+  console.log('===== FIREBASE CREDENTIAL DIAGNOSTIC INFORMATION =====');
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('MOCK_FIREBASE setting:', process.env.MOCK_FIREBASE);
   
-  // Environment variables
-  const envKeys = Object.keys(process.env).filter(
-    key => key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('GCP')
-  );
+  // Check for all possible credential sources
+  let foundSources = [];
   
-  credLogger.info(`- Environment variables (${envKeys.length} related to Google/Firebase found)`);
-  
-  // Service account file
-  const appCredPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (appCredPath) {
-    const exists = fs.existsSync(appCredPath);
-    credLogger.info(`- GOOGLE_APPLICATION_CREDENTIALS file: ${appCredPath} (exists: ${exists})`);
-  } else {
-    credLogger.info('- GOOGLE_APPLICATION_CREDENTIALS not set');
-  }
-  
-  // Check common locations
-  if (process.env.NODE_ENV === 'development') {
-    const commonLocations = [
-      './firebase-service-account.json',
-      './service-account.json',
-      './.firebase/service-account.json'
-    ];
+  // 1. Base64 encoded service account
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const length = process.env.FIREBASE_SERVICE_ACCOUNT.length;
+    foundSources.push(`FIREBASE_SERVICE_ACCOUNT (${length} characters)`);
     
-    for (const loc of commonLocations) {
-      const exists = fs.existsSync(loc);
-      if (exists) {
-        credLogger.info(`- Service account file found at: ${loc}`);
-      }
+    try {
+      const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString();
+      const parsed = JSON.parse(decoded);
+      const hasRequiredFields = parsed.project_id && parsed.private_key && parsed.client_email;
+      console.log(`  - Base64 decode ${parsed ? 'succeeded' : 'failed'}`);
+      console.log(`  - Has required fields: ${hasRequiredFields ? 'YES' : 'NO'}`);
+      if (parsed.project_id) console.log(`  - Project ID: ${parsed.project_id}`);
+      if (!parsed.private_key) console.log(`  - Missing private_key field`);
+      if (!parsed.client_email) console.log(`  - Missing client_email field`);
+    } catch (e) {
+      console.log(`  - Base64 decode failed: ${e.message}`);
     }
   }
   
-  // Application default location
-  const homeDir = process.env.HOME || process.env.USERPROFILE;
-  if (homeDir) {
-    const adcPath = path.join(homeDir, '.config/gcloud/application_default_credentials.json');
-    const exists = fs.existsSync(adcPath);
-    credLogger.info(`- Application Default Credentials: ${adcPath} (exists: ${exists})`);
+  // 2. Individual environment variables
+  let individualVars = [];
+  if (process.env.FIREBASE_PROJECT_ID) {
+    individualVars.push(`FIREBASE_PROJECT_ID: ${process.env.FIREBASE_PROJECT_ID}`);
+  }
+  if (process.env.GCP_PROJECT_ID) {
+    individualVars.push(`GCP_PROJECT_ID: ${process.env.GCP_PROJECT_ID}`);
+  }
+  if (process.env.GOOGLE_CLOUD_PROJECT) {
+    individualVars.push(`GOOGLE_CLOUD_PROJECT: ${process.env.GOOGLE_CLOUD_PROJECT}`);
+  }
+  if (process.env.FIREBASE_CLIENT_EMAIL) {
+    individualVars.push(`FIREBASE_CLIENT_EMAIL: ${process.env.FIREBASE_CLIENT_EMAIL}`);
+  }
+  if (process.env.FIREBASE_PRIVATE_KEY) {
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const hasCorrectHeader = privateKey.includes('BEGIN PRIVATE KEY');
+    const hasCorrectFooter = privateKey.includes('END PRIVATE KEY');
+    const hasActualNewlines = privateKey.includes('\n');
+    const hasEscapedNewlines = privateKey.includes('\\n');
+    
+    individualVars.push(`FIREBASE_PRIVATE_KEY: ${privateKey.length} characters`);
+    individualVars.push(`  - Has correct header: ${hasCorrectHeader ? 'YES' : 'NO'}`);
+    individualVars.push(`  - Has correct footer: ${hasCorrectFooter ? 'YES' : 'NO'}`);
+    individualVars.push(`  - Contains actual newlines: ${hasActualNewlines ? 'YES' : 'NO'}`);
+    individualVars.push(`  - Contains escaped newlines: ${hasEscapedNewlines ? 'YES' : 'NO'}`);
   }
   
-  // GCP environment
-  credLogger.info(`- Running in GCP environment: ${isRunningInGCP()}`);
+  if (individualVars.length > 0) {
+    foundSources.push('Individual environment variables:');
+    individualVars.forEach(v => foundSources.push(`  - ${v}`));
+  }
+  
+  // 3. Application credentials file
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    foundSources.push(`GOOGLE_APPLICATION_CREDENTIALS: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    try {
+      const fs = require('fs');
+      if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+        foundSources.push('  - File exists: YES');
+        
+        try {
+          const content = fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8');
+          const parsed = JSON.parse(content);
+          const hasRequiredFields = parsed.project_id && parsed.private_key && parsed.client_email;
+          foundSources.push(`  - File parse: ${parsed ? 'SUCCESS' : 'FAILED'}`);
+          foundSources.push(`  - Has required fields: ${hasRequiredFields ? 'YES' : 'NO'}`);
+        } catch (e) {
+          foundSources.push(`  - File read/parse failed: ${e.message}`);
+        }
+      } else {
+        foundSources.push('  - File exists: NO');
+      }
+    } catch (e) {
+      foundSources.push(`  - File access error: ${e.message}`);
+    }
+  }
+  
+  // 4. Local service account file
+  try {
+    const fs = require('fs');
+    const localPaths = [
+      path.join(process.cwd(), 'service-account.json'),
+      path.join(process.cwd(), 'firebase-service-account.json'),
+      path.join(process.cwd(), 'firestore-service-account.json'),
+    ];
+    
+    const existingFiles = localPaths.filter(p => fs.existsSync(p));
+    if (existingFiles.length > 0) {
+      foundSources.push('Local service account files:');
+      existingFiles.forEach(file => foundSources.push(`  - ${file}`));
+    }
+  } catch (e) {
+    foundSources.push(`Local file check error: ${e.message}`);
+  }
+  
+  // 5. Running in GCP
+  const gcpEnv = isRunningInGCP();
+  foundSources.push(`Running in GCP: ${gcpEnv ? 'YES' : 'NO'}`);
+  
+  // Output results
+  if (foundSources.length === 0) {
+    console.log('No Firebase credential sources found in the environment');
+  } else {
+    console.log('Found the following credential sources:');
+    foundSources.forEach(source => console.log(`- ${source}`));
+  }
+  
+  // Add a verification test that would actually try to initialize Firebase
+  console.log('\nTo validate your credentials, run:');
+  console.log('  npx ts-node scripts/verify-firebase-credentials.ts');
+  
+  console.log('=======================================================');
 }
 
 /**

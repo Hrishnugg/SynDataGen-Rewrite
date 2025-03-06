@@ -9,8 +9,11 @@ import { getApps, initializeApp, cert, applicationDefault, AppOptions, App } fro
 import { getFirestore as getAdminFirestore, Firestore, Settings } from 'firebase-admin/firestore';
 import { getFirebaseCredentials, ServiceAccountCredentials, areFirebaseCredentialsAvailable } from '@/lib/services/credential-manager';
 import { getFirebaseFirestore, getFirebaseInitStatus } from '@/lib/firebase';
-// Import dotenv using require syntax instead of ES modules
-const dotenv = require('dotenv');
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
+// Try to import key-fixer, but we'll handle if it's not available
+import { fixPrivateKey } from '@/lib/key-fixer';
 
 dotenv.config();
 
@@ -255,152 +258,175 @@ async function waitForInitialization(): Promise<Firestore> {
  * @returns Firebase app instance
  */
 async function getOrCreateFirebaseApp(credentials: ServiceAccountCredentials): Promise<App> {
-  // Check for existing apps
-  const apps = getApps();
-  logger.debug(`${apps.length} Firebase apps currently initialized`);
+  logger.debug('Getting or creating Firebase app with credentials');
   
-  // If we have an existing app, return it
-  if (apps.length > 0) {
-    logger.debug(`Using existing Firebase app: ${apps[0].name}`);
-    return apps[0];
+  // Check if any app is already initialized
+  const existingApps = getApps();
+  
+  if (existingApps.length > 0) {
+    logger.debug(`Returning existing Firebase app (${existingApps.length} apps found)`);
+    return existingApps[0];
   }
   
-  // Initialize a new app
+  logger.debug('No existing Firebase app found, initializing new app');
+  
+  // Prepare initialization options
+  let appOptions: AppOptions = {};
+  
   try {
-    const initOptions: AppOptions = {};
+    // Attempt to use the imported fixPrivateKey function, with fallback implementation
+    let fixPrivateKeyFn = (key: string): string => {
+      if (!key) return key;
+      
+      // Handle double-escaped newlines (Windows environments often do this)
+      let fixedKey = key;
+      if (fixedKey.includes('\\\\n')) {
+        fixedKey = fixedKey.replace(/\\\\n/g, '\\n');
+      }
+      
+      // Replace escaped newlines with actual newlines
+      if (fixedKey.includes('\\n')) {
+        fixedKey = fixedKey.replace(/\\n/g, '\n');
+      }
+      
+      // Handle missing header/footer
+      const hasHeader = fixedKey.includes('-----BEGIN PRIVATE KEY-----');
+      const hasFooter = fixedKey.includes('-----END PRIVATE KEY-----');
+      
+      if (!hasHeader) {
+        fixedKey = '-----BEGIN PRIVATE KEY-----\n' + fixedKey;
+      }
+      
+      if (!hasFooter) {
+        fixedKey = fixedKey + '\n-----END PRIVATE KEY-----';
+      }
+      
+      return fixedKey;
+    };
     
-    // Configure credentials based on what we have
+    // Try to use the imported fixPrivateKey function if available
+    try {
+      fixPrivateKeyFn = fixPrivateKey;
+      logger.debug('Using imported key-fixer module');
+    } catch (error) {
+      logger.warn('Using fallback key fixer implementation:', error instanceof Error ? error.message : String(error));
+    }
+    
+    // Use application default credentials if specified
     if (credentials.useAppDefault) {
-      logger.info('Initializing Firebase app with application default credentials');
-      initOptions.credential = applicationDefault();
-    } else if (credentials.private_key && credentials.client_email) {
-      logger.info('Initializing Firebase app with service account credentials');
+      logger.info('Using application default credentials');
+      appOptions = {
+        credential: applicationDefault()
+      };
+    } 
+    // Use service account credentials
+    else if (credentials.private_key && credentials.client_email) {
+      logger.info('Using service account credentials');
       
-      // Process the private key to ensure it's properly formatted
-      let privateKey = credentials.private_key;
+      // Fix the private key if needed
+      const fixedPrivateKey = fixPrivateKeyFn(credentials.private_key);
       
-      try {
-        // Instead of trying to import the module, implement key fixing inline
-        const fixPrivateKey = (key) => {
-          if (!key) {
-            console.error('[KeyFixer] Key is undefined or empty');
-            throw new Error('Cannot fix an undefined or empty private key');
-          }
-          
-          // Start with the original key
-          let processedKey = key;
-          
-          // Remove surrounding quotes if present
-          if (processedKey.startsWith('"') && processedKey.endsWith('"')) {
-            logger.debug('Removing surrounding quotes from private key');
-            processedKey = processedKey.slice(1, -1);
-          }
-          
-          // Replace escaped newlines with actual newlines
-          if (processedKey.includes('\\n')) {
-            logger.debug('Replacing escaped newlines in private key');
-            processedKey = processedKey.replace(/\\n/g, '\n');
-          }
-          
-          // Check if key is properly formatted
-          const isFormatted = processedKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
-                            processedKey.endsWith('-----END PRIVATE KEY-----') &&
-                            processedKey.includes('\n');
-                            
-          // Return if already properly formatted
-          if (isFormatted) {
-            return processedKey;
-          }
-          
-          // Try to reformat the key
-          logger.debug('Key not properly formatted, attempting to reformat');
-          // Extract base64 content
-          const base64Content = processedKey.replace(/[^A-Za-z0-9+/=]/g, '');
-          // Create properly formatted key
-          return `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
-        };
-        privateKey = fixPrivateKey(privateKey);
-        logger.debug('Private key processed successfully with key-fixer');
-      } catch (keyFixError) {
-        logger.error('Error processing private key with key-fixer:', keyFixError);
-        
-        // Fallback to manual processing if key-fixer fails
-        logger.debug('Falling back to manual key processing');
-        
-        // Remove surrounding quotes if present
-        if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-          logger.debug('Removing surrounding quotes from private key');
-          privateKey = privateKey.slice(1, -1);
-        }
-        
-        // Replace escaped newlines with actual newlines
-        if (privateKey.includes('\\n')) {
-          logger.debug('Replacing escaped newlines in private key');
-          privateKey = privateKey.replace(/\\n/g, '\n');
-        }
-        
-        // Check if key is properly formatted
-        const isFormatted = privateKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
-                           privateKey.endsWith('-----END PRIVATE KEY-----') &&
-                           privateKey.includes('\n');
-                           
-        // Try to reformat the key if it's not properly formatted
-        if (!isFormatted) {
-          logger.warn('Private key is not properly formatted, attempting to reformat');
-          
-          // Check if we just have the base64 part without the markers and newlines
-          const base64Content = privateKey.replace(/[^A-Za-z0-9+/=]/g, '');
-          privateKey = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
-          
-          // Log reformatting result
-          logger.debug('Key reformatted. Now starts with:', privateKey.substring(0, 30));
-          logger.debug('Key ends with:', privateKey.substring(privateKey.length - 30));
-        }
-      }
+      // Log key validity diagnostic
+      const wasKeyFixed = fixedPrivateKey !== credentials.private_key;
+      const keyLength = fixedPrivateKey.length;
+      const hasBeginMarker = fixedPrivateKey.includes('BEGIN PRIVATE KEY');
+      const hasEndMarker = fixedPrivateKey.includes('END PRIVATE KEY');
+      const hasActualNewlines = fixedPrivateKey.includes('\n');
       
-      // Use the processed private key
-      initOptions.credential = cert({
-        projectId: credentials.project_id,
-        clientEmail: credentials.client_email,
-        privateKey: privateKey
+      logger.debug('Private key diagnostic info:', {
+        originalLength: credentials.private_key.length,
+        fixedLength: keyLength,
+        wasFixed: wasKeyFixed,
+        hasBeginMarker,
+        hasEndMarker,
+        hasActualNewlines
       });
-    } else {
-      throw new Error('Invalid credentials: missing required fields');
-    }
-    
-    // Set project ID if available
-    if (credentials.project_id) {
-      initOptions.projectId = credentials.project_id;
-      logger.debug(`Setting project ID: ${credentials.project_id}`);
-    }
-    
-    // Initialize the app
-    const app = initializeApp(initOptions);
-    logger.info('Firebase app initialized successfully:', app.name);
-    return app;
-  } catch (error) {
-    // Provide detailed error diagnostics
-    logger.error('Firebase app initialization error:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    
-    // Enhanced error diagnostics for common issues
-    if (error instanceof Error) {
-      if (error.message.includes('credential')) {
-        throw new Error(`Firebase credential error: ${error.message}. Check your service account key format and permissions.`);
-      } else if (error.message.includes('project')) {
-        throw new Error(`Firebase project configuration error: ${error.message}. Check your project ID and make sure the project exists.`);
-      } else if (error.message.includes('already exists')) {
-        // This is not really an error, we can recover
-        logger.warn('Firebase app already initialized in another context');
-        const existingApps = getApps();
-        if (existingApps.length > 0) {
-          return existingApps[0];
+      
+      // Create certificate credentials
+      try {
+        logger.debug('Creating certificate with fixed private key');
+        appOptions = {
+          credential: cert({
+            projectId: credentials.project_id,
+            clientEmail: credentials.client_email,
+            privateKey: fixedPrivateKey,
+          }),
+          projectId: credentials.project_id
+        };
+        logger.debug('Certificate created successfully');
+      } catch (certError) {
+        // Log detailed diagnostics about the key
+        logger.error('Failed to create certificate:', certError);
+        logger.error('Private key format issue details:', {
+          length: keyLength,
+          beginsWith: keyLength > 30 ? fixedPrivateKey.substring(0, 30) + '...' : fixedPrivateKey,
+          endsWith: keyLength > 30 ? '...' + fixedPrivateKey.substring(keyLength - 30) : fixedPrivateKey,
+          containsBeginMarker: hasBeginMarker,
+          containsEndMarker: hasEndMarker,
+          containsNewlines: hasActualNewlines,
+        });
+        
+        // Try more aggressive fixing
+        logger.debug('Attempting more aggressive key fixing');
+        try {
+          // Try to parse only the base64 content and recreate the key
+          const keyContent = fixedPrivateKey
+            .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+            .replace(/-----END PRIVATE KEY-----/g, '')
+            .replace(/[\r\n\s]/g, '');
+          
+          // Format with proper line breaks (64 chars per line)
+          const formattedKey = '-----BEGIN PRIVATE KEY-----\n' +
+                              keyContent.match(/.{1,64}/g)?.join('\n') +
+                              '\n-----END PRIVATE KEY-----';
+          
+          logger.debug('Reformatted key with proper line breaks');
+          
+          // Try again with reformatted key
+          appOptions = {
+            credential: cert({
+              projectId: credentials.project_id,
+              clientEmail: credentials.client_email,
+              privateKey: formattedKey,
+            }),
+            projectId: credentials.project_id
+          };
+          logger.debug('Certificate created successfully with reformatted key');
+        } catch (reformatError) {
+          logger.error('Failed to create certificate with reformatted key:', reformatError);
+          throw reformatError;
         }
       }
+    } 
+    // No valid credential format provided
+    else {
+      throw new Error('Invalid credential format - missing required fields: private_key or client_email');
     }
     
+    // Initialize the app with proper error handling
+    try {
+      logger.debug('Initializing Firebase app with options');
+      const app = initializeApp(appOptions);
+      logger.info('Firebase app initialized successfully');
+      return app;
+    } catch (initError) {
+      // Handle specific initialization errors
+      if (initError instanceof Error) {
+        if (initError.message.includes('app/duplicate-app')) {
+          logger.warn('App already exists, returning existing app');
+          return getApps()[0];
+        } else if (initError.message.includes('auth/invalid-credential')) {
+          logger.error('Invalid credential error. Check your service account credentials.', initError);
+        } else if (initError.message.includes('app/invalid-app-options')) {
+          logger.error('Invalid app options error:', initError);
+        }
+      }
+      
+      // Rethrow the error
+      throw initError;
+    }
+  } catch (error) {
+    logger.error('Failed to create Firebase app:', error);
     throw error;
   }
 }
@@ -565,11 +591,8 @@ export function getFirestoreStatus(): Record<string, any> {
 /**
  * Get Firestore credentials from environment
  */
-function getFirestoreCredentials() {
-  console.log('Checking environment variables for Firebase credentials');
-  console.log('Environment variables available:', Object.keys(process.env).filter(key => 
-    key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('GCP')
-  ));
+export function getFirestoreCredentials() {
+  console.log('Checking for Firebase credentials in environment variables');
   
   // Check for environment variables
   let private_key = process.env.FIREBASE_PRIVATE_KEY || process.env.GOOGLE_PRIVATE_KEY;
@@ -597,12 +620,11 @@ function getFirestoreCredentials() {
     // Check if we can use application default credentials
     try {
       console.log('Attempting to use application default credentials');
-      const { applicationDefault } = require('firebase-admin/app');
-      const appDefaultCred = applicationDefault();
+      // Using the imported applicationDefault instead of requiring it
       console.log('Application default credentials found');
       
       // If we have application default but missing project ID
-      if (!project_id && appDefaultCred) {
+      if (!project_id) {
         console.log('Using application default credentials without explicit project_id');
         return { useAppDefault: true };
       }
@@ -612,7 +634,7 @@ function getFirestoreCredentials() {
     
     // Check for JSON credentials file
     try {
-      const fs = require('fs');
+      // Using the imported fs module instead of requiring it
       if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
         console.log('Attempting to load credentials from GOOGLE_APPLICATION_CREDENTIALS file');
         const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -630,48 +652,38 @@ function getFirestoreCredentials() {
     if (process.env.NODE_ENV === 'development') {
       try {
         console.log('Development environment: checking for local service account file');
-        const fs = require('fs');
+        // Using the imported fs and path modules instead of requiring them
         const localPaths = [
-          './firebase-service-account.json',
-          './service-account.json',
-          './.firebase/service-account.json'
+          path.join(process.cwd(), 'service-account.json'),
+          path.join(process.cwd(), 'firebase-service-account.json'),
+          path.join(process.cwd(), '.firebase', 'service-account.json'),
+          path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
         ];
         
-        for (const path of localPaths) {
-          if (fs.existsSync(path)) {
-            console.log(`Found local service account at ${path}`);
-            const serviceAccount = JSON.parse(fs.readFileSync(path, 'utf8'));
-            return serviceAccount;
+        for (const localPath of localPaths) {
+          if (fs.existsSync(localPath)) {
+            console.log(`Found local service account file at: ${localPath}`);
+            try {
+              const serviceAccount = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+              if (serviceAccount.project_id && serviceAccount.client_email && serviceAccount.private_key) {
+                console.log('Successfully loaded local service account');
+                return serviceAccount;
+              } else {
+                console.log('Local service account file is missing required fields');
+              }
+            } catch (readError) {
+              console.log(`Error reading service account from ${localPath}:`, readError.message);
+            }
           }
         }
       } catch (error) {
-        console.log('Failed to load local service account', error.message);
+        console.log('Error checking for local service account files:', error.message);
       }
     }
-  
-    // Log detailed information about missing credentials
-    const missingVars = [];
-    if (!private_key) missingVars.push('FIREBASE_PRIVATE_KEY/GOOGLE_PRIVATE_KEY');
-    if (!client_email) missingVars.push('FIREBASE_CLIENT_EMAIL/GOOGLE_CLIENT_EMAIL');
-    if (!project_id) missingVars.push('FIREBASE_PROJECT_ID/GOOGLE_PROJECT_ID/GCP_PROJECT_ID');
-    
-    throw new Error(`Missing Firestore credentials in environment variables: ${missingVars.join(', ')}`);
   }
-
-  // Parse private key - it might be stored with escaped newlines
-  let parsedKey = private_key;
-  if (parsedKey.includes('\\n')) {
-    console.log('Found escaped newlines in private key, parsing...');
-    parsedKey = parsedKey.replace(/\\n/g, '\n');
-  }
-
-  console.log(`Successfully loaded Firebase credentials for project: ${project_id}`);
   
-  return {
-    private_key: parsedKey,
-    client_email,
-    project_id
-  };
+  // No valid credentials found
+  return null;
 }
 
 /**
@@ -743,72 +755,65 @@ export function convertQuerySnapshot<T>(snapshot: admin.firestore.QuerySnapshot)
 }
 
 /**
- * Validate Firebase credentials on startup
- * This function should be called during app initialization to provide immediate feedback
+ * Validate Firebase credentials and return diagnostics information
  * about missing credentials
  */
-export function validateFirebaseCredentials() {
-  console.log('Validating Firebase credentials on startup...');
+export function validateFirebaseCredentials(): boolean {
+  console.log('[FIREBASE-DIAGNOSTIC] Validating Firebase credentials');
   
-  // Try to load dotenv again to make sure it's loaded
-  dotenv.config();
+  // Track validation state
+  let credentialsValid = false;
+  let serviceAccountValid = false;
+  let environmentVariablesValid = false;
+  let privateKeyValid = false;
   
-  console.log('[FIREBASE-DIAGNOSTIC] Starting credential validation');
-  console.log('[FIREBASE-DIAGNOSTIC] Environment:', process.env.NODE_ENV);
-  console.log('[FIREBASE-DIAGNOSTIC] MOCK_FIREBASE:', process.env.MOCK_FIREBASE);
-  
-  // Log available environment variables (filtered for security)
-  const envKeys = Object.keys(process.env);
-  const firebaseKeys = envKeys.filter(
+  console.log('[FIREBASE-DIAGNOSTIC] Checking environment variables:');
+  // Check all firebase related env vars
+  const firebaseVars = Object.keys(process.env).filter(
     key => key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('GCP')
   );
-  
-  console.log(`Found ${firebaseKeys.length} potential Firebase-related environment variables:`, 
-    firebaseKeys.map(k => `${k}: ${k.includes('KEY') ? '[REDACTED]' : (process.env[k] ? 'present' : 'empty')}`));
-  
-  // Enhanced logging for critical variables with value lengths
-  const critical_keys = [
-    'FIREBASE_PROJECT_ID', 
-    'GCP_PROJECT_ID', 
-    'GOOGLE_PROJECT_ID',
-    'FIREBASE_CLIENT_EMAIL',
-    'GOOGLE_CLIENT_EMAIL'
-  ];
-  
-  critical_keys.forEach(key => {
-    if (process.env[key]) {
-      console.log(`${key} is present with length: ${process.env[key].length}`);
+  console.log(`[FIREBASE-DIAGNOSTIC] Found ${firebaseVars.length} Firebase-related environment variables`);
+  firebaseVars.forEach(key => {
+    if (key.toLowerCase().includes('key')) {
+      // Don't output the key itself for security reasons
+      console.log(`[FIREBASE-DIAGNOSTIC] ${key}: [PRESENT] (${process.env[key]?.length || 0} characters)`);
     } else {
-      console.log(`${key} is NOT present`);
+      console.log(`[FIREBASE-DIAGNOSTIC] ${key}: ${process.env[key] || '[NOT SET]'}`);
     }
   });
   
-  // Check for private key specifically
+  // Check if we have the core Firebase environment variables
+  const hasFirebaseProjectId = !!process.env.FIREBASE_PROJECT_ID;
+  const hasFirebaseClientEmail = !!process.env.FIREBASE_CLIENT_EMAIL;
+  const hasFirebasePrivateKey = !!process.env.FIREBASE_PRIVATE_KEY;
+  
+  // Check if all core variables are present
+  if (hasFirebaseProjectId && hasFirebaseClientEmail && hasFirebasePrivateKey) {
+    console.log('[FIREBASE-DIAGNOSTIC] All core Firebase environment variables are present');
+    environmentVariablesValid = true;
+  } else {
+    console.log('[FIREBASE-DIAGNOSTIC] Missing some core Firebase environment variables:');
+    if (!hasFirebaseProjectId) console.log('- FIREBASE_PROJECT_ID is missing');
+    if (!hasFirebaseClientEmail) console.log('- FIREBASE_CLIENT_EMAIL is missing');
+    if (!hasFirebasePrivateKey) console.log('- FIREBASE_PRIVATE_KEY is missing');
+  }
+  
+  // Check private key format
   if (process.env.FIREBASE_PRIVATE_KEY) {
-    console.log('FIREBASE_PRIVATE_KEY is present with length:', process.env.FIREBASE_PRIVATE_KEY.length);
-    console.log('FIREBASE_PRIVATE_KEY starts with:', process.env.FIREBASE_PRIVATE_KEY.substring(0, 30) + '...');
-    
-    // Check if private key is properly formatted
-    if (!process.env.FIREBASE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY') || 
-        !process.env.FIREBASE_PRIVATE_KEY.includes('END PRIVATE KEY')) {
-      console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY appears to be malformed - missing BEGIN/END markers');
-      
-      // If the key might be surrounded by quotes, log that
-      if (process.env.FIREBASE_PRIVATE_KEY.startsWith('"') && process.env.FIREBASE_PRIVATE_KEY.endsWith('"')) {
-        console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY appears to be surrounded by quotes, which can cause issues');
-      }
-    }
-    
-    // Check if private key has escaped newlines
-    if (process.env.FIREBASE_PRIVATE_KEY.includes('\\n')) {
+    if (process.env.FIREBASE_PRIVATE_KEY.includes('\\n') && !process.env.FIREBASE_PRIVATE_KEY.includes('\n')) {
       console.log('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY contains escaped newlines (\\n)');
+      privateKeyValid = false;
     } else if (process.env.FIREBASE_PRIVATE_KEY.includes('\n')) {
       console.log('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY contains actual newlines');
+      privateKeyValid = process.env.FIREBASE_PRIVATE_KEY.includes('BEGIN PRIVATE KEY') && 
+                       process.env.FIREBASE_PRIVATE_KEY.includes('END PRIVATE KEY');
     } else {
       console.error('[FIREBASE-DIAGNOSTIC] FIREBASE_PRIVATE_KEY does not contain any newlines, which is likely invalid');
+      privateKeyValid = false;
     }
   } else {
     console.log('FIREBASE_PRIVATE_KEY is NOT present');
+    privateKeyValid = false;
   }
   
   // Try to manually process the key just as a test
@@ -817,201 +822,84 @@ export function validateFirebaseCredentials() {
     if (process.env.FIREBASE_PRIVATE_KEY) {
       let testKey = process.env.FIREBASE_PRIVATE_KEY;
       
-      // Try using our key fixer utility first
+      // Try using our imported key fixer utility 
       try {
-        // We need to require the module in a way that doesn't rely on '@/' paths
-        // since those are Next.js specific and might not be available in all contexts
-        const path = require('path');
-        const keyFixerPath = path.join(process.cwd(), 'src', 'lib', 'key-fixer.ts');
+        // Use the imported fixPrivateKey function
+        testKey = fixPrivateKey(testKey);
+        console.log('[FIREBASE-DIAGNOSTIC] Successfully used key-fixer to process private key');
         
-        // Try to dynamically load the module
-        // This is a bit tricky because we're in a TypeScript context
-        console.log('[FIREBASE-DIAGNOSTIC] Attempting to load key-fixer module');
-        
-        let keyFixer;
-        try {
-          // Try TypeScript path first
-          keyFixer = require(keyFixerPath);
-        } catch (tsImportError) {
-          // Try JavaScript path as fallback
-          try {
-            keyFixer = require(keyFixerPath.replace('.ts', '.js'));
-          } catch (jsImportError) {
-            // Both attempts failed, rethrow first error
-            throw tsImportError;
-          }
-        }
-        
-        if (keyFixer && typeof keyFixer.fixPrivateKey === 'function') {
-          testKey = keyFixer.fixPrivateKey(testKey);
-          console.log('[FIREBASE-DIAGNOSTIC] Successfully used key-fixer to process private key');
-          
-          // Patch the environment variable if successful
-          process.env.FIREBASE_PRIVATE_KEY = testKey;
-        } else {
-          throw new Error('key-fixer module loaded but fixPrivateKey function not found');
-        }
+        // Patch the environment variable if successful
+        process.env.FIREBASE_PRIVATE_KEY = testKey;
+        privateKeyValid = true;
       } catch (importError) {
-        console.log('[FIREBASE-DIAGNOSTIC] Unable to use key-fixer module, falling back to manual processing:', importError.message);
+        console.error('[FIREBASE-DIAGNOSTIC] Failed to use key-fixer, using manual process:', importError.message);
         
-        // Fallback to manual processing since key-fixer couldn't be loaded
-        // Remove quotes if present
-        if (testKey.startsWith('"') && testKey.endsWith('"')) {
-          testKey = testKey.slice(1, -1);
-          console.log('[FIREBASE-DIAGNOSTIC] Removed surrounding quotes from key test');
-        }
-        
-        // Replace escaped newlines
+        // Fall back to manual processing
         if (testKey.includes('\\n')) {
           testKey = testKey.replace(/\\n/g, '\n');
-          console.log('[FIREBASE-DIAGNOSTIC] Replaced escaped newlines in key test');
+          console.log('[FIREBASE-DIAGNOSTIC] Manually replaced escaped newlines');
+          privateKeyValid = testKey.includes('BEGIN PRIVATE KEY') && 
+                          testKey.includes('END PRIVATE KEY');
         }
       }
       
-      // Check key validity
-      const isValid = testKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
-                     testKey.endsWith('-----END PRIVATE KEY-----') &&
-                     testKey.includes('\n');
-                     
-      console.log('[FIREBASE-DIAGNOSTIC] Processed key validity check:', isValid);
-      
-      // Log the key structure
-      if (!isValid) {
-        console.log('[FIREBASE-DIAGNOSTIC] Key structural analysis:');
-        console.log('- Starts with BEGIN marker:', testKey.startsWith('-----BEGIN PRIVATE KEY-----'));
-        console.log('- Ends with END marker:', testKey.endsWith('-----END PRIVATE KEY-----'));
-        console.log('- Contains newlines:', testKey.includes('\n'));
-        console.log('- First 5 chars:', testKey.substring(0, 5));
-        console.log('- Last 5 chars:', testKey.substring(testKey.length - 5));
-      }
-      
-      // Try a last-resort fix
-      if (!isValid) {
-        // Sometimes keys are very badly formatted - try a complete reformat
-        // This fixes keys missing proper BEGIN/END markers or newlines
-        console.log('[FIREBASE-DIAGNOSTIC] Attempting last-resort key format fix...');
-        
-        // Strip all non-base64 characters
-        const base64Content = testKey.replace(/[^A-Za-z0-9+/=]/g, '');
-        // Reformat with proper BEGIN/END markers and newlines
-        const reformattedKey = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
-        
-        // Check validity of reformatted key
-        const reformattedValid = reformattedKey.startsWith('-----BEGIN PRIVATE KEY-----') && 
-                                reformattedKey.endsWith('-----END PRIVATE KEY-----') &&
-                                reformattedKey.includes('\n');
-                                
-        console.log('[FIREBASE-DIAGNOSTIC] Last-resort reformatted key validity:', reformattedValid);
-        
-        // If this approach succeeded, patch the environment variable directly
-        if (reformattedValid) {
-          console.log('[FIREBASE-DIAGNOSTIC] Patching environment variable with correctly formatted key');
-          process.env.FIREBASE_PRIVATE_KEY = reformattedKey;
-        }
-      }
+      // Print diagnostic info about the key
+      console.log('[FIREBASE-DIAGNOSTIC] Private key after processing:');
+      console.log(`- Length: ${testKey.length} characters`);
+      console.log(`- Contains BEGIN marker: ${testKey.includes('BEGIN PRIVATE KEY')}`);
+      console.log(`- Contains END marker: ${testKey.includes('END PRIVATE KEY')}`);
+      console.log(`- Contains actual newlines: ${testKey.includes('\n')}`);
+    } else {
+      console.log('[FIREBASE-DIAGNOSTIC] No private key to process');
     }
   } catch (error) {
-    console.error('[FIREBASE-DIAGNOSTIC] Error processing test key:', error);
+    console.error('[FIREBASE-DIAGNOSTIC] Error during private key processing:', error);
   }
   
-  // Check required variables
-  const requiredVarSets = [
-    // Set 1: Firebase service account
-    ['FIREBASE_PROJECT_ID', 'FIREBASE_PRIVATE_KEY', 'FIREBASE_CLIENT_EMAIL'],
-    // Set 2: Google service account
-    ['GOOGLE_PROJECT_ID', 'GOOGLE_PRIVATE_KEY', 'GOOGLE_CLIENT_EMAIL'],
-    // Set 3: Application default credentials
-    ['GOOGLE_APPLICATION_CREDENTIALS']
-  ];
-  
-  // Check if we have at least one complete set
-  const missingVarSets = requiredVarSets.map(varSet => {
-    const missingVars = varSet.filter(v => !process.env[v]);
-    return { 
-      set: varSet, 
-      missing: missingVars,
-      complete: missingVars.length === 0
-    };
-  });
-  
-  const hasCompleteSet = missingVarSets.some(set => set.complete);
-  
-  console.log('Credential validation result:', { 
-    hasCompleteSet,
-    missingVarSets: missingVarSets.map(set => ({
-      set: set.set,
-      missing: set.missing,
-      complete: set.complete
-    }))
-  });
-  
-  if (hasCompleteSet) {
-    console.log('[FIREBASE-DIAGNOSTIC] Found a complete set of Firebase credentials');
-    return true;
-  } else {
-    console.error('[FIREBASE-DIAGNOSTIC] No complete set of Firebase credentials found');
-    return false;
-  }
-  
-  // If we don't have a complete set, but have service account file
+  // Check for service account file
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.log('Checking service account file at:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    console.log(`[FIREBASE-DIAGNOSTIC] GOOGLE_APPLICATION_CREDENTIALS is set to: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    
     try {
-      const fs = require('fs');
-      const filePath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      
-      if (fs.existsSync(filePath)) {
-        console.log(`Service account file exists at ${filePath}`);
+      // Using the imported fs module instead of requiring it
+      if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+        console.log('[FIREBASE-DIAGNOSTIC] Service account file exists');
+        
         try {
-          const serviceAccount = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-          if (serviceAccount.project_id && serviceAccount.private_key && serviceAccount.client_email) {
-            console.log('Service account file contains valid credentials');
-            return true;
-          } else {
-            console.warn('Service account file is missing required fields');
-          }
+          const serviceAccount = JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
+          const hasRequiredFields = 
+            serviceAccount.project_id && 
+            serviceAccount.client_email && 
+            serviceAccount.private_key;
+          
+          console.log(`[FIREBASE-DIAGNOSTIC] Service account parsed successfully: ${hasRequiredFields ? 'has all required fields' : 'missing some fields'}`);
+          console.log(`[FIREBASE-DIAGNOSTIC] Project ID: ${serviceAccount.project_id || '[MISSING]'}`);
+          console.log(`[FIREBASE-DIAGNOSTIC] Client email: ${serviceAccount.client_email ? '[PRESENT]' : '[MISSING]'}`);
+          console.log(`[FIREBASE-DIAGNOSTIC] Private key: ${serviceAccount.private_key ? '[PRESENT]' : '[MISSING]'}`);
+          
+          serviceAccountValid = hasRequiredFields;
         } catch (parseError) {
-          console.error('Failed to parse service account file:', parseError.message);
+          console.error('[FIREBASE-DIAGNOSTIC] Failed to parse service account file:', parseError.message);
+          serviceAccountValid = false;
         }
       } else {
-        console.error(`Service account file does not exist at ${filePath}`);
+        console.error('[FIREBASE-DIAGNOSTIC] Service account file does not exist at specified path');
+        serviceAccountValid = false;
       }
     } catch (fileError) {
-      console.error('Error checking service account file:', fileError.message);
+      console.error('[FIREBASE-DIAGNOSTIC] Error checking service account file:', fileError.message);
+      serviceAccountValid = false;
     }
   }
   
-  // Look for local service account files in development mode
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const fs = require('fs');
-      const possiblePaths = [
-        './firebase-service-account.json',
-        './service-account.json',
-        './.firebase/service-account.json',
-        './secrets/firebase-service-account.json'
-      ];
-      
-      for (const path of possiblePaths) {
-        if (fs.existsSync(path)) {
-          console.log(`Found local service account file at ${path}`);
-          console.log(`To use this file, set GOOGLE_APPLICATION_CREDENTIALS=${path}`);
-        }
-      }
-    } catch (localFileError) {
-      console.error('Error checking for local service account files:', localFileError.message);
-    }
-  }
+  // Determine if credentials are valid
+  // Either environment variables with valid private key OR valid service account file
+  credentialsValid = (environmentVariablesValid && privateKeyValid) || serviceAccountValid;
   
-  // Log what's missing for each set
-  console.warn('Missing Firebase credentials:');
-  missingVarSets.forEach((set, i) => {
-    if (set.missing.length > 0) {
-      console.warn(`Option ${i+1}: Missing: ${set.missing.join(', ')}`);
-    }
-  });
+  console.log(`[FIREBASE-DIAGNOSTIC] Validation complete. Credentials valid: ${credentialsValid}`);
+  console.log(`[FIREBASE-DIAGNOSTIC] Details: env vars valid: ${environmentVariablesValid}, private key valid: ${privateKeyValid}, service account valid: ${serviceAccountValid}`);
   
-  return false;
+  return credentialsValid;
 }
 
 // Export useful Firebase Admin types and utilities

@@ -1,103 +1,135 @@
 /**
- * Private Key Format Fixer
+ * Firebase Private Key Fixer
  * 
- * This utility provides a solution for the Firebase private key formatting issues
- * that we're encountering in the project.
+ * This module provides utilities for fixing common issues with Firebase private keys
+ * stored in environment variables. It handles:
+ * 
+ * 1. Replacing escaped newlines (\n) with actual newlines
+ * 2. Adding missing BEGIN/END markers if needed
+ * 3. Proper formatting with newlines as required by the JWT library
+ * 4. Fixing ASN.1 parsing issues by proper PEM format enforcement
  */
 
 /**
- * Ensures a Firebase private key is properly formatted
- * This addresses several common issues that can happen with private keys:
- * 1. Keys with escaped newlines (\n) instead of actual newlines
- * 2. Keys missing proper BEGIN/END markers
- * 3. Keys with incorrect line breaks
- * 4. Keys surrounded by extra quotes
+ * Fix common issues with Firebase private keys
+ * 
+ * @param privateKey The private key string to fix
+ * @returns The fixed private key string
  */
-export function fixPrivateKey(key: string | undefined): string {
-  if (!key) {
-    console.error('[KeyFixer] Key is undefined or empty');
-    throw new Error('Cannot fix an undefined or empty private key');
+export function fixPrivateKey(privateKey: string): string {
+  if (!privateKey) {
+    throw new Error('Private key is empty or undefined');
+  }
+
+  // Step 1: Clean the key of any potential formatting issues
+  let fixedKey = privateKey.trim();
+  
+  // Step 2: Remove surrounding quotes if present
+  if (fixedKey.startsWith('"') && fixedKey.endsWith('"')) {
+    fixedKey = fixedKey.slice(1, -1).trim();
   }
   
-  console.log('[KeyFixer] Processing private key of length:', key.length);
-  
-  // Start with the original key
-  let processedKey = key;
-  
-  // Step 1: Remove surrounding quotes if present
-  if (processedKey.startsWith('"') && processedKey.endsWith('"')) {
-    console.log('[KeyFixer] Removing surrounding quotes');
-    processedKey = processedKey.slice(1, -1);
+  // Step 3: Handle escaped newlines
+  if (fixedKey.includes('\\n')) {
+    fixedKey = fixedKey.replace(/\\n/g, '\n');
   }
   
-  // Step 2: Replace escaped newlines with actual newlines
-  if (processedKey.includes('\\n')) {
-    console.log('[KeyFixer] Replacing escaped newlines');
-    processedKey = processedKey.replace(/\\n/g, '\n');
-  }
+  // Step 4: Check if we need to add the PEM header/footer
+  const hasHeader = fixedKey.includes('-----BEGIN PRIVATE KEY-----');
+  const hasFooter = fixedKey.includes('-----END PRIVATE KEY-----');
   
-  // Step 3: Check if the key is properly formatted after the initial processing
-  const hasBeginMarker = processedKey.includes('-----BEGIN PRIVATE KEY-----');
-  const hasEndMarker = processedKey.includes('-----END PRIVATE KEY-----');
-  const hasNewlines = processedKey.includes('\n');
+  // Step 5: Extract just the base64 content for proper reformatting
+  let base64Content = fixedKey;
   
-  // If already properly formatted, return it
-  if (hasBeginMarker && hasEndMarker && hasNewlines) {
-    const beginsWithMarker = processedKey.trim().startsWith('-----BEGIN PRIVATE KEY-----');
-    const endsWithMarker = processedKey.trim().endsWith('-----END PRIVATE KEY-----');
+  if (hasHeader && hasFooter) {
+    // Extract content between header and footer
+    const headerIndex = fixedKey.indexOf('-----BEGIN PRIVATE KEY-----');
+    const footerIndex = fixedKey.indexOf('-----END PRIVATE KEY-----');
     
-    if (beginsWithMarker && endsWithMarker) {
-      console.log('[KeyFixer] Key is already properly formatted');
-      return processedKey;
+    if (headerIndex !== -1 && footerIndex !== -1 && footerIndex > headerIndex) {
+      base64Content = fixedKey.substring(
+        headerIndex + '-----BEGIN PRIVATE KEY-----'.length,
+        footerIndex
+      );
     }
   }
   
-  // Step 4: If still not properly formatted, try a more aggressive approach:
-  // Extract just the base64 content and reformat completely
-  console.log('[KeyFixer] Key still not properly formatted, applying advanced fix');
+  // Step 6: Clean the base64 content of any non-base64 characters
+  base64Content = base64Content
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/[\r\n\s]/g, '');
   
-  try {
-    // Extract all base64 characters (remove anything that's not valid base64)
-    const base64Pattern = /[A-Za-z0-9+/=]+/g;
-    const matches = processedKey.match(base64Pattern);
-    
-    if (!matches || matches.length === 0) {
-      console.error('[KeyFixer] Could not extract base64 content from key');
-      throw new Error('Invalid private key format - could not extract base64 content');
-    }
-    
-    // Join all base64 parts (in case they were separated by non-base64 chars)
-    const base64Content = matches.join('');
-    
-    // Create a properly formatted PEM key
-    const reformattedKey = `-----BEGIN PRIVATE KEY-----\n${base64Content}\n-----END PRIVATE KEY-----`;
-    
-    console.log('[KeyFixer] Successfully reformatted key:', {
-      length: reformattedKey.length,
-      startsWithMarker: reformattedKey.startsWith('-----BEGIN PRIVATE KEY-----'),
-      endsWithMarker: reformattedKey.endsWith('-----END PRIVATE KEY-----'),
-      hasNewlines: reformattedKey.includes('\n')
-    });
-    
-    return reformattedKey;
-  } catch (error) {
-    console.error('[KeyFixer] Error during advanced key formatting:', error);
-    throw new Error(`Failed to fix private key format: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  // Step 7: Format the key in the exact PEM format with correct line breaks
+  // The proper format is:
+  // - Header
+  // - Newline
+  // - Base64 content with line breaks every 64 characters
+  // - Newline
+  // - Footer
+  const formattedLines = base64Content.match(/.{1,64}/g) || [];
+  const formattedKey = `-----BEGIN PRIVATE KEY-----\n${formattedLines.join('\n')}\n-----END PRIVATE KEY-----`;
+  
+  return formattedKey;
 }
 
-// Export a function that can be used in the Firebase initialization
-export function getFixedFirebaseKey(): string {
-  const originalKey = process.env.FIREBASE_PRIVATE_KEY;
-  
-  if (!originalKey) {
-    throw new Error('FIREBASE_PRIVATE_KEY environment variable is not set');
+/**
+ * Diagnose issues with a private key
+ * 
+ * @param privateKey The private key to diagnose
+ * @returns An object with diagnostic information
+ */
+export function diagnosePrivateKey(privateKey: string): Record<string, boolean | number> {
+  if (!privateKey) {
+    return {
+      isEmpty: true,
+      length: 0,
+      hasHeader: false,
+      hasFooter: false,
+      hasEscapedNewlines: false,
+      hasActualNewlines: false,
+      isDoubleEscaped: false,
+      hasWhitespace: false,
+    };
   }
   
-  try {
-    return fixPrivateKey(originalKey);
-  } catch (error) {
-    console.error('[KeyFixer] Failed to fix Firebase private key:', error);
-    throw error;
-  }
+  return {
+    isEmpty: privateKey.trim().length === 0,
+    length: privateKey.length,
+    hasHeader: privateKey.includes('-----BEGIN PRIVATE KEY-----'),
+    hasFooter: privateKey.includes('-----END PRIVATE KEY-----'),
+    hasEscapedNewlines: privateKey.includes('\\n'),
+    hasActualNewlines: privateKey.includes('\n'),
+    isDoubleEscaped: privateKey.includes('\\\\n'),
+    hasWhitespace: /\s/.test(privateKey),
+    hasSurroundingQuotes: privateKey.startsWith('"') && privateKey.endsWith('"'),
+    lineCount: privateKey.split('\n').length,
+    base64ContentOnly: privateKey
+      .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\r|\n|\s/g, '')
+      .length
+  };
 }
+
+/**
+ * Validate that a private key has the correct format
+ * 
+ * @param privateKey The private key to validate
+ * @returns True if the key is valid, false otherwise
+ */
+export function isValidPrivateKey(privateKey: string): boolean {
+  if (!privateKey) {
+    return false;
+  }
+  
+  const hasHeader = privateKey.includes('-----BEGIN PRIVATE KEY-----');
+  const hasFooter = privateKey.includes('-----END PRIVATE KEY-----');
+  const hasNewlines = privateKey.includes('\n');
+  
+  return hasHeader && hasFooter && hasNewlines;
+}
+
+export default {
+  fixPrivateKey,
+  diagnosePrivateKey,
+  isValidPrivateKey
+};

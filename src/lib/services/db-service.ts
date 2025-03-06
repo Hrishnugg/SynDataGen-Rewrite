@@ -55,6 +55,31 @@ export async function getFirestore(preloadData = false): Promise<any> {
     return _firestoreService;
   }
 
+  // DIAGNOSTIC: Explicitly log environment variables to help debug
+  console.log('[DB-SERVICE] Environment variables check:');
+  console.log('- NODE_ENV:', process.env.NODE_ENV);
+  console.log('- MOCK_FIREBASE:', process.env.MOCK_FIREBASE);
+  console.log('- FORCE_REAL_FIRESTORE:', process.env.FORCE_REAL_FIRESTORE);
+  console.log('- USE_MOCK_DATA:', process.env.USE_MOCK_DATA);
+  console.log('- GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS || '[NOT SET]');
+  console.log('- Has FIREBASE_PROJECT_ID:', !!process.env.FIREBASE_PROJECT_ID);
+  console.log('- Has FIREBASE_CLIENT_EMAIL:', !!process.env.FIREBASE_CLIENT_EMAIL);
+  console.log('- Has FIREBASE_PRIVATE_KEY:', !!process.env.FIREBASE_PRIVATE_KEY);
+
+  // NEW: If GOOGLE_APPLICATION_CREDENTIALS is not set, but we have a fixed service account file, set it
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && process.env.FORCE_REAL_FIRESTORE === 'true') {
+    const fs = require('fs');
+    const path = require('path');
+    const credentialsPath = path.join(process.cwd(), 'credentials', 'firebase-service-account.json');
+    
+    if (fs.existsSync(credentialsPath)) {
+      console.log(`[DB-SERVICE] Setting GOOGLE_APPLICATION_CREDENTIALS to: ${credentialsPath}`);
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+    } else {
+      console.warn(`[DB-SERVICE] Cannot find credentials file at: ${credentialsPath}`);
+    }
+  }
+
   // Check for Firebase initialization status first
   const firebaseStatus = getFirebaseInitStatus();
   if (!firebaseStatus.initialized && firebaseStatus.error) {
@@ -66,18 +91,28 @@ export async function getFirestore(preloadData = false): Promise<any> {
     const currentTime = Date.now();
     const timeSinceLastInit = currentTime - _lastInitTime;
     
-    // Implement backoff if there was a recent error
-    if (_lastInitError && timeSinceLastInit < 5000) {
+    // Check if we should enforce using real Firestore
+    const forceRealFirestore = process.env.FORCE_REAL_FIRESTORE === 'true';
+    const mockFirebaseDisabled = process.env.MOCK_FIREBASE !== 'true' && process.env.USE_MOCK_DATA !== 'true';
+    
+    // MODIFIED: Only use mock data if explicitly enabled or we're in dev/test AND we're not forcing real Firestore
+    const shouldUseMockData = 
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') && 
+      (process.env.MOCK_FIREBASE === 'true' || process.env.USE_MOCK_DATA === 'true') && 
+      !forceRealFirestore;
+    
+    // Implement backoff if there was a recent error and we're not forcing real Firestore
+    if (_lastInitError && timeSinceLastInit < 5000 && !forceRealFirestore) {
       console.warn(`Throttling Firestore initialization after recent error (${timeSinceLastInit}ms ago): ${_lastInitError.message}`);
       
-      // Check if we're in a development environment where we can use mock data
-      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.MOCK_FIREBASE === 'true') {
-        console.info('Using mock data in development environment due to Firestore initialization issues');
+      // Use mock data in development if we're not forcing real Firestore
+      if (shouldUseMockData) {
+        console.info('[DB-SERVICE] Using mock data in development environment due to Firestore initialization issues');
         // Return mock service for development
         return getMockFirestoreService();
       }
       
-      // In production, still attempt to retry after throttle
+      // In production or if we're forcing real Firestore, attempt to retry after throttle
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
@@ -120,12 +155,12 @@ export async function getFirestore(preloadData = false): Promise<any> {
     
     console.error(`Failed to initialize Firestore service: ${error.message}`, error);
     
-    // Check if we're in development or test
-    if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || process.env.MOCK_FIREBASE === 'true') {
-      console.warn('Using mock data service in development due to Firestore error');
+    // Check if we're in development or test and should use mock data
+    if (shouldUseMockData) {
+      console.warn('[DB-SERVICE] Using mock data service in development due to Firestore error');
       return getMockFirestoreService();
     } else {
-      // In production, report but still throw the error
+      // In production or if we're forcing real Firestore, throw the error
       throw error;
     }
   }

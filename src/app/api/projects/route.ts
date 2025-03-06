@@ -13,6 +13,49 @@ function generateBucketName(projectName: string, userId: string): string {
   return `synoptic-${sanitizedName}-${timestamp}-${randomStr}`;
 }
 
+// Utility function to resolve the service account path
+function resolveServiceAccountPath(): string | null {
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    
+    // Check the current working directory
+    console.log('[PROJECTS-API] Current working directory:', process.cwd());
+    
+    // Try multiple potential locations
+    const potentialPaths = [
+      // Relative paths
+      './credentials/firebase-service-account.json',
+      'credentials/firebase-service-account.json',
+      // Absolute paths
+      path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
+      path.resolve('credentials', 'firebase-service-account.json')
+    ];
+    
+    console.log('[PROJECTS-API] Checking potential service account paths:');
+    for (const potentialPath of potentialPaths) {
+      try {
+        const absolutePath = path.isAbsolute(potentialPath) ? 
+          potentialPath : path.resolve(process.cwd(), potentialPath);
+          
+        const exists = fs.existsSync(absolutePath);
+        console.log(`- ${potentialPath} -> ${absolutePath}: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
+        
+        if (exists) {
+          return absolutePath;
+        }
+      } catch (err) {
+        console.warn(`Error checking path ${potentialPath}:`, err);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[PROJECTS-API] Error resolving service account path:', error);
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -85,6 +128,19 @@ export async function GET(request: NextRequest) {
   try {
     console.log('Starting projects fetch...');
     
+    // DIAGNOSTIC: Show all environment variables related to Firebase
+    console.log('[PROJECTS-API] Environment variables check:');
+    Object.keys(process.env)
+      .filter(key => key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('MOCK') || key.includes('FORCE'))
+      .forEach(key => {
+        const value = process.env[key];
+        if (key.toLowerCase().includes('key')) {
+          console.log(`- ${key}: [PRESENT] (${value ? value.length : 0} characters)`);
+        } else {
+          console.log(`- ${key}: ${value || '[NOT SET]'}`);
+        }
+      });
+      
     // Get the session using authOptions
     console.log('Calling getServerSession with authOptions...');
     const session = await getServerSession(authOptions);
@@ -156,19 +212,40 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     };
 
-    // Check for Firebase credentials availability before trying to initialize
+    // ENHANCED: Ensure service account path is properly set
+    const forceRealFirestore = process.env.FORCE_REAL_FIRESTORE === 'true';
+    
+    // If Google Application Credentials is not set, try to find and set it
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      console.log('[PROJECTS-API] GOOGLE_APPLICATION_CREDENTIALS is not set, attempting to find service account file');
+      
+      const serviceAccountPath = resolveServiceAccountPath();
+      
+      if (serviceAccountPath) {
+        console.log(`[PROJECTS-API] Found service account file at: ${serviceAccountPath}`);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = serviceAccountPath;
+        console.log(`[PROJECTS-API] Set GOOGLE_APPLICATION_CREDENTIALS to: ${serviceAccountPath}`);
+      } else {
+        console.error('[PROJECTS-API] Could not find service account file in any standard location');
+        debugInfo.errors.push('Could not find service account file in any standard location');
+      }
+    } else {
+      console.log(`[PROJECTS-API] GOOGLE_APPLICATION_CREDENTIALS is already set to: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+    }
+    
+    // Validate Firebase credentials
     try {
-      // Import the validation function
       const { validateFirebaseCredentials } = await import('@/lib/gcp/firestore/initFirestore');
       debugInfo.firebaseCredentialsFound = validateFirebaseCredentials();
+      console.log(`[PROJECTS-API] validateFirebaseCredentials() returned: ${debugInfo.firebaseCredentialsFound}`);
     } catch (validationError) {
-      console.error('Error validating Firebase credentials:', validationError);
+      console.error('[PROJECTS-API] Error validating Firebase credentials:', validationError);
       debugInfo.errors.push(`Credential validation error: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
     }
 
-    // If credentials are missing, use mock data for development environment
-    if (!debugInfo.firebaseCredentialsFound && process.env.NODE_ENV === 'development') {
-      console.log('Firebase credentials not found. Using mock data for development.');
+    // MODIFIED: Only use mock data if specifically not forcing real Firestore
+    if (!debugInfo.firebaseCredentialsFound && !forceRealFirestore && process.env.NODE_ENV === 'development') {
+      console.log('[PROJECTS-API] Firebase credentials not found and not forcing real Firestore. Using mock data for development.');
       debugInfo.usedMockData = true;
       
       // Generate mock project data
@@ -195,22 +272,41 @@ export async function GET(request: NextRequest) {
       console.error('Failed to initialize Firestore service:', firestoreInitError);
       debugInfo.errors.push(`Firestore init error: ${firestoreInitError instanceof Error ? firestoreInitError.message : String(firestoreInitError)}`);
       
-      // Return mock data as fallback
-      console.log('Using mock data as fallback due to Firestore initialization failure');
-      const mockProjects = generateMockProjects(session.user.id, status, limit);
+      // MODIFIED: Only use mock data fallback if not forcing real Firestore
+      if (!forceRealFirestore) {
+        console.log('Using mock data as fallback due to Firestore initialization failure');
+        const mockProjects = generateMockProjects(session.user.id, status, limit);
+        return NextResponse.json({
+          projects: mockProjects,
+          count: mockProjects.length,
+          debug: {
+            ...debugInfo,
+            projectsCount: mockProjects.length,
+            mockDataUsed: true
+          }
+        });
+      } else {
+        // If forcing real Firestore but it failed, return a proper error
+        return NextResponse.json({
+          error: 'Firestore connection required but failed',
+          debug: debugInfo
+        }, { status: 500 });
+      }
+    }
+    
+    // MODIFIED: Check if we got a mock service and are forcing real Firestore
+    if (firestoreService.getMockData && forceRealFirestore) {
       return NextResponse.json({
-        projects: mockProjects,
-        count: mockProjects.length,
+        error: 'Received mock Firestore service but real Firestore is required',
         debug: {
           ...debugInfo,
-          projectsCount: mockProjects.length,
-          mockDataUsed: true
+          forceRealFirestore: true
         }
-      });
+      }, { status: 500 });
     }
     
     // Check if we got a mock service with getMockData method
-    if (firestoreService.getMockData) {
+    if (firestoreService.getMockData && !forceRealFirestore) {
       console.log('Using mock data from FirestoreService fallback');
       const mockProjects = firestoreService.getMockData('projects', 20);
       mockDataUsed = true;
