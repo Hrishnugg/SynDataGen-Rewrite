@@ -5,7 +5,26 @@
  */
 
 import * as admin from 'firebase-admin';
-import { getFirestore, Firestore, DocumentData, QuerySnapshot, Query, DocumentReference } from 'firebase-admin/firestore';
+import { getFirestore, Firestore, DocumentData, QuerySnapshot, Query, DocumentReference, CollectionReference } from 'firebase-admin/firestore';
+import { logger } from '@/lib/utils/logger';
+
+// Define global state for TypeScript
+declare global {
+  var __firestoreState: {
+    initialized: boolean;
+    instance: Firestore | null;
+    settingsApplied: boolean;
+  };
+}
+
+// Initialize global state if it doesn't exist
+if (!global.__firestoreState) {
+  global.__firestoreState = {
+    initialized: false,
+    instance: null,
+    settingsApplied: false
+  };
+}
 
 // Track initialization status
 let isInitialized = false;
@@ -15,46 +34,59 @@ let firestoreInstance: Firestore | null = null;
  * Initialize Firestore with appropriate settings
  */
 export async function initializeFirestore(): Promise<void> {
-  if (isInitialized) {
+  if (isInitialized && firestoreInstance) {
     return;
   }
 
   try {
     // Check if there's already a global Firestore state
-    // @ts-ignore - Global state might exist from initFirestore.ts
     if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
-      // @ts-ignore
       firestoreInstance = global.__firestoreState.instance;
       isInitialized = true;
       console.log('Reusing already initialized Firestore instance from global state');
       return;
     }
 
-    if (!admin.apps.length) {
+    // Check if Firebase Admin is already initialized
+    // Use a safer check that won't throw if admin.apps is undefined
+    const appsInitialized = admin.apps && Array.isArray(admin.apps) && admin.apps.length > 0;
+    
+    if (!appsInitialized) {
       // Initialize Firebase Admin SDK
-      admin.initializeApp({
-        credential: admin.credential.applicationDefault()
-      });
+      try {
+        admin.initializeApp({
+          projectId: process.env.FIREBASE_PROJECT_ID || 'syndatagen-test',
+          credential: admin.credential.applicationDefault()
+        });
+      } catch (error) {
+        logger.warn('Error initializing with application default credentials, falling back to emulator config');
+        // Fall back to a basic config for emulator
+        admin.initializeApp({
+          projectId: process.env.FIREBASE_PROJECT_ID || 'syndatagen-test'
+        });
+      }
     }
 
     firestoreInstance = getFirestore();
     
     // Only apply settings if we haven't already
-    // @ts-ignore - Check if settings have been applied in global state
     if (!global.__firestoreState?.settingsApplied) {
       firestoreInstance.settings({
         ignoreUndefinedProperties: true,
       });
-      // @ts-ignore - Mark settings as applied in global state if it exists
-      if (global.__firestoreState) {
-        global.__firestoreState.settingsApplied = true;
-      }
+      
+      // Mark settings as applied in global state
+      global.__firestoreState.settingsApplied = true;
     }
-
+    
+    // Update global state
+    global.__firestoreState.initialized = true;
+    global.__firestoreState.instance = firestoreInstance;
+    
     isInitialized = true;
-    console.log('Firestore initialized successfully');
+    logger.info('Firestore initialized successfully');
   } catch (error: any) {
-    console.error('Firestore initialization failed:', error);
+    logger.error('Firestore initialization failed:', error);
     throw error;
   }
 }
@@ -63,19 +95,163 @@ export async function initializeFirestore(): Promise<void> {
  * Get the Firestore instance
  */
 export function getFirestoreInstance(): Firestore {
-  if (!isInitialized || !firestoreInstance) {
-    // Check global state before throwing
-    // @ts-ignore - Global state might exist from initFirestore.ts
-    if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
-      // @ts-ignore
-      firestoreInstance = global.__firestoreState.instance;
+  // First check if we already have an instance
+  if (isInitialized && firestoreInstance) {
+    return firestoreInstance;
+  }
+  
+  // Check global state before throwing
+  if (global.__firestoreState?.initialized && global.__firestoreState?.instance) {
+    firestoreInstance = global.__firestoreState.instance;
+    isInitialized = true;
+    logger.debug('Retrieved initialized Firestore instance from global state');
+    return firestoreInstance;
+  }
+  
+  // Try to initialize lazily
+  try {
+    // This is a synchronous function, so we can't await the async initialization
+    // Instead, we'll check if Firestore is already initialized elsewhere
+    const appsInitialized = admin.apps && Array.isArray(admin.apps) && admin.apps.length > 0;
+    
+    if (appsInitialized) {
+      firestoreInstance = getFirestore();
       isInitialized = true;
-      console.log('Retrieved initialized Firestore instance from global state');
+      
+      // Update global state
+      global.__firestoreState.initialized = true;
+      global.__firestoreState.instance = firestoreInstance;
+      
       return firestoreInstance;
     }
-    throw new Error('Firestore not initialized. Call initializeFirestore first.');
+  } catch (error) {
+    logger.error('Failed to get Firestore instance:', error);
   }
-  return firestoreInstance;
+  
+  throw new Error('Firestore not initialized. Call initializeFirestore first.');
+}
+
+/**
+ * Create a query from a collection
+ * @param collectionPath Path to the collection
+ * @param queryFn Function to build the query
+ * @returns Query object
+ */
+export function createQuery(
+  collectionPath: string,
+  queryFn: (collectionRef: CollectionReference) => Query
+): Query {
+  const db = getFirestoreInstance();
+  const collectionRef = db.collection(collectionPath);
+  return queryFn(collectionRef);
+}
+
+/**
+ * Execute a query and return the results
+ * @param query Query to execute
+ * @returns Query results
+ */
+export async function executeQuery(query: Query): Promise<DocumentData[]> {
+  const snapshot = await query.get();
+  return snapshot.docs.map(doc => {
+    return {
+      id: doc.id,
+      ...doc.data()
+    };
+  });
+}
+
+/**
+ * Get all documents from a collection
+ * @param collectionPath Path to the collection
+ * @returns Array of documents
+ */
+export async function getAllDocuments(collectionPath: string): Promise<DocumentData[]> {
+  const db = getFirestoreInstance();
+  const snapshot = await db.collection(collectionPath).get();
+  
+  return snapshot.docs.map(doc => {
+    return {
+      id: doc.id,
+      ...doc.data()
+    };
+  });
+}
+
+/**
+ * Get a document by ID
+ * @param collectionPath Path to the collection
+ * @param documentId Document ID
+ * @returns Document data or null if not found
+ */
+export async function getDocument(
+  collectionPath: string,
+  documentId: string
+): Promise<DocumentData | null> {
+  const db = getFirestoreInstance();
+  const docRef = db.collection(collectionPath).doc(documentId);
+  const doc = await docRef.get();
+  
+  if (!doc.exists) {
+    return null;
+  }
+  
+  return {
+    id: doc.id,
+    ...doc.data()
+  };
+}
+
+/**
+ * Create or update a document
+ * @param collectionPath Path to the collection
+ * @param documentId Document ID (optional, will be generated if not provided)
+ * @param data Document data
+ * @returns Document reference
+ */
+export async function setDocument(
+  collectionPath: string,
+  data: DocumentData,
+  documentId?: string
+): Promise<DocumentReference> {
+  const db = getFirestoreInstance();
+  const collectionRef = db.collection(collectionPath);
+  
+  if (documentId) {
+    const docRef = collectionRef.doc(documentId);
+    await docRef.set(data, { merge: true });
+    return docRef;
+  } else {
+    return await collectionRef.add(data);
+  }
+}
+
+/**
+ * Delete a document
+ * @param collectionPath Path to the collection
+ * @param documentId Document ID
+ * @returns True if successful
+ */
+export async function deleteDocument(
+  collectionPath: string,
+  documentId: string
+): Promise<boolean> {
+  const db = getFirestoreInstance();
+  const docRef = db.collection(collectionPath).doc(documentId);
+  await docRef.delete();
+  return true;
+}
+
+/**
+ * Get the current Firestore state for diagnostics
+ */
+export function getFirestoreState() {
+  return {
+    initialized: isInitialized,
+    hasInstance: !!firestoreInstance,
+    globalState: global.__firestoreState,
+    appsInitialized: admin.apps.length > 0
+  };
 }
 
 /**
@@ -94,34 +270,6 @@ export interface FirestoreQueryOptions {
   limit?: number;
   startAfter?: DocumentData;
   endBefore?: DocumentData;
-}
-
-/**
- * Get a document from Firestore
- * 
- * @param collection Collection path
- * @param id Document ID
- * @returns Document data or null if not found
- */
-export async function getDocument<T>(
-  collection: string,
-  id: string
-): Promise<T | null> {
-  await ensureInitialized();
-  
-  try {
-    const docRef = firestoreInstance!.collection(collection).doc(id);
-    const doc = await docRef.get();
-    
-    if (!doc.exists) {
-      return null;
-    }
-    
-    return { id: doc.id, ...doc.data() } as unknown as T;
-  } catch (error: any) {
-    console.error(`Error getting document ${id} from ${collection}:`, error);
-    throw error;
-  }
 }
 
 /**
@@ -232,29 +380,6 @@ export async function updateDocument<T extends Record<string, any>>(
     return true;
   } catch (error: any) {
     console.error(`Error updating document ${id} in ${collection}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Delete a document from Firestore
- * 
- * @param collection Collection path
- * @param id Document ID
- * @returns True if successful
- */
-export async function deleteDocument(
-  collection: string,
-  id: string
-): Promise<boolean> {
-  await ensureInitialized();
-  
-  try {
-    const docRef = firestoreInstance!.collection(collection).doc(id);
-    await docRef.delete();
-    return true;
-  } catch (error: any) {
-    console.error(`Error deleting document ${id} from ${collection}:`, error);
     throw error;
   }
 }

@@ -131,7 +131,7 @@ async function runRestore() {
     }
     
     console.log('\nAvailable backups:');
-    backups.forEach((backup, index) => {
+    backups.forEach((backup: string, index: number) => {
       console.log(`${index + 1}. ${backup}`);
     });
     
@@ -194,7 +194,7 @@ async function runList() {
       console.log('No backups found.');
     } else {
       console.log('\nAvailable backups:');
-      backups.forEach((backupUri, index) => {
+      backups.forEach((backupUri: string, index: number) => {
         console.log(`${index + 1}. ${backupUri}`);
       });
     }
@@ -225,7 +225,10 @@ async function runExport() {
   try {
     await Promise.all(options.collections.map(async (collection: string) => {
       const outputPath = options.file.replace('.json', `-${collection}.json`);
-      await backup.exportCollectionToJson(collection, outputPath);
+      await backup.exportCollectionToJson({
+        collectionId: collection,
+        outputPath: outputPath
+      });
       console.log(`Exported ${collection} to ${outputPath}`);
     }));
     
@@ -264,7 +267,11 @@ async function runImport() {
     `);
     
     try {
-      await backup.importJsonToCollection(options.collections[0], options.file);
+      await backup.importJsonToCollection({
+        collectionId: options.collections[0],
+        inputPath: options.file,
+        merge: false
+      });
       console.log(`\n✅ Import completed successfully!`);
     } catch (error: any) {
       console.error(`\n❌ Import failed: ${error.message}`);

@@ -1,7 +1,8 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { FirestoreJobManagementService } from '@/lib/services/data-generation/job-management-service';
-import { BasePipelineService } from '@/lib/services/data-generation/pipeline-service';
-import { JobConfiguration, JobCreationResponse, JobStatus, JobError, PipelineHealth } from '@/lib/models/data-generation/types';
+import { FirestoreJobManagementService } from '@/features/data-generation/services/job-management-service';
+import { BasePipelineService } from '@/features/data-generation/services/pipeline-service';
+import { JobConfiguration, JobCreationResponse, JobStatus, PipelineHealth } from '@/lib/models/data-generation/types';
+import { JobError } from '@/features/data-generation/services/job-management-service.interface';
 
 // Mock the Firestore
 jest.mock('@/lib/firebase', () => {
@@ -94,8 +95,8 @@ class MockPipelineService extends BasePipelineService {
   }
 }
 
-jest.mock('@/lib/services/data-generation/pipeline-service', () => {
-  const actual = jest.requireActual('@/lib/services/data-generation/pipeline-service');
+jest.mock('@/features/data-generation/services/pipeline-service', () => {
+  const actual = jest.requireActual('@/features/data-generation/services/pipeline-service');
   return {
     BasePipelineService: actual.BasePipelineService,
     getPipelineService: jest.fn().mockReturnValue(new MockPipelineService())

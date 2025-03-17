@@ -5,10 +5,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { jobManagementService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
+import { getJobManagementService } from '@/features/data-generation/services/job-management-service';
+import { logger } from '@/lib/utils/logger';
 
 /**
  * GET /api/data-generation/jobs/[jobId]
@@ -21,7 +21,7 @@ export async function GET(
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -32,11 +32,17 @@ export async function GET(
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
     
+    const jobManagementService = getJobManagementService();
+    
     // Get job status
     const jobStatus = await jobManagementService.getJobStatus(jobId);
     
-    // Check if the user has access to this job
-    if (jobStatus.customerId !== userId) {
+    if (!jobStatus) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+    
+    // Use createdBy instead of customerId for access control
+    if (jobStatus.createdBy !== userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     
@@ -67,7 +73,7 @@ export async function DELETE(
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -78,12 +84,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
     
+    const jobManagementService = getJobManagementService();
+    
+    // Get job status to check ownership
+    const jobStatus = await jobManagementService.getJobStatus(jobId);
+    
+    if (!jobStatus) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+    }
+    
+    // Use createdBy instead of customerId for access control
+    if (jobStatus.createdBy !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
     // Cancel job
-    const success = await jobManagementService.cancelJob(jobId, userId);
+    const success = await jobManagementService.cancelJob(jobId);
     
     if (!success) {
       return NextResponse.json(
-        { error: 'Failed to cancel job. Job may be in a state that cannot be cancelled.' },
+        { error: 'Failed to cancel job' },
         { status: 400 }
       );
     }
@@ -92,14 +112,9 @@ export async function DELETE(
   } catch (error) {
     logger.error('Error cancelling job', error);
     
-    // Check if job not found or forbidden
-    if (error instanceof Error) {
-      if (error.message.includes('not found')) {
-        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-      }
-      if (error.message.includes('forbidden') || error.message.includes('access')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Check if job not found
+    if (error instanceof Error && error.message.includes('not found')) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
     
     return NextResponse.json(
@@ -111,7 +126,7 @@ export async function DELETE(
 
 /**
  * POST /api/data-generation/jobs/[jobId]/resume
- * Resume a specific job
+ * Resume a paused job
  */
 export async function POST(
   request: NextRequest,
@@ -120,7 +135,7 @@ export async function POST(
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -131,39 +146,48 @@ export async function POST(
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
     
-    // Check if this is a resume request
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
+    const jobManagementService = getJobManagementService();
     
-    if (action === 'resume') {
-      // Resume job
-      const success = await jobManagementService.resumeJob(jobId, userId);
-      
-      if (!success) {
-        return NextResponse.json(
-          { error: 'Failed to resume job. Job may be in a state that cannot be resumed or the resume window has expired.' },
-          { status: 400 }
-        );
-      }
-      
-      return NextResponse.json({ success: true });
+    // Get job status to check ownership and current status
+    const jobStatus = await jobManagementService.getJobStatus(jobId);
+    
+    if (!jobStatus) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
     
-    return NextResponse.json(
-      { error: 'Invalid action. Supported actions: resume' },
-      { status: 400 }
-    );
+    // Use createdBy instead of customerId for access control
+    if (jobStatus.createdBy !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    
+    // Check if the job is in a state that can be resumed
+    // Use type assertion to help TypeScript understand the comparison
+    if ((jobStatus.status as string) !== 'cancelled') {
+      return NextResponse.json(
+        { error: 'Job is not in a state that can be resumed' },
+        { status: 400 }
+      );
+    }
+    
+    // Since the resumeJob method isn't part of our interface, use updateJobStatus instead
+    const success = await jobManagementService.updateJobStatus(jobId, {
+      status: 'pending' // Using string literal instead of JobStatusValue type
+    });
+    
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Failed to resume job' },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json({ success: true });
   } catch (error) {
     logger.error('Error resuming job', error);
     
-    // Check if job not found or forbidden
-    if (error instanceof Error) {
-      if (error.message.includes('not found')) {
-        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-      }
-      if (error.message.includes('forbidden') || error.message.includes('access')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Check if job not found
+    if (error instanceof Error && error.message.includes('not found')) {
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
     
     return NextResponse.json(
@@ -171,4 +195,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

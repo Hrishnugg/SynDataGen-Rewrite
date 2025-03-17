@@ -8,7 +8,7 @@
  * - Batch operations
  */
 
-import { getFirestore, preloadCommonData, clearDatabaseCache } from '../lib/services/db-service';
+import { getFirestore, preloadCommonData, clearDatabaseCache } from '../lib/api/services/db-service';
 import { PROJECT_COLLECTION } from '../lib/models/firestore/project';
 import { CUSTOMER_COLLECTION } from '../lib/models/firestore/customer';
 import { WAITLIST_COLLECTION } from '../lib/models/firestore/waitlist';

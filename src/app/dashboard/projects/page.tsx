@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { FiAlertTriangle } from "react-icons/fi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Plus } from "lucide-react";
-import { ProjectDataTable } from "@/components/projects/project-data-table";
-import { Project } from "@/app/dashboard/projects/columns";
-import CreateProjectModal from "@/components/projects/CreateProjectModal";
+import { Loader2, Plus, RefreshCw } from "lucide-react";
+import { ProjectDataTable } from "@/features/projects/components/project-data-table";
+import { Project } from "./columns";
+import CreateProjectModal from "@/features/projects/components/CreateProjectModal";
 import { toast } from "sonner";
 
 export default function ProjectsPage() {
@@ -64,6 +64,22 @@ export default function ProjectsPage() {
     fetchProjects();
   }, [fetchProjects, refreshTrigger]);
 
+  // Listen for the custom refresh event
+  useEffect(() => {
+    const handleRefreshEvent = () => {
+      console.log("Refresh event received, updating projects list");
+      setRefreshTrigger(prev => prev + 1);
+    };
+
+    // Add event listener
+    window.addEventListener('refreshProjectsList', handleRefreshEvent);
+
+    // Clean up
+    return () => {
+      window.removeEventListener('refreshProjectsList', handleRefreshEvent);
+    };
+  }, []);
+
   const handleCreateProject = async (projectData: any) => {
     try {
       setLoading(true);
@@ -90,10 +106,20 @@ export default function ProjectsPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Projects</h1>
-        <Button onClick={() => setIsOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
+        <div className="flex space-x-2">
+          <Button 
+            variant="outline" 
+            onClick={handleRefresh} 
+            disabled={loading}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => setIsOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Project
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -119,11 +145,7 @@ export default function ProjectsPage() {
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
       ) : (
-        <ProjectDataTable 
-          projects={projects} 
-          onCreateProject={() => setIsOpen(true)}
-          onRefresh={handleRefresh}
-        />
+        <ProjectDataTable projects={projects} />
       )}
 
       <CreateProjectModal 

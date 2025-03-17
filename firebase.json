@@ -1,7 +1,7 @@
 {
   "firestore": {
-    "rules": "src/lib/gcp/firestore/config/firestore.rules",
-    "indexes": "src/lib/gcp/firestore/config/firestore.indexes.json"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "emulators": {
     "auth": {
@@ -13,6 +13,7 @@
     "ui": {
       "enabled": true,
       "port": 4000
-    }
+    },
+    "singleProjectMode": true
   }
 } 

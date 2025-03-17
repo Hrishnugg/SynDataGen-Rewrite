@@ -6,8 +6,8 @@
  */
 
 import * as dotenv from 'dotenv';
-import { getFirestoreService } from '../src/lib/services/firestore-service';
-import { fixPrivateKey } from '../src/lib/key-fixer';
+import { getFirestoreService } from '../src/lib/api/services/firestore-service';
+import { fixPrivateKey } from '../src/lib/firebase/key-fixer';
 
 // Load environment variables
 dotenv.config();
@@ -67,7 +67,7 @@ async function testFirestoreConnection() {
   
   try {
     // Get Firestore service with immediate initialization
-    firestoreService = await getFirestoreService({ enabled: false }, true);
+    firestoreService = await getFirestoreService({ enabled: false, defaultTtlSeconds: 0 }, true);
     console.log('✅ Firestore service initialized successfully');
   } catch (initError) {
     console.error('❌ Failed to initialize Firestore service:');
@@ -104,7 +104,7 @@ async function testFirestoreConnection() {
     await firestoreService.update(TEST_COLLECTION, TEST_DOCUMENT.id, updateData);
     
     // Read again to verify update
-    const updatedDoc = await firestoreService.getById(TEST_COLLECTION, TEST_DOCUMENT.id);
+    const updatedDoc = await firestoreService.getById(TEST_COLLECTION, TEST_DOCUMENT.id) as { updated: boolean, [key: string]: any };
     
     if (!updatedDoc.updated) {
       throw new Error('Document update failed');

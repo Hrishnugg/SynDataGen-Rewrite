@@ -1,22 +1,53 @@
 module.exports = {
-  preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.ts', '**/tests/**/*.spec.ts'],
+  testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
+  transform: {
+    '^.+\\.(ts|tsx)$': ['ts-jest', {
+      isolatedModules: true,
+    }],
+  },
   moduleNameMapper: {
+    '^@/lib/(.*)$': '<rootDir>/src/lib/$1',
+    '^@/tests/(.*)$': '<rootDir>/src/tests/$1',
+    '^@/features/(.*)$': '<rootDir>/src/features/$1',
     '^@/(.*)$': '<rootDir>/src/$1'
   },
-  transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: 'tsconfig.json',
-    }]
-  },
-  coverageDirectory: 'coverage',
-  collectCoverageFrom: [
-    'src/lib/models/data-generation/**/*.ts',
-    'src/lib/services/data-generation/**/*.ts',
-    '!**/node_modules/**',
-    '!**/dist/**'
-  ],
   setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
-  testTimeout: 30000
+  globalSetup: '<rootDir>/src/tests/global-setup.js',
+  globalTeardown: '<rootDir>/src/tests/global-teardown.js',
+  testTimeout: 30000, // Increased timeout for emulator tests
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/.next/',
+    '/out/',
+    '/scripts/',
+    '/typescript-fixes-backup'
+  ],
+  coveragePathIgnorePatterns: [
+    '/node_modules/',
+    '/.next/',
+    '/out/',
+    '/scripts/',
+    '/typescript-fixes-backup'
+  ],
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/tests/**/*',
+    '!src/scripts/**/*'
+  ],
+  testEnvironmentOptions: {
+    // Configure environment variables for tests
+    env: {
+      FIRESTORE_EMULATOR_HOST: 'localhost:8080',
+      FIREBASE_AUTH_EMULATOR_HOST: 'localhost:9099',
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'syndatagen-test',
+      NEXT_PUBLIC_FIREBASE_API_KEY: 'test-api-key',
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'localhost',
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: 'test-bucket.appspot.com',
+      FIREBASE_ADMIN_CLIENT_EMAIL: 'test@test-project.iam.gserviceaccount.com',
+      FIREBASE_ADMIN_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj\nMzEfYyjiWA4R4/M2bS1GB4t7NXp98C3SC6dVMvDuictGeurT8jNbvJZHtCSuYEvu\nNMoSfm76oqFvAp8Gy0iz5sxjZmSnXyCdPEovGhLa0VzMaQ8s+CLOyS56YyCFGeJZ\n-----END PRIVATE KEY-----\n', // Fake key for testing
+      NODE_ENV: 'test'
+    }
+  }
 }; 

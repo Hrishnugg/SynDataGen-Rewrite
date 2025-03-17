@@ -6,10 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { getFirestoreService } from '@/lib/services/firestore-service';
-import { getFirebaseCredentials, areFirebaseCredentialsAvailable } from '@/lib/services/credential-manager';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/firebase/auth';
+import { getFirestoreService } from '@/lib/api/services/firestore-service';
+import { getFirebaseCredentials } from '@/lib/api/services/credential-manager';
+import { areFirebaseCredentialsAvailable } from '@/lib/firebase';
 
 export async function GET(request: NextRequest) {
   // Check for admin authorization
@@ -58,11 +59,11 @@ export async function GET(request: NextRequest) {
     try {
       credentials = await getFirebaseCredentials();
       diagnosticInfo.credentialSources.credentials = {
-        source: credentials.source || 'unknown',
-        projectId: credentials.project_id || '[MISSING]',
-        hasClientEmail: !!credentials.client_email,
-        hasPrivateKey: !!credentials.private_key,
-        usingAppDefault: !!credentials.useAppDefault
+        source: credentials?.source || 'unknown',
+        projectId: credentials?.project_id || '[MISSING]',
+        hasClientEmail: !!credentials?.client_email,
+        hasPrivateKey: !!credentials?.private_key,
+        usingAppDefault: !!credentials?.useAppDefault
       };
     } catch (error) {
       credentialError = error;
@@ -81,7 +82,8 @@ export async function GET(request: NextRequest) {
       try {
         // Try to initialize Firestore service
         firestoreService = await getFirestoreService({
-          enabled: false // Disable cache for the test
+          enabled: false, // Disable cache for the test
+          defaultTtlSeconds: 0 // Required by CacheConfig interface
         }, true);
         
         // Try a quick operation to verify connection

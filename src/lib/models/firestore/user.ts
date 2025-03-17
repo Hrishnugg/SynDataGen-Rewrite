@@ -4,6 +4,8 @@
  * Defines the structure and types for user data in Firestore.
  */
 
+import { Timestamp, DocumentData } from 'firebase-admin/firestore';
+
 /**
  * User data model for Firestore
  */
@@ -43,7 +45,7 @@ export const USER_COLLECTION = 'users';
  * @param id Document ID
  * @returns User object
  */
-export function firestoreToUser(doc: FirebaseFirestore.DocumentData, id?: string): User {
+export function firestoreToUser(doc: DocumentData, id?: string): User {
   // Check if doc already has an id property (which might be the case for mock data)
   const userId = id || doc.id || 'unknown-id';
   
@@ -82,7 +84,7 @@ export function firestoreToUser(doc: FirebaseFirestore.DocumentData, id?: string
  * @param user User object
  * @returns Firestore document data
  */
-export function userToFirestore(user: User): FirebaseFirestore.DocumentData {
+export function userToFirestore(user: User): DocumentData {
   return {
     name: user.name,
     email: user.email,

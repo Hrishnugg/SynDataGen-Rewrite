@@ -5,6 +5,7 @@
  * This allows simulating multiple concurrent users and jobs to test system performance under load.
  */
 
+// @ts-ignore - Type declarations are defined in @types
 import { dataGenerationClient } from '../services/data-generation';
 import { JobConfiguration } from '../models/data-generation/types';
 

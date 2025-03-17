@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { createMetricsHandler } from '@/lib/monitoring/firestore-metrics';
-import { getDatabaseCacheStats } from '@/lib/services/db-service';
+import { getDatabaseCacheStats } from '@/lib/api/services/db-service';
 import { headers } from 'next/headers';
 
 // Firestore operation costs (per 100K operations)
@@ -22,7 +22,7 @@ const COST_PER_100K = {
 export async function GET(req: Request) {
   try {
     // Check for monitoring token (for monitoring services)
-    const headersList = headers();
+    const headersList = await headers();
     const monitoringToken = headersList.get('x-monitoring-token');
     const configuredToken = process.env.MONITORING_TOKEN;
     
@@ -42,8 +42,8 @@ export async function GET(req: Request) {
       }
       
       // Check for admin role - safely handle undefined properties
-      const role = session.user.role;
-      const isAdmin = session.user.isAdmin === true || role === 'admin';
+      const role = (session.user as any)?.role;
+      const isAdmin = (session.user as any)?.isAdmin === true || role === 'admin';
       
       if (!isAdmin) {
         return NextResponse.json({ 

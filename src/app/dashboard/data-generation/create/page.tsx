@@ -6,10 +6,10 @@
  * Page for creating a new data generation job.
  */
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,12 +17,101 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { ArrowLeft, Plus, Trash2, Save, Play } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Play, Loader2 } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import { dataGenerationClient } from '@/features/data-generation/services/client';
+
+// Project type definition
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
+}
 
 export default function CreateJobPage() {
+  return (
+    <Suspense fallback={<JobFormSkeleton />}>
+      <CreateJobForm />
+    </Suspense>
+  );
+}
+
+// Skeleton loading state for the form
+function JobFormSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Create New Job</h1>
+        <div className="w-24 h-10 bg-gray-200 animate-pulse rounded-md"></div>
+      </div>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <div className="w-48 h-7 bg-gray-200 animate-pulse rounded-md"></div>
+          </CardTitle>
+          <CardDescription>
+            <div className="w-64 h-5 bg-gray-200 animate-pulse rounded-md"></div>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="space-y-2">
+                <div className="w-24 h-5 bg-gray-200 animate-pulse rounded-md"></div>
+                <div className="w-full h-10 bg-gray-200 animate-pulse rounded-md"></div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CreateJobForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+  
+  // Get project ID from URL on component mount and fetch all projects
+  useEffect(() => {
+    const projectIdFromUrl = searchParams.get('projectId');
+    
+    // Fetch all available projects
+    const fetchProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const response = await fetch('/api/projects');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch projects: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setProjects(data.projects || []);
+        
+        // If projectId is provided in URL, set it directly
+        if (projectIdFromUrl) {
+          setProjectId(projectIdFromUrl);
+        }
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        toast({
+          title: 'Error loading projects',
+          description: error instanceof Error ? error.message : 'An unknown error occurred',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+    
+    fetchProjects();
+  }, [searchParams]);
   
   // Basic job information
   const [jobName, setJobName] = useState('');
@@ -48,6 +137,53 @@ export default function CreateJobPage() {
   const [locale, setLocale] = useState('en');
   const [includeNulls, setIncludeNulls] = useState(false);
   const [nullProbability, setNullProbability] = useState(0.1);
+  
+  // Add a project selection section to the form
+  const renderProjectSelection = () => {
+    if (loadingProjects) {
+      return (
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">Loading projects...</span>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="space-y-2">
+        <Label htmlFor="project-select" className="text-sm font-medium">
+          Project
+        </Label>
+        <Select
+          value={projectId || ''}
+          onValueChange={(value) => setProjectId(value)}
+          disabled={projects.length === 0}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select a project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.length === 0 ? (
+              <SelectItem value="no-projects" disabled>
+                No projects available
+              </SelectItem>
+            ) : (
+              projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
+        {!projectId && (
+          <p className="text-sm text-muted-foreground">
+            Please select a project to associate this job with
+          </p>
+        )}
+      </div>
+    );
+  };
   
   // Add a new field to the schema
   const addField = () => {
@@ -101,64 +237,18 @@ export default function CreateJobPage() {
     router.push('/dashboard/data-generation/jobs');
   };
   
-  // Validate the form
-  const validateForm = () => {
-    if (!jobName.trim()) {
-      toast({
-        title: 'Job name is required',
-        description: 'Please provide a name for the job.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    
-    if (recordCount <= 0) {
-      toast({
-        title: 'Invalid record count',
-        description: 'Record count must be greater than 0.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    
-    if (fields.length === 0) {
-      toast({
-        title: 'No fields defined',
-        description: 'Please add at least one field to the schema.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    
-    // Check for empty field names
-    const emptyFieldNames = fields.some(field => !field.name.trim());
-    if (emptyFieldNames) {
-      toast({
-        title: 'Empty field names',
-        description: 'All fields must have a name.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    
-    // Check for duplicate field names
-    const fieldNames = fields.map(field => field.name);
-    const hasDuplicates = fieldNames.some((name, index) => fieldNames.indexOf(name) !== index);
-    if (hasDuplicates) {
-      toast({
-        title: 'Duplicate field names',
-        description: 'Field names must be unique.',
-        variant: 'destructive',
-      });
-      return false;
-    }
-    
-    return true;
-  };
-  
   // Handle form submission
   const handleSubmit = async (startImmediately: boolean = false) => {
     if (!validateForm()) {
+      return;
+    }
+    
+    if (!projectId) {
+      toast({
+        title: 'Project selection required',
+        description: 'Please select a project for this job.',
+        variant: 'destructive',
+      });
       return;
     }
     
@@ -187,6 +277,7 @@ export default function CreateJobPage() {
           nullProbability: includeNulls ? nullProbability : 0,
         },
         startImmediately,
+        projectId,
       };
       
       const jobId = await dataGenerationClient.createJob(jobConfig);
@@ -325,104 +416,161 @@ export default function CreateJobPage() {
     }
   };
   
+  // Validate the form
+  const validateForm = () => {
+    if (!jobName.trim()) {
+      toast({
+        title: 'Job name is required',
+        description: 'Please provide a name for the job.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    if (!projectId) {
+      toast({
+        title: 'Project is required',
+        description: 'Please select a project for this job.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    if (recordCount <= 0) {
+      toast({
+        title: 'Invalid record count',
+        description: 'Record count must be greater than 0.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    if (fields.length === 0) {
+      toast({
+        title: 'No fields defined',
+        description: 'Please add at least one field to the schema.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    // Check for empty field names
+    const emptyFieldNames = fields.some(field => !field.name.trim());
+    if (emptyFieldNames) {
+      toast({
+        title: 'Empty field names',
+        description: 'All fields must have a name.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    // Check for duplicate field names
+    const fieldNames = fields.map(field => field.name);
+    const hasDuplicates = fieldNames.some((name, index) => fieldNames.indexOf(name) !== index);
+    if (hasDuplicates) {
+      toast({
+        title: 'Duplicate field names',
+        description: 'Field names must be unique.',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    
+    return true;
+  };
+  
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleBackToJobs}
-            className="h-8 w-8"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-3xl font-bold">Create Job</h1>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => handleSubmit(false)}
-            disabled={isSubmitting}
-            className="flex items-center gap-1"
-          >
-            <Save className="h-4 w-4" />
-            <span>Save</span>
-          </Button>
-          
-          <Button
-            variant="default"
-            onClick={() => handleSubmit(true)}
-            disabled={isSubmitting}
-            className="flex items-center gap-1"
-          >
-            <Play className="h-4 w-4" />
-            <span>Save & Start</span>
-          </Button>
-        </div>
+    <div className="container mx-auto py-6 max-w-5xl">
+      <div className="flex items-center mb-6">
+        <Button 
+          variant="ghost" 
+          className="mr-4" 
+          onClick={handleBackToJobs}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Jobs
+        </Button>
+        <h1 className="text-3xl font-bold">Create New Job</h1>
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
+        <TabsList className="mb-4">
           <TabsTrigger value="basic">Basic Information</TabsTrigger>
           <TabsTrigger value="schema">Schema Configuration</TabsTrigger>
           <TabsTrigger value="advanced">Advanced Options</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="basic" className="space-y-6">
+        <TabsContent value="basic">
           <Card>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
-              <CardDescription>Provide basic information about the data generation job</CardDescription>
+              <CardDescription>
+                Provide basic information about the data generation job.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Project Selection */}
+              {renderProjectSelection()}
+              
+              <Separator />
+              
               <div className="space-y-2">
-                <Label htmlFor="job-name">Job Name *</Label>
+                <Label htmlFor="job-name" className="text-sm font-medium">
+                  Job Name
+                </Label>
                 <Input
                   id="job-name"
                   placeholder="Enter job name"
                   value={jobName}
-                  onChange={e => setJobName(e.target.value)}
+                  onChange={(e) => setJobName(e.target.value)}
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="job-description">Description</Label>
+                <Label htmlFor="job-description" className="text-sm font-medium">
+                  Description
+                </Label>
                 <Textarea
                   id="job-description"
-                  placeholder="Enter job description"
+                  placeholder="Enter job description (optional)"
                   value={jobDescription}
-                  onChange={e => setJobDescription(e.target.value)}
-                  rows={4}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  rows={3}
                 />
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="output-format">Output Format</Label>
-                  <Select value={outputFormat} onValueChange={setOutputFormat}>
-                    <SelectTrigger id="output-format">
-                      <SelectValue placeholder="Select output format" />
+                  <Label htmlFor="output-format" className="text-sm font-medium">
+                    Output Format
+                  </Label>
+                  <Select
+                    value={outputFormat}
+                    onValueChange={setOutputFormat}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select format" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="csv">CSV</SelectItem>
                       <SelectItem value="json">JSON</SelectItem>
-                      <SelectItem value="xml">XML</SelectItem>
-                      <SelectItem value="sql">SQL</SelectItem>
+                      <SelectItem value="parquet">Parquet</SelectItem>
+                      <SelectItem value="avro">Avro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="record-count">Record Count *</Label>
+                  <Label htmlFor="record-count" className="text-sm font-medium">
+                    Record Count
+                  </Label>
                   <Input
                     id="record-count"
                     type="number"
                     min={1}
-                    placeholder="Enter record count"
                     value={recordCount}
-                    onChange={e => setRecordCount(Number(e.target.value))}
+                    onChange={(e) => setRecordCount(Number(e.target.value))}
                   />
                 </div>
               </div>
@@ -588,6 +736,28 @@ export default function CreateJobPage() {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      <div className="flex items-center gap-2 mt-6">
+        <Button
+          variant="outline"
+          onClick={() => handleSubmit(false)}
+          disabled={isSubmitting}
+          className="flex items-center gap-1"
+        >
+          <Save className="h-4 w-4" />
+          <span>Save</span>
+        </Button>
+        
+        <Button
+          variant="default"
+          onClick={() => handleSubmit(true)}
+          disabled={isSubmitting}
+          className="flex items-center gap-1"
+        >
+          <Play className="h-4 w-4" />
+          <span>Save & Start</span>
+        </Button>
+      </div>
     </div>
   );
 } 

@@ -25,13 +25,23 @@ export default function VanillaThreeDecagon() {
         antialias: true,
         alpha: true // Enable transparency
       });
-      renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+      
+      // Ensure containerRef is not null before accessing its properties
+      let width = 300;
+      let height = 300;
+      if (containerRef.current) {
+        width = containerRef.current.clientWidth || width;
+        height = containerRef.current.clientHeight || height;
+      }
+      renderer.setSize(width, height);
       
       // Add renderer to the DOM
-      while (containerRef.current.firstChild) {
-        containerRef.current.removeChild(containerRef.current.firstChild);
+      if (containerRef.current) {
+        while (containerRef.current.firstChild) {
+          containerRef.current.removeChild(containerRef.current.firstChild);
+        }
+        containerRef.current.appendChild(renderer.domElement);
       }
-      containerRef.current.appendChild(renderer.domElement);
       
       // Add lights
       const ambientLight = new THREE.AmbientLight(
@@ -61,8 +71,9 @@ export default function VanillaThreeDecagon() {
       const handleResize = () => {
         if (!containerRef.current) return;
         
-        const width = containerRef.current.clientWidth;
-        const height = containerRef.current.clientHeight;
+        // Get dimensions from the container reference
+        const width = containerRef.current.clientWidth || 300;
+        const height = containerRef.current.clientHeight || 300;
         
         renderer.setSize(width, height);
       };

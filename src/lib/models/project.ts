@@ -1,3 +1,4 @@
+import { ProjectMetadata } from '@/types/projects';
 /**
  * Project Model
  * 
@@ -30,7 +31,7 @@ export interface Project {
     dataRetentionDays: number;
     maxStorageGB: number;
   };
-  metadata: Record<string, any>;
+  metadata: ProjectMetadata;
 }
 
 export interface CreateProjectInput {

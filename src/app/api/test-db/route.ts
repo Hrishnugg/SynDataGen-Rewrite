@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 
 export async function GET() {
   try {
-    // Get Firestore service
-    const firestoreService = getFirestore();
-    await firestoreService.init();
+    // Get Firestore service - await the Promise to get the actual service
+    const firestoreService = await getFirestore();
     
     // Test the connection by listing collections
     const collections = await firestoreService.query(
       '_connection_test',
-      (collection) => collection.limit(1)
+      { limit: 1 }
     );
     
     // Create a test document to verify write access
@@ -29,9 +28,14 @@ export async function GET() {
 
   } catch (error) {
     console.error('Database connection error:', error);
-    return NextResponse.json(
-      { error: "Failed to connect to Firestore database" },
-      { status: 500 }
-    );
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    return NextResponse.json({
+      message: "Database connection failed",
+      error: errorMessage,
+      status: "error"
+    }, {
+      status: 500
+    });
   }
-} 
+}

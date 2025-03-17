@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
-import { fixPrivateKey } from '../src/lib/key-fixer';
+import { fixPrivateKey } from '../src/lib/firebase/key-fixer';
 
 // Load existing environment variables
 dotenv.config();

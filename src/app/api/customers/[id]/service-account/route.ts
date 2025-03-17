@@ -7,7 +7,7 @@ import {
   CUSTOMER_AUDIT_LOG_COLLECTION,
   auditLogToFirestore
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 import {
   createCustomerServiceAccount,
   rotateServiceAccountKey,
@@ -34,7 +34,7 @@ export async function GET(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -46,7 +46,7 @@ export async function GET(
     const firestoreService = await getFirestore();
     
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -115,7 +115,7 @@ export async function POST(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === "admin";
+    const isAdmin = (session.user as any)?.role === "admin";
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden - Admin access required" },
@@ -134,10 +134,7 @@ export async function POST(
 
     // Get the customer to verify it exists and get needed info
     const firestoreService = await getFirestore();
-    const customerData = await firestoreService.getById<Customer>(
-      CUSTOMER_COLLECTION,
-      customerId
-    );
+    const customerData = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
 
     if (!customerData) {
       return NextResponse.json(
@@ -166,7 +163,7 @@ export async function POST(
     });
 
     // Update the customer record with the service account info
-    await firestoreService.update<Partial<Customer>>(
+    await firestoreService.update(
       CUSTOMER_COLLECTION,
       customerId,
       {
@@ -225,7 +222,7 @@ export async function PATCH(
     }
 
     // Check if user is admin
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -243,7 +240,7 @@ export async function PATCH(
     const firestoreService = await getFirestore();
     
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -331,7 +328,7 @@ export async function DELETE(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === "admin";
+    const isAdmin = (session.user as any)?.role === "admin";
     if (!isAdmin) {
       return NextResponse.json(
         { error: "Forbidden - Admin access required" },
@@ -350,10 +347,7 @@ export async function DELETE(
 
     // Get the customer to verify it exists and has a service account
     const firestoreService = await getFirestore();
-    const customerData = await firestoreService.getById<Customer>(
-      CUSTOMER_COLLECTION,
-      customerId
-    );
+    const customerData = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
 
     if (!customerData) {
       return NextResponse.json(
@@ -374,7 +368,7 @@ export async function DELETE(
     await deleteServiceAccount(customerId);
 
     // Update the customer record to remove service account info
-    await firestoreService.update<Partial<Customer>>(
+    await firestoreService.update(
       CUSTOMER_COLLECTION,
       customerId,
       {

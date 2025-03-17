@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { archiveProject, getProjectById } from "@/lib/services/projectService";
+import { archiveProject, getProjectById } from "@/features/projects/services/projectService";
 
 export async function POST(
   request: NextRequest,
@@ -21,14 +21,33 @@ export async function POST(
     }
 
     // Archive the project
-    const archivedProject = await archiveProject(projectId);
+    const success = await archiveProject(projectId);
     
-    return NextResponse.json(archivedProject);
+    if (success) {
+      return NextResponse.json({
+        success: true,
+        message: "Project successfully archived",
+        projectId
+      });
+    } else {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Failed to archive project",
+          projectId
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error archiving project:", error);
     return NextResponse.json(
-      { error: "Failed to archive project" },
+      { 
+        success: false, 
+        error: "Failed to archive project",
+        projectId
+      },
       { status: 500 }
     );
   }
-} 
+}

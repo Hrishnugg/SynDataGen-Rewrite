@@ -16,7 +16,7 @@ const CREATE_SERVICE_ACCOUNT = false;
 async function createTestData() {
   try {
     console.log('Initializing Firestore...');
-    const db = getFirestoreInstance();
+    const db = await getFirestoreInstance();
     
     // Create sample customer
     console.log('\nCreating sample customer...');
@@ -50,65 +50,69 @@ async function createTestData() {
           serviceAccountKeyRef: serviceAccountResult.keySecretName
         };
         
-        console.log(`Service account created: ${serviceAccountResult.email}`);
+        console.log('Service account created successfully:', serviceAccountResult.email);
       } catch (error) {
-        console.error('Failed to create service account:', error);
+        console.error('Error creating service account:', error);
         console.log('Continuing without service account...');
       }
     }
     
-    // Write customer to Firestore
+    // Create customer document
+    console.log(`Creating customer document with ID: ${customerId}`);
     await db.collection(CUSTOMER_COLLECTION).doc(customerId).set(customerData);
-    console.log(`Created customer with ID: ${customerId}`);
+    console.log('Customer document created successfully');
     
     // Create sample waitlist submission
     console.log('\nCreating sample waitlist submission...');
     const waitlistId = 'test-waitlist-1';
     const waitlistData: Omit<WaitlistSubmission, 'id'> = {
       email: 'waitlist@example.com',
-      name: 'Wait List User',
-      company: 'Example Corp',
-      jobTitle: 'Data Engineer',
-      useCase: 'We need synthetic data for testing our machine learning models.',
-      dataVolume: '10-100GB',
-      industry: 'Technology',
+      name: 'Waitlist User',
+      company: 'Test Company',
+      useCase: 'Testing the application',
       createdAt: new Date(),
       status: 'pending',
-      notes: 'Created via test script',
       metadata: {
-        referralSource: 'website',
-        priority: 'high'
+        source: 'test-script'
       }
     };
     
-    // Write waitlist submission to Firestore
+    // Create waitlist document
+    console.log(`Creating waitlist document with ID: ${waitlistId}`);
     await db.collection(WAITLIST_COLLECTION).doc(waitlistId).set(waitlistData);
-    console.log(`Created waitlist submission with ID: ${waitlistId}`);
+    console.log('Waitlist document created successfully');
     
-    // Verify data by reading it back
-    console.log('\nVerifying data by reading it back...');
-    
+    // Verify data was created
+    console.log('\nVerifying customer document...');
     const customerDoc = await db.collection(CUSTOMER_COLLECTION).doc(customerId).get();
+    
     if (customerDoc.exists) {
-      console.log('Customer data verification successful');
+      console.log('Customer document exists:', customerDoc.data());
     } else {
-      console.error('Failed to verify customer data!');
+      console.error('Customer document was not created successfully');
     }
     
+    console.log('\nVerifying waitlist document...');
     const waitlistDoc = await db.collection(WAITLIST_COLLECTION).doc(waitlistId).get();
+    
     if (waitlistDoc.exists) {
-      console.log('Waitlist data verification successful');
+      console.log('Waitlist document exists:', waitlistDoc.data());
     } else {
-      console.error('Failed to verify waitlist data!');
+      console.error('Waitlist document was not created successfully');
     }
     
-    console.log('\n✅ Test data created successfully!');
-    
+    console.log('\nTest data creation completed successfully');
   } catch (error) {
-    console.error('\n❌ Failed to create test data:', error);
+    console.error('Error creating test data:', error);
     process.exit(1);
   }
 }
 
 // Run the script
-createTestData(); 
+createTestData().then(() => {
+  console.log('Script completed');
+  process.exit(0);
+}).catch(error => {
+  console.error('Script failed:', error);
+  process.exit(1);
+}); 

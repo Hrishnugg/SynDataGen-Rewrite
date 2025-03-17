@@ -14,9 +14,10 @@ async function testFirestoreConnection() {
     
     // Try to access a collection
     console.log('Testing connection by listing collections...');
-    const collections = await db.listCollections();
-    
-    console.log('Available collections:');
+    const collections = db ? 
+   await db?.listCollections()
+
+    console.log('Available collections:');;
     if (collections.length === 0) {
       console.log('  No collections found. This is normal for a new Firestore instance.');
     } else {
@@ -27,9 +28,9 @@ async function testFirestoreConnection() {
     
     // Try to write a test document
     console.log('\nTesting write operations...');
-    const testCollection = db.collection('_connection_test');
-    const testDocRef = testCollection.doc('test_document');
-    
+    const testCollection = db ? db?.collection('_connection_test') : null;;
+    const testDocRef = testCollection.doc('test_document')
+
     await testDocRef.set({
       timestamp: new Date(),
       message: 'Connection test successful',

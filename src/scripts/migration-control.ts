@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { Command } from 'commander';
-import { setCollectionBackend, setGlobalBackend } from '../../lib/services/db-service';
+import { setCollectionBackend, setGlobalBackend } from '../lib/api/services/db-service';
 
 // Load environment variables
 dotenv.config();

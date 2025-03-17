@@ -7,9 +7,8 @@ import {
   CUSTOMER_AUDIT_LOG_COLLECTION,
   auditLogToFirestore
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 import { getSecret } from '@/lib/gcp/secrets';
-import { headers } from 'next/headers';
 
 // Define the params type as a Promise
 type IdParams = Promise<{ id: string }>;
@@ -30,7 +29,7 @@ export async function GET(
     }
 
     // Admin check - only admins can access keys
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -39,14 +38,14 @@ export async function GET(
     const { id: customerId } = await params;
     
     // Additional security: Get IP address for audit logs
-    const headersList = headers();
+    const headersList = request.headers;
     const clientIp = headersList.get('x-forwarded-for') || 'unknown';
     
     // Get Firestore service
     const firestoreService = await getFirestore();
     
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -84,23 +83,19 @@ export async function GET(
       // Retrieve the secret from Secret Manager
       const keyData = await getSecret(customer.gcpConfig.serviceAccountKeyRef);
       
-      // Create audit log entry for key retrieval
-      const auditEntry: CustomerAuditLogEntry = {
-        customerId,
-        timestamp: new Date(),
-        action: 'service_account_action',
-        performedBy: session.user.id || 'system',
-        details: {
-          message: 'Service account key retrieved',
-          reason: reason,
-          ipAddress: clientIp
-        }
-      };
-      
-      // Add audit log entry
+      // Log the access for security auditing
       await firestoreService.create(
         `${CUSTOMER_COLLECTION}/${customerId}/${CUSTOMER_AUDIT_LOG_COLLECTION}`,
-        auditLogToFirestore(auditEntry)
+        auditLogToFirestore({
+          customerId,
+          action: 'service_account_action',
+          performedBy: session.user.id || '',
+          timestamp: new Date(),
+          details: {
+            message: 'Key access for admin support or debugging',
+            serviceAccountAction: 'create'
+          }
+        })
       );
       
       // Return the key data

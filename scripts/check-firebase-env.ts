@@ -5,7 +5,7 @@
  */
 
 import * as dotenv from 'dotenv';
-import { diagnosePrivateKey } from '../src/lib/key-fixer';
+import { diagnosePrivateKey } from '../src/lib/firebase/key-fixer';
 
 // Load environment variables
 dotenv.config();

@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { hash } from 'bcryptjs';
 import { USER_COLLECTION } from '@/lib/models/firestore/user';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
+import { Firestore, CollectionReference } from 'firebase-admin/firestore';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,22 +26,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate password strength
+    // Validate password length
     if (password.length < 8) {
       return NextResponse.json(
-        { error: "Password must be at least 8 characters long" },
+        { error: "Password must be at least 8 characters" },
         { status: 400 }
       );
     }
 
     // Get Firestore service
-    const firestoreService = getFirestore();
-    await firestoreService.init();
+    const firestoreService = await getFirestore();
     
     // Check if user already exists
     const existingUsers = await firestoreService.query(
       USER_COLLECTION,
-      (collection) => collection.where('email', '==', email.toLowerCase())
+      {
+        where: [{
+          field: 'email',
+          operator: '==',
+          value: email.toLowerCase()
+        }]
+      }
     );
     
     if (existingUsers && existingUsers.length > 0) {
@@ -71,12 +77,11 @@ export async function POST(request: NextRequest) {
       success: true,
       userId
     });
-
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error("Registration error:", error);
     return NextResponse.json(
-      { error: "An unexpected error occurred" },
+      { error: "Failed to register user" },
       { status: 500 }
     );
   }
-} 
+}

@@ -1,3 +1,5 @@
+import { ProjectMetadata } from '@/types/metadata';
+
 /**
  * Firestore Project Model
  * 
@@ -34,7 +36,7 @@ export interface Project {
     dataRetentionDays: number;
     maxStorageGB: number;
   };
-  metadata?: Record<string, any>; // Additional project metadata
+  metadata?: ProjectMetadata; // Additional project metadata
 }
 
 /**
@@ -50,7 +52,7 @@ export interface CreateProjectInput {
     dataRetentionDays?: number;
     maxStorageGB?: number;
   };
-  metadata?: Record<string, any>;
+  metadata?: ProjectMetadata;
 }
 
 /**

@@ -4,9 +4,9 @@
  * Manages the state transitions for data generation jobs.
  */
 
-import { JobStatus, JobStage, JobError } from './types';
+import { JobStatus, JobStage, JobError, JobStatusValue } from './types';
 
-type JobState = JobStatus['status'];
+type JobState = JobStatusValue;
 
 /**
  * Valid state transitions for jobs
@@ -17,7 +17,10 @@ const VALID_TRANSITIONS: Record<JobState, JobState[]> = {
   'completed': [],
   'failed': ['queued'],
   'cancelled': ['queued'],
-  'paused': ['running', 'cancelled', 'failed']
+  'paused': ['running', 'cancelled', 'failed'],
+  'pending': ['queued', 'cancelled'],
+  'accepted': ['queued', 'cancelled'],
+  'rejected': ['queued']
 };
 
 /**
@@ -48,26 +51,32 @@ export function createDefaultStages(dataType: string): JobStage[] {
     {
       name: 'initialization',
       status: 'pending',
+      progress: 0
     },
     {
       name: 'data-processing',
       status: 'pending',
+      progress: 0
     },
     {
       name: 'model-generation',
       status: 'pending',
+      progress: 0
     },
     {
       name: 'data-generation',
       status: 'pending',
+      progress: 0
     },
     {
       name: 'output-formatting',
       status: 'pending',
+      progress: 0
     },
     {
       name: 'finalization',
       status: 'pending',
+      progress: 0
     },
   ];
 
@@ -192,4 +201,36 @@ export function areAllStagesCompleted(stages: JobStage[]): boolean {
  */
 export function hasAnyStageFailedOrCancelled(stages: JobStage[]): boolean {
   return stages.some(stage => ['failed', 'cancelled'].includes(stage.status));
+}
+
+/**
+ * Job State Machine Class
+ * 
+ * Provides an object-oriented interface to the job state machine functions.
+ */
+export class JobStateMachine {
+  /**
+   * Initialize a job in the state machine
+   */
+  async initiate(job: any): Promise<void> {
+    // In a real implementation, this would store the job state,
+    // initialize stages, etc. For now, this is just a mock implementation
+    console.log(`Initiating job ${job.id} in state machine`);
+    return Promise.resolve();
+  }
+
+  /**
+   * Transition a job to a new state
+   */
+  async transition(job: any, newState: JobState): Promise<void> {
+    // Verify the transition is valid
+    if (!isValidTransition(job.status, newState)) {
+      throw new Error(`Invalid job state transition from ${job.status} to ${newState}`);
+    }
+    
+    // In a real implementation, this would update the job state,
+    // trigger side effects, etc.
+    console.log(`Transitioning job ${job.id} from ${job.status} to ${newState}`);
+    return Promise.resolve();
+  }
 } 

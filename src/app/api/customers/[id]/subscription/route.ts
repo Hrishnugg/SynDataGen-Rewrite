@@ -7,10 +7,34 @@ import {
   CUSTOMER_AUDIT_LOG_COLLECTION,
   auditLogToFirestore
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 
-// Define the IdParams type for Promise-based parameters
-type IdParams = Promise<{ id: string }>;
+// Define extended customer type to ensure type safety
+interface CustomerType {
+  id?: string;
+  name?: string;
+  email?: string;
+  status?: 'active' | 'inactive' | 'pending';
+  createdAt?: Date;
+  billingTier?: string;
+  settings?: {
+    maxProjects?: number;
+    maxStorage?: number;
+    maxUsers?: number;
+    retentionDays?: number;
+    storageQuota?: number;
+  };
+  subscriptionDetails?: {
+    planId: string;
+    startDate: Date | null;
+    renewalDate: Date | null;
+    autoRenew: boolean;
+    paymentMethod: string | null;
+  };
+}
+
+// Define the IdParams type for non-Promise-based parameters
+type IdParams = { id: string };
 
 /**
  * GET - Retrieve customer subscription details
@@ -27,19 +51,19 @@ export async function GET(
     }
 
     // Admin check - in the future, customers could also view their own subscription
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
-    // Get customer ID from params
-    const { id: customerId } = await params;
-    
     // Get Firestore service
     const firestoreService = await getFirestore();
     
+    // Get customer ID from params
+    const { id: customerId } = params;
+    
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as CustomerType;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -78,8 +102,8 @@ export async function GET(
       daysRemaining,
       billingTier: customer.billingTier || 'free',
       resources: {
-        maxProjects: customer.settings.maxProjects,
-        storageQuotaGB: customer.settings.storageQuota
+        maxProjects: customer.settings?.maxProjects,
+        storageQuotaGB: customer.settings?.storageQuota
       }
     };
 
@@ -108,19 +132,19 @@ export async function PATCH(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
     // Get customer ID from params
-    const { id: customerId } = await params;
+    const { id: customerId } = params;
     
     // Get Firestore service
     const firestoreService = await getFirestore();
     
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as CustomerType;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -161,7 +185,12 @@ export async function PATCH(
     // Prepare subscription update
     const currentSubscription = customer.subscriptionDetails || {};
     
-    const subscriptionUpdate = {
+    // Define the complete update object structure
+    const subscriptionUpdate: {
+      subscriptionDetails: any;
+      billingTier?: string;
+      settings?: any;
+    } = {
       subscriptionDetails: {
         ...currentSubscription,
         ...updateData
@@ -173,7 +202,7 @@ export async function PATCH(
       subscriptionUpdate.billingTier = updateData.billingTier;
       
       // Update resource limits based on billing tier
-      const settings = { ...customer.settings };
+      const settings = { ...(customer.settings || {}) };
       
       switch (updateData.billingTier) {
         case 'free':
@@ -198,7 +227,11 @@ export async function PATCH(
     }
 
     // Track changes for audit log
-    const changes = {
+    const changes: {
+      subscriptionDetails: { old: any; new: any };
+      billingTier?: { old: any; new: any };
+      settings?: { old: any; new: any };
+    } = {
       subscriptionDetails: {
         old: currentSubscription,
         new: subscriptionUpdate.subscriptionDetails
@@ -212,8 +245,8 @@ export async function PATCH(
       };
       
       changes.settings = {
-        old: customer.settings,
-        new: subscriptionUpdate.settings
+        old: customer.settings || {},
+        new: subscriptionUpdate.settings || {}
       };
     }
 
@@ -243,7 +276,7 @@ export async function PATCH(
     );
 
     // Get updated customer
-    const updatedCustomer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const updatedCustomer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as CustomerType;
     
     // Return the updated subscription details
     return NextResponse.json({

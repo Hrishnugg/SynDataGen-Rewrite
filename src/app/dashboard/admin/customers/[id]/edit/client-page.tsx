@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CustomerForm } from "@/components/customers/CustomerForm";
+import { CustomerForm } from "@/features/customers/components/CustomerForm";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ClientPageProps } from "@/lib/page-utils";
+import { ClientPageProps } from "@/lib/utils/page-utils";
 
 // Define the params type for this specific page
 type CustomerEditParams = {

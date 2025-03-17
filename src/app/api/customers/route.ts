@@ -8,8 +8,8 @@ import {
   DEFAULT_BILLING_TIER,
   firestoreToCustomer
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
-import { FirestoreQueryOptions } from '@/lib/services/firestore-service';
+import { getFirestore } from '@/lib/api/services/db-service';
+import { FirestoreQueryOptions } from '@/lib/api/services/firestore-service';
 
 /**
  * GET - List customers with filtering and pagination
@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
 
     // Admin check (in a real app, you'd want to verify if the user is an admin)
     // For now we're just checking if a role property exists on the user
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const userRole = (session.user as any)?.role;
+    const isAdmin = userRole === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -53,11 +54,19 @@ export async function GET(request: NextRequest) {
     // Add filters
     const whereConditions = [];
     if (status) {
-      whereConditions.push({ field: 'status', operator: '==', value: status });
+      whereConditions.push({
+        field: 'status',
+        operator: '==' as const,
+        value: status
+      });
     }
     
     if (billingTier) {
-      whereConditions.push({ field: 'billingTier', operator: '==', value: billingTier });
+      whereConditions.push({
+        field: 'billingTier',
+        operator: '==' as const,
+        value: billingTier
+      });
     }
     
     if (whereConditions.length > 0) {
@@ -75,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     // Execute the query
     const firestoreService = await getFirestore();
-    const paginationResult = await firestoreService.queryWithPagination<Customer>(
+    const paginationResult = await firestoreService.queryWithPagination(
       CUSTOMER_COLLECTION,
       queryOptions
     );
@@ -112,7 +121,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const userRole = (session.user as any)?.role;
+    const isAdmin = userRole === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -141,10 +151,10 @@ export async function POST(request: NextRequest) {
     const firestoreService = await getFirestore();
     
     // Check if a customer with the same email already exists
-    const existingCustomers = await firestoreService.query<Customer>(
+    const existingCustomers = await firestoreService.query(
       CUSTOMER_COLLECTION, 
       { 
-        where: [{ field: 'email', operator: '==', value: body.email }],
+        where: [{ field: 'email', operator: '==' as const, value: body.email }],
         limit: 1
       }
     );

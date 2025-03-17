@@ -5,10 +5,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { pipelineService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
+import { getPipelineService } from '@/features/data-generation/services/pipeline-service';
+import { logger } from '@/lib/utils/logger';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
 
 /**
  * GET /api/data-generation/health
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Get pipeline health
+    const pipelineService = getPipelineService();
     const health = await pipelineService.checkHealth();
     
     // Return appropriate status code based on health status
@@ -34,12 +35,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     logger.error('Error checking pipeline health', error);
     return NextResponse.json(
-      { 
-        status: 'unhealthy',
-        message: 'Failed to check pipeline health',
-        timestamp: new Date()
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
-} 
+}

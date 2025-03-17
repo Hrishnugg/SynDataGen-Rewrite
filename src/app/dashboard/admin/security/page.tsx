@@ -8,7 +8,7 @@ import {
   CardHeader, 
   CardTitle,
   CardFooter
-} from "@/components/ui/Card";
+} from "@/components/ui/card";
 import { 
   Select,
   SelectContent,

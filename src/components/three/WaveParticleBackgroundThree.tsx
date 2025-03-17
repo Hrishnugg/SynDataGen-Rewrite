@@ -122,8 +122,7 @@ function ParticleWave({ mousePos }: {mousePos: {x: number;y: number;};}) {
     if (!pointsRef.current) return;
 
     const time = clock.getElapsedTime();
-    const positions = pointsRef.current.geometry.attributes.position.
-    array as Float32Array;
+    const positions = pointsRef.current?.geometry.attributes.position.array as Float32Array;
     const deltaTime = Math.min(0.1, clock.getDelta()); // Capped delta time for stability
 
     // Mouse influence parameters
@@ -306,7 +305,9 @@ function ParticleWave({ mousePos }: {mousePos: {x: number;y: number;};}) {
     }
 
     // Tell Three.js to update particle positions
-    pointsRef.current.geometry.attributes.position.needsUpdate = true;
+    if (pointsRef.current && pointsRef.current.geometry.attributes.position) {
+      pointsRef.current.geometry.attributes.position.needsUpdate = true;
+    }
   });
 
   // Create a circle texture for particles with sharper falloff
@@ -340,17 +341,20 @@ function ParticleWave({ mousePos }: {mousePos: {x: number;y: number;};}) {
           attach="attributes-position"
           count={count}
           array={initialPositions}
-          itemSize={3} />
+          itemSize={3}
+          args={[initialPositions, 3]} />
         <bufferAttribute
           attach="attributes-color"
           count={count}
           array={colors}
-          itemSize={3} />
+          itemSize={3}
+          args={[colors, 3]} />
         <bufferAttribute
           attach="attributes-size"
           count={count}
           array={sizes}
-          itemSize={1} />
+          itemSize={1}
+          args={[sizes, 1]} />
       </bufferGeometry>
       <pointsMaterial
         size={0.06}

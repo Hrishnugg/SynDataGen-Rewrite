@@ -9,19 +9,22 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Download, FileJson, FileText, FileSpreadsheet, Database } from 'lucide-react';
-import { JobStatus, JobDetails } from '@/lib/models/data-generation/types';
+import { FileDown, RefreshCw } from '@/components/icons';
+import { JobStatus, JobDetails, JobStatusValue } from '@/lib/models/data-generation';
 import { toast } from '@/components/ui/use-toast';
+import { dataGenerationClient } from '@/features/data-generation/services/client';
+import { DataTable } from '@/features/data-generation/components/data-viewer/data-table';
 
 // Mock data for development
 const mockJobDetails: JobDetails = {
   id: 'job-123',
   name: 'Customer Data Generation',
-  status: 'completed' as JobStatus,
+  status: 'completed' as JobStatusValue,
   progress: 100,
   recordsGenerated: 10000,
   createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -51,18 +54,33 @@ export default function JobDownloadPage({ params }: { params: { id: string } }) 
   const [previewColumns, setPreviewColumns] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('preview');
   const [isDownloading, setIsDownloading] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   
-  // Fetch job details on component mount
+  // Set the job ID after component mount
   useEffect(() => {
-    fetchJobDetails();
-  }, [params.id]);
+    const setParamId = async () => {
+      const { id } = await params;
+      setJobId(id);
+    };
+    
+    setParamId();
+  }, [params]);
+  
+  // Fetch job details when jobId is available
+  useEffect(() => {
+    if (jobId) {
+      fetchJobDetails();
+    }
+  }, [jobId]);
   
   // Fetch job details
   const fetchJobDetails = async () => {
+    if (!jobId) return;
+    
     setIsLoading(true);
     
     try {
-      const details = await dataGenerationClient.getJobDetails(params.id);
+      const details = await dataGenerationClient.getJobDetails(jobId);
       setJobDetails(details);
       
       // Redirect if job is not completed
@@ -73,7 +91,7 @@ export default function JobDownloadPage({ params }: { params: { id: string } }) 
           variant: 'destructive',
         });
         
-        router.push(`/dashboard/data-generation/jobs/${params.id}`);
+        router.push(`/dashboard/data-generation/jobs/${jobId}`);
         return;
       }
       
@@ -92,8 +110,10 @@ export default function JobDownloadPage({ params }: { params: { id: string } }) 
   
   // Fetch preview data
   const fetchPreviewData = async () => {
+    if (!jobId) return;
+    
     try {
-      const data = await dataGenerationClient.getJobPreviewData(params.id);
+      const data = await dataGenerationClient.getJobPreviewData(jobId);
       
       if (data && data.length > 0) {
         // Extract column definitions from the first row
@@ -116,10 +136,12 @@ export default function JobDownloadPage({ params }: { params: { id: string } }) 
   
   // Handle download
   const handleDownload = async (format: string) => {
+    if (!jobId) return;
+    
     setIsDownloading(true);
     
     try {
-      await dataGenerationClient.downloadJobData(params.id, format);
+      await dataGenerationClient.downloadJobData(jobId, format);
       
       toast({
         title: 'Download started',
@@ -138,7 +160,8 @@ export default function JobDownloadPage({ params }: { params: { id: string } }) 
   
   // Navigate back to job details
   const handleBackToJobDetails = () => {
-    router.push(`/dashboard/data-generation/jobs/${params.id}`);
+    if (!jobId) return;
+    router.push(`/dashboard/data-generation/jobs/${jobId}`);
   };
   
   // Get file size display

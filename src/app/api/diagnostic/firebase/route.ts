@@ -9,284 +9,111 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
 import { 
   getFirebaseInitStatus, 
-  areFirebaseCredentialsAvailable, 
+  areFirebaseCredentialsAvailable,
   initializeFirebaseAdmin,
-  getFirebaseAuth
+  getFirebaseAuth,
+  getFirebaseFirestore
 } from '@/lib/firebase';
-import { 
-  areFirebaseCredentialsAvailable as areCredentialsAvailable,
-  getCredentialManager,
-  getFirebaseCredentials
-} from '@/lib/services/credential-manager';
-import { getFirestore } from '@/lib/services/db-service';
-import { getFirestoreInstance, getFirestoreStatus } from '@/lib/gcp/firestore/initFirestore';
-import * as os from 'os';
 import { validateFirebaseCredentials } from '@/lib/gcp/firestore/initFirestore';
+import { ServiceAccountCredentials } from '@/lib/gcp/firestore/firestore-utils';
+import { getFirestoreStatus } from '@/lib/gcp/firestore/firestore-utils';
+import * as os from 'os';
+import { getCredentialManager } from '@/features/data-generation/services/credential-manager-service';
 
 /**
  * GET handler for Firebase diagnostic endpoint
- * 
- * This enhanced endpoint provides comprehensive diagnostic information 
- * about the entire Firebase authentication stack.
- * 
- * For security, two levels of access are provided:
- * 1. Basic diagnostics - Available to all authenticated users
- * 2. Full diagnostics - Only available to admin users
+ * Provides comprehensive diagnostics for Firebase setup
  */
 export async function GET(request: NextRequest) {
-  // Start timing the diagnostic process
   const startTime = Date.now();
   
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    const isAuthenticated = !!session?.user;
-    const isAdmin = isAuthenticated && (session.user.role === 'admin' || session.user.isAdmin);
+    // Gather system environment info
+    const env = process.env.NODE_ENV || 'development';
+    const hostname = os.hostname();
     
-    // Security check - limit detailed information for non-admins
-    if (!isAuthenticated) {
-      return NextResponse.json({ 
-        error: 'Authentication required',
-        message: 'You must be logged in to access diagnostic information'
-      }, { status: 401 });
-    }
-
-    // Collect environment information
-    const environment = {
-      nodeEnv: process.env.NODE_ENV || 'not set',
-      vercelEnv: process.env.VERCEL_ENV || 'not set',
-      platform: os.platform(),
-      release: os.release(),
-      hostname: os.hostname(),
-      processUptime: process.uptime(),
-      systemUptime: os.uptime(),
-      memory: {
-        total: os.totalmem(),
-        free: os.freemem(),
-        usage: Math.round((1 - os.freemem() / os.totalmem()) * 100) + '%'
-      }
-    };
-
-    // Configuration check - examine environment variables
-    const envVars = {
-      // Firebase Core
-      FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT ? 
-        `set (${process.env.FIREBASE_SERVICE_ACCOUNT.length} chars)` : 'not set',
-      GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || 'not set',
-      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'not set',
-      // Firebase Services
-      FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET || 'not set',
-      // Emulator Configuration
-      FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST || 'not set',
-      FIREBASE_AUTH_EMULATOR_HOST: process.env.FIREBASE_AUTH_EMULATOR_HOST || 'not set',
-      FIREBASE_STORAGE_EMULATOR_HOST: process.env.FIREBASE_STORAGE_EMULATOR_HOST || 'not set',
-      // Development Settings
-      MOCK_FIREBASE: process.env.MOCK_FIREBASE || 'not set',
-      // Auth Configuration
-      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET ? 
-        `set (${process.env.NEXTAUTH_SECRET.length} chars)` : 'not set',
-      NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'not set',
-    };
-
-    // Check Firebase initialization status
-    const firebaseStatus = getFirebaseInitStatus();
+    // Session information for authentication diagnostics
+    let session = null;
+    let sessionError = null;
     
-    // Get credential status from credential manager
-    const credentialManager = getCredentialManager();
-    const credentialStatus = await credentialManager.getCredentialStatus();
+    try {
+      session = await getServerSession(authOptions);
+    } catch (e) {
+      sessionError = e instanceof Error ? e.message : String(e);
+    }
     
-    // Check if credentials are available through various methods
-    const credentialsAvailable = {
-      firebase: areFirebaseCredentialsAvailable(),
-      credentialManager: areCredentialsAvailable(),
-      validationResult: validateFirebaseCredentials()
-    };
-
-    // Perform live service checks
-    const serviceChecks: Record<string, any> = {};
-
-    // 1. Attempt to initialize Firebase if not already initialized
-    try {
-      const wasInitialized = firebaseStatus.initialized;
-      const initSuccess = initializeFirebaseAdmin();
-      serviceChecks.firebaseInit = { 
-        success: initSuccess,
-        wasAlreadyInitialized: wasInitialized
-      };
-    } catch (error: any) {
-      serviceChecks.firebaseInit = { 
-        success: false, 
-        error: {
-          message: error.message,
-          code: error.code,
-          name: error.name
-        }
-      };
-    }
-
-    // 2. Check Firebase Auth
-    try {
-      const auth = getFirebaseAuth();
-      serviceChecks.firebaseAuth = { 
-        success: !!auth,
-        available: !!auth
-      };
-    } catch (error: any) {
-      serviceChecks.firebaseAuth = { 
-        success: false, 
-        error: {
-          message: error.message,
-          code: error.code,
-          name: error.name
-        }
-      };
-    }
-
-    // 3. Check Firestore through service
-    try {
-      const db = await getFirestore(false);
-      serviceChecks.firestoreService = { 
-        success: !!db,
-        mock: db && 'getMockData' in db
-      };
-    } catch (error: any) {
-      serviceChecks.firestoreService = { 
-        success: false, 
-        error: {
-          message: error.message,
-          code: error.code,
-          name: error.name
-        }
-      };
-    }
-
-    // 4. Check Firestore direct instance
-    try {
-      const firestoreInstance = await getFirestoreInstance();
-      const firestoreDetailedStatus = getFirestoreStatus();
-      serviceChecks.firestoreDirect = { 
-        success: !!firestoreInstance,
-        status: firestoreDetailedStatus
-      };
-    } catch (error: any) {
-      serviceChecks.firestoreDirect = { 
-        success: false, 
-        error: {
-          message: error.message,
-          code: error.code,
-          name: error.name
-        }
-      };
-    }
-
-    // 5. Test connection to Firestore with actual query if admin
-    if (isAdmin) {
+    // Firebase/Firestore status checks
+    const firebaseInitStatus = await getFirebaseInitStatus();
+    const credentialsAvailable = await areFirebaseCredentialsAvailable();
+    
+    // Attempt to check credentials if they're available
+    let credentialStatus = 'unavailable';
+    if (credentialsAvailable) {
       try {
-        const db = await getFirestore(false);
-        // Attempt to query a simple system collection
-        const testCollection = '_diagnostic_test';
-        const testDocId = 'connection_test';
-        const testDoc = await db.getDocument(testCollection, testDocId, false);
+        const credentialManager = await getCredentialManager();
+        const credentials = await credentialManager.getFirebaseCredentials();
         
-        // If test document doesn't exist, create it
-        if (!testDoc) {
-          await db.createDocument(testCollection, {
-            id: testDocId,
-            timestamp: new Date().toISOString(),
-            testType: 'connection',
-            environment: process.env.NODE_ENV
-          });
-          serviceChecks.firestoreWrite = { success: true };
+        // Validate the credentials using the proper parameter
+        const validationResult = validateFirebaseCredentials(credentials);
+        if (validationResult.valid) {
+          credentialStatus = 'valid';
         } else {
-          // Update the existing document
-          await db.updateDocument(testCollection, testDocId, {
-            timestamp: new Date().toISOString(),
-            lastChecked: new Date().toISOString()
-          });
-          serviceChecks.firestoreWrite = { success: true };
+          credentialStatus = `invalid: ${validationResult.error || 'unknown error'}`;
         }
-        
-        // Read back the document
-        const updatedDoc = await db.getDocument(testCollection, testDocId, false);
-        serviceChecks.firestoreRead = { 
-          success: true,
-          document: updatedDoc
-        };
-      } catch (error: any) {
-        serviceChecks.firestoreQuery = { 
-          success: false, 
-          error: {
-            message: error.message,
-            code: error.code,
-            name: error.name
-          }
-        };
+      } catch (e) {
+        credentialStatus = `error: ${e instanceof Error ? e.message : String(e)}`;
       }
     }
     
-    // Calculate total diagnostic run time
-    const endTime = Date.now();
-    const diagnosticTime = endTime - startTime;
-
-    // Determine overall health status
-    const isHealthy = serviceChecks.firebaseInit?.success && 
-                     (serviceChecks.firestoreService?.success || serviceChecks.firestoreDirect?.success);
+    // Check Firestore connection
+    let firestoreStatus = 'unknown';
+    try {
+      firestoreStatus = await getFirestoreStatus();
+    } catch (e) {
+      firestoreStatus = `error: ${e instanceof Error ? e.message : String(e)}`;
+    }
     
-    // Return comprehensive diagnostic information
-    return NextResponse.json({
+    // Build comprehensive response
+    const diagnostics = {
       timestamp: new Date().toISOString(),
-      diagnosticTimeMs: diagnosticTime,
-      overall: {
-        healthy: isHealthy,
-        environment: process.env.NODE_ENV,
-        authProvider: 'firebase',
-        firestoreAvailable: serviceChecks.firestoreService?.success || serviceChecks.firestoreDirect?.success,
-        authAvailable: serviceChecks.firebaseAuth?.success
+      requestDuration: Date.now() - startTime,
+      environment: {
+        node_env: env,
+        hostname: hostname,
+        platform: os.platform(),
+        node_version: process.version
       },
-      user: {
-        authenticated: isAuthenticated,
-        isAdmin,
-        userId: session?.user?.id || null,
-        email: session?.user?.email || null
-      },
-      environment,
-      configuration: {
-        envVars,
-        nextAuthConfigured: envVars.NEXTAUTH_SECRET !== 'not set' && envVars.NEXTAUTH_URL !== 'not set',
-        firebaseConfigured: credentialsAvailable.firebase || credentialsAvailable.credentialManager
+      authentication: {
+        session_available: !!session,
+        session_error: sessionError,
+        auth_options_available: !!authOptions
       },
       firebase: {
-        status: firebaseStatus,
-        credentials: {
-          available: credentialsAvailable,
-          status: credentialStatus
-        }
+        credentials_available: credentialsAvailable,
+        credential_status: credentialStatus,
+        initialized: firebaseInitStatus.initialized,
+        initialization_error: firebaseInitStatus.error
       },
-      services: serviceChecks,
-      // For admin users only, include detailed debug info
-      ...(isAdmin ? {
-        debug: {
-          detailedFirestoreStatus: getFirestoreStatus(),
-          initializationError: firebaseStatus.error,
-          userSession: {
-            expires: session?.expires,
-            authenticated: !!session?.user,
-            userId: session?.user?.id,
-            userEmail: session?.user?.email
-          }
-        }
-      } : {})
-    });
-  } catch (error: any) {
-    console.error('Firebase diagnostic error:', error);
+      firestore: {
+        status: firestoreStatus
+      }
+    };
+    
+    return NextResponse.json(diagnostics);
+    
+  } catch (e) {
+    console.error('Firebase diagnostic endpoint error:', e);
+    
     return NextResponse.json({
-      error: 'Diagnostic error',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      timestamp: new Date().toISOString()
-    }, { status: 500 });
+      error: 'Failed to generate Firebase diagnostics',
+      message: e instanceof Error ? e.message : String(e),
+      timestamp: new Date().toISOString(),
+      requestDuration: Date.now() - startTime
+    }, {
+      status: 500
+    });
   }
-} 
+}

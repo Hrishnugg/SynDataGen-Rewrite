@@ -6,7 +6,7 @@
  */
 
 import * as admin from 'firebase-admin';
-import { getFirebaseCredentials, areFirebaseCredentialsAvailable } from '../src/lib/services/credential-manager';
+import { getFirebaseCredentials, areFirebaseCredentialsAvailable } from '../src/lib/api/services/credential-manager';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -48,6 +48,13 @@ async function verifyFirebaseCredentials() {
   console.log('\nAttempting to retrieve credentials...');
   try {
     const credentials = await getFirebaseCredentials();
+    
+    // Add null check to ensure TypeScript knows credentials isn't null
+    if (!credentials) {
+      console.error('Failed to retrieve credentials: returned null');
+      process.exit(1);
+    }
+    
     console.log('Successfully retrieved credentials:');
     console.log(`- Source: ${credentials.source || 'unknown'}`);
     console.log(`- Project ID: ${credentials.project_id || 'N/A'}`);

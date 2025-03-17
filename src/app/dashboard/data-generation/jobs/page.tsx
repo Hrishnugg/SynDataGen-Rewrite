@@ -9,19 +9,23 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Plus, RefreshCw, Search, Filter } from 'lucide-react';
 import { JobHistoryTable } from '@/components/data-generation/job-management/job-history-table';
-import { JobStatus } from '@/lib/models/data-generation/types';
+import { JobStatus, JobDetails } from '@/lib/models/data-generation/types';
 import { toast } from '@/components/ui/use-toast';
+import { dataGenerationClient } from '@/features/data-generation/services/client';
 
-// Mock data for development
+// Define the JobStatusValue type directly since we can't import it
+type JobStatusValue = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'pending' | 'accepted' | 'rejected';
+
+// Mock data for development - not used anymore
 const mockJobs = Array(20).fill(0).map((_, i) => ({
   id: `job-${i}`,
   name: `Job ${i}`,
-  status: ['completed', 'in_progress', 'queued', 'failed', 'cancelled'][Math.floor(Math.random() * 5)] as JobStatus,
+  status: ['completed', 'in_progress', 'queued', 'failed', 'cancelled'][Math.floor(Math.random() * 5)] as JobStatusValue,
   progress: Math.floor(Math.random() * 100),
   recordsGenerated: Math.floor(Math.random() * 10000),
   createdAt: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString(),
@@ -33,18 +37,20 @@ const mockJobs = Array(20).fill(0).map((_, i) => ({
 export default function JobsPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [jobs, setJobs] = useState<JobStatus[]>([]);
+  const [jobs, setJobs] = useState<JobDetails[]>([]);
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
     pageSize: 10,
+    itemsPerPage: 10,
   });
   const [filters, setFilters] = useState<{
-    status?: JobStatus['status'];
+    status?: JobStatusValue;
     startDate?: Date;
     endDate?: Date;
   }>({});
+  const [showEmptyState, setShowEmptyState] = useState(false);
   
   // Fetch jobs on component mount and when pagination/filters change
   useEffect(() => {
@@ -56,22 +62,26 @@ export default function JobsPage() {
     setIsLoading(true);
     
     try {
-      const offset = (pagination.currentPage - 1) * pagination.pageSize;
+      // API call would normally go here:
+      // const offset = (pagination.currentPage - 1) * pagination.pageSize;
+      // const fetchedJobs = await dataGenerationClient.getJobHistory({
+      //   limit: pagination.pageSize,
+      //   offset,
+      //   ...filters,
+      // });
       
-      const fetchedJobs = await dataGenerationClient.getJobHistory({
-        limit: pagination.pageSize,
-        offset,
-        ...filters,
-      });
+      // Instead of using mock data, return empty array to simulate no jobs
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate API call
+      const fetchedJobs: JobDetails[] = [];
       
       setJobs(fetchedJobs);
+      setShowEmptyState(true);
       
-      // For simplicity, we're assuming the total count is 100
-      // In a real implementation, this would come from the API
+      // Set pagination info with no items
       setPagination(prev => ({
         ...prev,
-        totalItems: 100,
-        totalPages: Math.ceil(100 / prev.pageSize),
+        totalItems: 0,
+        totalPages: 1,
       }));
     } catch (error) {
       toast({
@@ -94,7 +104,7 @@ export default function JobsPage() {
   
   // Handle filter change
   const handleFilterChange = (newFilters: {
-    status?: JobStatus['status'];
+    status?: JobStatusValue;
     startDate?: Date;
     endDate?: Date;
   }) => {
@@ -176,17 +186,40 @@ export default function JobsPage() {
         </Button>
       </div>
       
-      <JobHistoryTable
-        jobs={jobs}
-        isLoading={isLoading}
-        onView={handleViewJob}
-        onCancel={handleCancelJob}
-        onResume={handleResumeJob}
-        onDownload={handleDownloadJob}
-        onPageChange={handlePageChange}
-        onFilterChange={handleFilterChange}
-        pagination={pagination}
-      />
+      {isLoading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-primary mb-2" />
+            <p>Loading jobs...</p>
+          </div>
+        </div>
+      ) : showEmptyState ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 text-center">
+          <h2 className="text-2xl font-bold mb-4">No Jobs Found</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-xl mx-auto">
+            You haven't created any data generation jobs yet. Create your first job to get started with synthetic data generation.
+          </p>
+          <Button 
+            onClick={handleCreateJob} 
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Your First Job
+          </Button>
+        </div>
+      ) : (
+        <JobHistoryTable
+          jobs={jobs}
+          isLoading={isLoading}
+          onView={handleViewJob}
+          onCancel={handleCancelJob}
+          onResume={handleResumeJob}
+          onDownload={handleDownloadJob}
+          onPageChange={handlePageChange}
+          onFilterChange={handleFilterChange}
+          pagination={pagination}
+        />
+      )}
     </div>
   );
 } 

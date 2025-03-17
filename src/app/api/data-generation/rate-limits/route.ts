@@ -5,10 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { jobManagementService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
+import { getJobManagementService } from '@/features/data-generation/services/job-management-service';
+import { logger } from '@/lib/utils/logger';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
+import { MockJobManagementService } from '@/features/data-generation/services/mock-service';
+
+// Use mock service in development environment instead of returning mock data
+const useService = process.env.NODE_ENV === 'development' 
+  ? new MockJobManagementService() 
+  : getJobManagementService();
 
 /**
  * GET /api/data-generation/rate-limits
@@ -18,14 +24,14 @@ export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const customerId = session.user.id;
     
-    // Get rate limit status
-    const rateLimitStatus = await jobManagementService.getRateLimitStatus(customerId);
+    // Get rate limit status using the mock service
+    const rateLimitStatus = await useService.getRateLimitStatus(customerId);
     
     return NextResponse.json(rateLimitStatus);
   } catch (error) {
@@ -35,4 +41,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

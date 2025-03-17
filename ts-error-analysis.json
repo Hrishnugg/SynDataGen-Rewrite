@@ -1,0 +1,535 @@
+{
+  "totalErrors": 616,
+  "fileCount": 8,
+  "mostProblematicFiles": [
+    {
+      "file": "src/features/data-generation/services/job-management-service.ts",
+      "errorCount": 271,
+      "commonErrors": [
+        {
+          "code": "TS1005",
+          "count": 174,
+          "message": "':' expected."
+        },
+        {
+          "code": "TS1128",
+          "count": 39,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "code": "TS1003",
+          "count": 23,
+          "message": "Identifier expected."
+        }
+      ],
+      "errorExamples": [
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 135,
+          "column": 35,
+          "code": "TS1005",
+          "message": "':' expected.",
+          "context": null,
+          "expandedContext": "  133: \n  134:       // Update rate limit status\n> 135:       const rateLimitRef = db ? db;\n  136: if (db) {\n  137: }"
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 143,
+          "column": 6,
+          "code": "TS1472",
+          "message": "'catch' or 'finally' expected.",
+          "context": null,
+          "expandedContext": "  141:  }\n  142:    }\n> 143:      }\n  144: \n  145:       if (rateLimitDoc.exists) {"
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 145,
+          "column": 23,
+          "code": "TS1005",
+          "message": "',' expected.",
+          "context": null,
+          "expandedContext": "  143:      }\n  144: \n> 145:       if (rateLimitDoc.exists) {\n  146:         await rateLimitRef.update({\n  147:           currentJobs: FieldValue.increment(1),"
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 148,
+          "column": 34,
+          "code": "TS1005",
+          "message": "',' expected.",
+          "context": null,
+          "expandedContext": "  146:         await rateLimitRef.update({\n  147:           currentJobs: FieldValue.increment(1),\n> 148:           lastUpdated: new Date();\n  149:         });\n  150:       } else {"
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 150,
+          "column": 9,
+          "code": "TS1068",
+          "message": "Unexpected token. A constructor, method, accessor, or property was expected.",
+          "context": null,
+          "expandedContext": "  148:           lastUpdated: new Date();\n  149:         });\n> 150:       } else {\n  151:         // Create initial rate limit document\n  152:         await rateLimitRef.set({"
+        }
+      ]
+    },
+    {
+      "file": "src/lib/api/services/firestore-service.ts",
+      "errorCount": 211,
+      "commonErrors": [
+        {
+          "code": "TS1005",
+          "count": 145,
+          "message": "':' expected."
+        },
+        {
+          "code": "TS1128",
+          "count": 28,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "code": "TS1434",
+          "count": 17,
+          "message": "Unexpected keyword or identifier."
+        }
+      ],
+      "errorExamples": [
+        {
+          "file": "src/lib/api/services/firestore-service.ts",
+          "line": 50,
+          "column": 26,
+          "code": "TS1109",
+          "message": "Expression expected.",
+          "context": null,
+          "expandedContext": "  48:     this.code = code;\n  49:     this.details = details;\n> 50:     this.originalError = if (details) {\n  51:   .originalError\n  52: }"
+        },
+        {
+          "file": "src/lib/api/services/firestore-service.ts",
+          "line": 51,
+          "column": 3,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  49:     this.details = details;\n  50:     this.originalError = if (details) {\n> 51:   .originalError\n  52: }\n  53:     // Ensure proper prototype chain for instanceof checks"
+        },
+        {
+          "file": "src/lib/api/services/firestore-service.ts",
+          "line": 117,
+          "column": 1,
+          "code": "TS1005",
+          "message": "':' expected.",
+          "context": null,
+          "expandedContext": "  115:       if (global.__firestoreState ? global.__firestoreState\n  116: .initialized && global.__firestoreState?.instance\n> 117: }\n  118:         console.log('[Firestore:DEBUG] Using existing Firestore instance from global state');\n  119:         // @ts-ignore"
+        },
+        {
+          "file": "src/lib/api/services/firestore-service.ts",
+          "line": 118,
+          "column": 9,
+          "code": "TS1472",
+          "message": "'catch' or 'finally' expected.",
+          "context": null,
+          "expandedContext": "  116: .initialized && global.__firestoreState?.instance\n  117: }\n> 118:         console.log('[Firestore:DEBUG] Using existing Firestore instance from global state');\n  119:         // @ts-ignore\n  120:         this.db = global.__firestoreState.instance;"
+        },
+        {
+          "file": "src/lib/api/services/firestore-service.ts",
+          "line": 124,
+          "column": 35,
+          "code": "TS1005",
+          "message": "')' expected.",
+          "context": null,
+          "expandedContext": "  122:         \n  123:         // Initialize the cache if configured\n> 124:         if (this.if (cacheConfig) {\n  125: .enabled) {\n  126: }"
+        }
+      ]
+    },
+    {
+      "file": "src/lib/gcp/firestore/initFirestore.ts",
+      "errorCount": 74,
+      "commonErrors": [
+        {
+          "code": "TS1005",
+          "count": 30,
+          "message": "')' expected."
+        },
+        {
+          "code": "TS1128",
+          "count": 29,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "code": "TS1109",
+          "count": 10,
+          "message": "Expression expected."
+        }
+      ],
+      "errorExamples": [
+        {
+          "file": "src/lib/gcp/firestore/initFirestore.ts",
+          "line": 76,
+          "column": 5,
+          "code": "TS1005",
+          "message": "')' expected.",
+          "context": null,
+          "expandedContext": "  74:   // Check if already initialized and return instance;\n  75:   if (global.__firestoreState.initialized && global.__firestoreState.instance\n> 76:     return global.__firestoreState.instance;\n  77:   }\n  78: "
+        },
+        {
+          "file": "src/lib/gcp/firestore/initFirestore.ts",
+          "line": 224,
+          "column": 1,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  222:     }\n  223:   }\n> 224: }\n  225: \n  226: /**"
+        },
+        {
+          "file": "src/lib/gcp/firestore/initFirestore.ts",
+          "line": 242,
+          "column": 5,
+          "code": "TS1005",
+          "message": "')' expected.",
+          "context": null,
+          "expandedContext": "  240:   // Check if initialized\n  241:   if (global.__firestoreState.initialized && global.__firestoreState.instance\n> 242:     logger.debug('Concurrent initialization completed successfully');\n  243:     return global.__firestoreState.instance;\n  244:   }"
+        },
+        {
+          "file": "src/lib/gcp/firestore/initFirestore.ts",
+          "line": 260,
+          "column": 1,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  258:   // If we get here, something unexpected happened\n  259:   throw new Error('Firestore initialization failed with an unknown error');\n> 260: }\n  261: \n  262: /**"
+        },
+        {
+          "file": "src/lib/gcp/firestore/initFirestore.ts",
+          "line": 275,
+          "column": 26,
+          "code": "TS1005",
+          "message": "']' expected.",
+          "context": null,
+          "expandedContext": "  273:   if (existingApps.length > 0) {\n  274:     logger.debug(\"Returning existing Firebase app (\" + existingApps.length + \"apps found)\");\n> 275:     return existingApps[0;\n  276:   ]\n  277:   }"
+        }
+      ]
+    },
+    {
+      "file": "src/lib/gcp/serviceAccount.ts",
+      "errorCount": 28,
+      "commonErrors": [
+        {
+          "code": "TS1128",
+          "count": 14,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "code": "TS1005",
+          "count": 10,
+          "message": "',' expected."
+        },
+        {
+          "code": "TS1472",
+          "count": 3,
+          "message": "'catch' or 'finally' expected."
+        }
+      ],
+      "errorExamples": [
+        {
+          "file": "src/lib/gcp/serviceAccount.ts",
+          "line": 121,
+          "column": 7,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  119:     // Create a more structured account ID using customer ID and sanitized name\r\n  120:     const sanitizedName = params.customerName;\r\n> 121:       .toLowerCase();\n  122:       .replace(/[^a-z0-9]/g, '-');\n  123:       .substring(0, 15); // Keep it short\r"
+        },
+        {
+          "file": "src/lib/gcp/serviceAccount.ts",
+          "line": 122,
+          "column": 7,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  120:     const sanitizedName = params.customerName;\r\n  121:       .toLowerCase();\n> 122:       .replace(/[^a-z0-9]/g, '-');\n  123:       .substring(0, 15); // Keep it short\r\n  124:       \r"
+        },
+        {
+          "file": "src/lib/gcp/serviceAccount.ts",
+          "line": 123,
+          "column": 7,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  121:       .toLowerCase();\n  122:       .replace(/[^a-z0-9]/g, '-');\n> 123:       .substring(0, 15); // Keep it short\r\n  124:       \r\n  125:     const accountId = \"sa-${sanitizedName}-\" + params.customerId.substring(0, 6) + \"\";\r"
+        },
+        {
+          "file": "src/lib/gcp/serviceAccount.ts",
+          "line": 146,
+          "column": 60,
+          "code": "TS1005",
+          "message": "',' expected.",
+          "context": null,
+          "expandedContext": "  144:     // Determine which roles to assign based on billing tier\r\n  145:     const billingTier = params.billingTier || 'free';\r\n> 146:     let rolesToAssign = [...BILLING_TIER_ROLES[billingTier];\n  147:   ]\r\n  148:     \r"
+        },
+        {
+          "file": "src/lib/gcp/serviceAccount.ts",
+          "line": 147,
+          "column": 3,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  145:     const billingTier = params.billingTier || 'free';\r\n  146:     let rolesToAssign = [...BILLING_TIER_ROLES[billingTier];\n> 147:   ]\r\n  148:     \r\n  149:     // Add any custom roles if specified\r"
+        }
+      ]
+    },
+    {
+      "file": "src/features/customers/services/customers.ts",
+      "errorCount": 16,
+      "commonErrors": [
+        {
+          "code": "TS1109",
+          "count": 4,
+          "message": "Expression expected."
+        },
+        {
+          "code": "TS1472",
+          "count": 4,
+          "message": "'catch' or 'finally' expected."
+        },
+        {
+          "code": "TS1005",
+          "count": 4,
+          "message": "'try' expected."
+        }
+      ],
+      "errorExamples": [
+        {
+          "file": "src/features/customers/services/customers.ts",
+          "line": 46,
+          "column": 4,
+          "code": "TS1109",
+          "message": "Expression expected.",
+          "context": null,
+          "expandedContext": "  44:     const db = await getDb();\r\n  45:     const customerRef = db?\n> 46:    if (db) {\n  47:      if (db) {\n  48:        await db.collection('customers').add({\r"
+        },
+        {
+          "file": "src/features/customers/services/customers.ts",
+          "line": 57,
+          "column": 5,
+          "code": "TS1472",
+          "message": "'catch' or 'finally' expected.",
+          "context": null,
+          "expandedContext": "  55:      }\n  56: \n> 57:     return {\r\n  58:       id: customerRef.id,\r\n  59:       ...customerData,\r"
+        },
+        {
+          "file": "src/features/customers/services/customers.ts",
+          "line": 63,
+          "column": 5,
+          "code": "TS1005",
+          "message": "'try' expected.",
+          "context": null,
+          "expandedContext": "  61:       updatedAt: new Date().toISOString()\r\n  62:     };\r\n> 63:   } catch (error) {\r\n  64:     logger.error('Error creating customer:', error);\r\n  65:     throw error;\r"
+        },
+        {
+          "file": "src/features/customers/services/customers.ts",
+          "line": 67,
+          "column": 1,
+          "code": "TS1128",
+          "message": "Declaration or statement expected.",
+          "context": null,
+          "expandedContext": "  65:     throw error;\r\n  66:   }\r\n> 67: }\r\n  68: \r\n  69: /**\r"
+        },
+        {
+          "file": "src/features/customers/services/customers.ts",
+          "line": 78,
+          "column": 4,
+          "code": "TS1109",
+          "message": "Expression expected.",
+          "context": null,
+          "expandedContext": "  76:     const db = await getDb();\r\n  77:     const doc = db?\n> 78:    if (db) {\n  79:      if (db) {\n  80:        await db.collection('customers').doc(id).get();\r"
+        }
+      ]
+    }
+  ],
+  "mostCommonErrorCodes": [
+    {
+      "code": "TS1005",
+      "count": 368,
+      "message": "'try' expected.",
+      "examples": [
+        {
+          "file": "src/app/api/projects/[id]/jobs/route.ts",
+          "line": 157,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/metrics/route.ts",
+          "line": 143,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/route.ts",
+          "line": 74,
+          "context": null
+        }
+      ]
+    },
+    {
+      "code": "TS1128",
+      "count": 117,
+      "message": "Declaration or statement expected.",
+      "examples": [
+        {
+          "file": "src/app/api/projects/[id]/jobs/route.ts",
+          "line": 167,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/metrics/route.ts",
+          "line": 166,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/route.ts",
+          "line": 78,
+          "context": null
+        }
+      ]
+    },
+    {
+      "code": "TS1434",
+      "count": 31,
+      "message": "Unexpected keyword or identifier.",
+      "examples": [
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 188,
+          "context": null
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 221,
+          "context": null
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 306,
+          "context": null
+        }
+      ]
+    },
+    {
+      "code": "TS1109",
+      "count": 29,
+      "message": "Expression expected.",
+      "examples": [
+        {
+          "file": "src/app/api/projects/[id]/jobs/route.ts",
+          "line": 108,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/metrics/route.ts",
+          "line": 61,
+          "context": null
+        },
+        {
+          "file": "src/app/api/projects/[id]/route.ts",
+          "line": 61,
+          "context": null
+        }
+      ]
+    },
+    {
+      "code": "TS1003",
+      "count": 26,
+      "message": "Identifier expected.",
+      "examples": [
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 191,
+          "context": null
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 224,
+          "context": null
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 232,
+          "context": null
+        }
+      ]
+    }
+  ],
+  "suggestedFixes": [
+    {
+      "errorCode": "TS1005",
+      "description": "Missing punctuation (commas, semicolons, etc.)",
+      "fixStrategy": "Create a script to add missing punctuation at the end of lines",
+      "examples": [
+        {
+          "file": "src/app/api/projects/[id]/jobs/route.ts",
+          "line": 157,
+          "context": null,
+          "message": "'try' expected."
+        },
+        {
+          "file": "src/app/api/projects/[id]/metrics/route.ts",
+          "line": 143,
+          "context": null,
+          "message": "'try' expected."
+        },
+        {
+          "file": "src/app/api/projects/[id]/route.ts",
+          "line": 74,
+          "context": null,
+          "message": "'try' expected."
+        }
+      ]
+    },
+    {
+      "errorCode": "TS1128",
+      "description": "Syntax error in code structure",
+      "fixStrategy": "Check for missing braces, parentheses, or incorrect method chaining",
+      "examples": [
+        {
+          "file": "src/app/api/projects/[id]/jobs/route.ts",
+          "line": 167,
+          "context": null,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "file": "src/app/api/projects/[id]/metrics/route.ts",
+          "line": 166,
+          "context": null,
+          "message": "Declaration or statement expected."
+        },
+        {
+          "file": "src/app/api/projects/[id]/route.ts",
+          "line": 78,
+          "context": null,
+          "message": "Declaration or statement expected."
+        }
+      ]
+    },
+    {
+      "errorCode": "TS1434",
+      "description": "Unexpected keyword in code",
+      "fixStrategy": "Check for incorrect function declarations or misplaced keywords",
+      "examples": [
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 188,
+          "context": null,
+          "message": "Unexpected keyword or identifier."
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 221,
+          "context": null,
+          "message": "Unexpected keyword or identifier."
+        },
+        {
+          "file": "src/features/data-generation/services/job-management-service.ts",
+          "line": 306,
+          "context": null,
+          "message": "Unexpected keyword or identifier."
+        }
+      ]
+    }
+  ]
+}

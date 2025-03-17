@@ -1,62 +1,97 @@
 import { NextRequest, NextResponse } from "next/server";
+import { FirestoreJobManagementService } from "@/features/data-generation/services/job-management-service";
+import { getFirestoreService } from "@/lib/api/services/firestore-service";
+import { getProjectById } from "@/features/projects/services/projectService";
+import { logger } from "@/lib/utils/logger";
+import { DocumentData } from "firebase-admin/firestore";
 
+// Define job interfaces
+interface JobProgress {
+  percentComplete: number;
+  endTime?: string;
+}
+
+interface JobParameters {
+  recordCount: number;
+  schema?: Record<string, any>;
+  options?: Record<string, any>;
+}
+
+interface JobConfig {
+  parameters: JobParameters;
+  outputFormat?: string;
+  destination?: string;
+}
+
+interface Job {
+  id: string;
+  name?: string;
+  projectId: string;
+  customerId?: string;
+  status: string;
+  startTime?: Date;
+  endTime?: Date;
+  createdAt: Date;
+  updatedAt?: Date;
+  progress?: JobProgress;
+  config?: JobConfig;
+  error?: {
+    message: string;
+    code?: string;
+    details?: any;
+  };
+}
+
+interface SimplifiedJob {
+  id: string;
+  name?: string;
+  projectId: string;
+  status: string;
+  startTime?: Date;
+  endTime?: Date;
+  progress?: JobProgress;
+}
+
+interface JobSnapshot {
+  id: string;
+  data: () => Job;
+}
+
+// Job service functions
+async function getJobsForProject(projectId: string): Promise<JobSnapshot[]> {
+  try {
+    const firestoreService = getFirestoreService();
+    
+    // Use the service interface instead of direct Firestore calls
+    const jobs = await firestoreService.queryDocuments<Job & { id: string }>('jobs', [
+      { field: 'projectId', operator: '==', value: projectId }
+    ]);
+    
+    return jobs.map(job => ({
+      id: job.id,
+      data: () => job
+    }));
+  } catch (e) {
+    console.error("Error getting jobs:", e);
+    return [];
+  }
+}
+
+// Route handlers
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  // Properly await params according to Next.js 15 requirements
-  const { id } = await params;
-  const projectId = id;
-
   try {
-    // This would normally come from a database
-    // For now, we'll return mock data
-    const mockJobs = [
-      {
-        id: "job-1",
-        name: "Product data generation",
-        status: "completed",
-        progress: 100,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(), // 3 days ago
-        completedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
-        projectId,
-        recordCount: 5000
-      },
-      {
-        id: "job-2",
-        name: "Customer profiles",
-        status: "running",
-        progress: 65,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(), // 12 hours ago
-        projectId,
-        recordCount: 10000
-      },
-      {
-        id: "job-3",
-        name: "Transaction history",
-        status: "pending",
-        progress: 0,
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-        projectId,
-        recordCount: 25000
-      },
-      {
-        id: "job-4",
-        name: "Order dataset",
-        status: "failed",
-        progress: 34,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-        projectId,
-        recordCount: 7500
-      }
-    ];
-
-    return NextResponse.json({ jobs: mockJobs });
+    const projectId = params.id;
+    const jobs = await getJobsForProject(projectId);
+    
+    return NextResponse.json(jobs);
   } catch (error) {
-    console.error("Error fetching jobs:", error);
+    console.error("Error in GET route:", error);
     return NextResponse.json(
-      { error: "Failed to fetch jobs" },
+      { error: "Failed to retrieve jobs" },
       { status: 500 }
     );
   }
-} 
+}

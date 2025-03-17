@@ -6,8 +6,8 @@ import {
   CustomerAuditLogEntry,
   CUSTOMER_AUDIT_LOG_COLLECTION
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
-import { FirestoreQueryOptions } from '@/lib/services/firestore-service';
+import { getFirestore } from '@/lib/api/services/db-service';
+import { FirestoreQueryOptions } from '@/lib/api/services/firestore-service';
 
 // Specify dynamism
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,7 @@ export async function GET(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -42,7 +42,7 @@ export async function GET(
     const firestoreService = await getFirestore();
     
     // First check if the customer exists
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId);
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -65,21 +65,39 @@ export async function GET(
       limit
     };
 
-    // Add filters
-    const whereConditions = [];
+    // Build query where conditions
+    const whereConditions: {
+      field: string;
+      operator: '==' | '<' | '<=' | '>' | '>=' | '!=' | 'array-contains' | 'array-contains-any' | 'in' | 'not-in';
+      value: any;
+    }[] = [
+      { 
+        field: 'customerId', 
+        operator: '==', 
+        value: customerId 
+      }
+    ];
     
     if (action) {
-      whereConditions.push({ field: 'action', operator: '==', value: action });
+      whereConditions.push({ 
+        field: 'action', 
+        operator: '==', 
+        value: action 
+      });
     }
     
     if (performedBy) {
-      whereConditions.push({ field: 'performedBy', operator: '==', value: performedBy });
+      whereConditions.push({ 
+        field: 'userId', 
+        operator: '==', 
+        value: performedBy 
+      });
     }
     
     if (fromDate) {
       whereConditions.push({ 
         field: 'timestamp', 
-        operator: '>=', 
+        operator: '>=' as '>=', 
         value: new Date(fromDate) 
       });
     }
@@ -87,11 +105,11 @@ export async function GET(
     if (toDate) {
       whereConditions.push({ 
         field: 'timestamp', 
-        operator: '<=', 
+        operator: '<=' as '<=', 
         value: new Date(toDate) 
       });
     }
-    
+
     if (whereConditions.length > 0) {
       queryOptions.where = whereConditions;
     }
@@ -108,22 +126,22 @@ export async function GET(
       }
     }
 
-    // Execute the query
-    const collectionPath = `${CUSTOMER_COLLECTION}/${customerId}/${CUSTOMER_AUDIT_LOG_COLLECTION}`;
-    const paginationResult = await firestoreService.queryWithPagination<CustomerAuditLogEntry>(
-      collectionPath,
+    // Query the audit logs
+    const auditLogs = await firestoreService.query(
+      `${CUSTOMER_COLLECTION}/${customerId}/${CUSTOMER_AUDIT_LOG_COLLECTION}`,
       queryOptions
     );
 
+    // Add type assertion to the audit logs
+    const typedAuditLogs = auditLogs as Array<{ id: string }>;
+
     // Return paginated results
     return NextResponse.json({
-      auditLogs: paginationResult.items,
+      auditLogs,
       pagination: {
-        hasMore: paginationResult.hasMore,
-        nextCursor: paginationResult.hasMore && paginationResult.items.length > 0 
-          ? paginationResult.items[paginationResult.items.length - 1].id 
-          : null,
-        count: paginationResult.items.length
+        hasMore: auditLogs.length >= limit,
+        nextCursor: auditLogs.length >= limit ? typedAuditLogs[typedAuditLogs.length - 1].id : null,
+        count: auditLogs.length
       }
     });
   } catch (error) {
@@ -140,7 +158,7 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: IdParams }
+  { params }: { params: { id: string } }
 ) {
   try {
     // Authorize request
@@ -150,19 +168,19 @@ export async function POST(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
 
-    // Await the params to get the ID
-    const { id: customerId } = await params;
+    // Get customer ID from params
+    const { id: customerId } = params;
     
     // Get Firestore service
     const firestoreService = await getFirestore();
     
     // First check if the customer exists
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId);
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });

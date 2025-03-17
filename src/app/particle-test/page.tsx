@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Tab } from "@headlessui/react";
-import DreamyParticles from "@/components/dreamy-particles/DreamyParticles";
+import DreamyParticles from "../../components/ui/DreamyParticles";
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(" ");

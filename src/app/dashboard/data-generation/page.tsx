@@ -12,7 +12,8 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Plus, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 import { JobStatusCard } from '@/components/data-generation/job-management/job-status-card';
-import { StatCard, JobSummaryChart } from '@/components/data-generation/dashboard/job-summary-stats';
+import { JobSummaryStats } from '@/components/data-generation/dashboard/job-summary-stats';
+import { JobSummaryChart } from '@/features/data-generation/components/dashboard/job-summary-stats';
 import { RateLimitIndicator } from '@/components/data-generation/dashboard/rate-limit-indicator';
 import { Separator } from '@/components/ui/separator';
 import { JobStatus, RateLimitStatus } from '@/lib/models/data-generation/types';
@@ -20,12 +21,12 @@ import { toast } from '@/components/ui/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Mock data for development
+// Mock data for development - will be replaced with empty arrays in actual implementation
 const mockJobs = [
   {
     id: 'job-1',
     name: 'Customer Data Generation',
-    status: 'completed' as JobStatus,
+    status: 'completed',
     progress: 100,
     recordsGenerated: 10000,
     dataSize: 2048000,
@@ -37,7 +38,7 @@ const mockJobs = [
   {
     id: 'job-2',
     name: 'Product Catalog',
-    status: 'in_progress' as JobStatus,
+    status: 'running',
     progress: 45,
     recordsGenerated: 4500,
     dataSize: 1024000,
@@ -49,7 +50,7 @@ const mockJobs = [
   {
     id: 'job-3',
     name: 'Transaction History',
-    status: 'queued' as JobStatus,
+    status: 'queued',
     progress: 0,
     recordsGenerated: 0,
     dataSize: 0,
@@ -61,7 +62,7 @@ const mockJobs = [
   {
     id: 'job-4',
     name: 'User Profiles',
-    status: 'failed' as JobStatus,
+    status: 'failed',
     progress: 23,
     recordsGenerated: 1150,
     dataSize: 512000,
@@ -82,10 +83,11 @@ const mockRateLimitStatus: RateLimitStatus = {
 export default function DataGenerationDashboard() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [recentJobs, setRecentJobs] = useState(mockJobs);
-  const [rateLimitStatus, setRateLimitStatus] = useState<RateLimitStatus>(mockRateLimitStatus);
+  const [recentJobs, setRecentJobs] = useState<any[]>([]); // Initialize with empty array instead of mockJobs
+  const [rateLimitStatus, setRateLimitStatus] = useState<RateLimitStatus | null>(null); // Initialize with null instead of mockRateLimitStatus
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showEmptyState, setShowEmptyState] = useState(false);
   
   // Fetch data on component mount
   useEffect(() => {
@@ -105,9 +107,14 @@ export default function DataGenerationDashboard() {
       // const jobsResponse = await fetch('/api/data-generation/jobs/recent');
       // const rateLimitResponse = await fetch('/api/data-generation/rate-limit');
       
-      // For now, use mock data
-      setRecentJobs(mockJobs);
-      setRateLimitStatus(mockRateLimitStatus);
+      // Instead of using mock data, we now show empty state
+      setRecentJobs([]);
+      setRateLimitStatus({
+        currentUsage: 0,
+        limit: 100000,
+        resetTime: new Date(Date.now() + 86400000).toISOString()
+      });
+      setShowEmptyState(true);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError(`Failed to load data generation dashboard: ${err instanceof Error ? err.message : String(err)}`);
@@ -152,7 +159,7 @@ export default function DataGenerationDashboard() {
     router.push(`/dashboard/data-generation/jobs/${jobId}`);
   };
   
-  // Calculate job statistics
+  // Calculate job statistics based on empty array or actual data
   const jobStats = {
     total: recentJobs.length,
     completed: recentJobs.filter(job => job.status === 'completed').length,
@@ -198,83 +205,99 @@ export default function DataGenerationDashboard() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard 
-              title="Total Jobs" 
-              value={jobStats.total} 
-              icon="total" 
-            />
-            <StatCard 
-              title="Completed" 
-              value={jobStats.completed} 
-              icon="completed" 
-            />
-            <StatCard 
-              title="In Progress" 
-              value={jobStats.inProgress} 
-              icon="inProgress" 
-            />
-            <StatCard 
-              title="Failed" 
-              value={jobStats.failed} 
-              icon="failed" 
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle>Recent Jobs</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {recentJobs.length === 0 ? (
-                    <div className="text-center py-6">
-                      <p className="text-gray-500 dark:text-gray-400 mb-4">No jobs found</p>
-                      <Button onClick={handleCreateJob}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Your First Job
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {recentJobs.map(job => (
-                        <JobStatusCard 
-                          key={job.id} 
-                          job={job} 
-                          onClick={() => handleViewJob(job.id)} 
-                        />
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+          {showEmptyState ? (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 text-center">
+              <h2 className="text-2xl font-bold mb-4">No Data Generation Jobs</h2>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">
+                You haven't created any data generation jobs yet. Get started by creating your first job.
+              </p>
+              <Button onClick={handleCreateJob} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Create Your First Job
+              </Button>
             </div>
-            
-            <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle>Usage</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <RateLimitIndicator status={rateLimitStatus} />
-                  
-                  <Separator className="my-4" />
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Records Generated</span>
-                      <span className="font-medium">{jobStats.recordsGenerated.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">Total Data Size</span>
-                      <span className="font-medium">{(jobStats.totalDataSize / (1024 * 1024)).toFixed(2)} MB</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <JobSummaryStats 
+                  title="Total Jobs" 
+                  value={jobStats.total} 
+                  icon="total" 
+                />
+                <JobSummaryStats 
+                  title="Completed" 
+                  value={jobStats.completed} 
+                  icon="completed" 
+                />
+                <JobSummaryStats 
+                  title="In Progress" 
+                  value={jobStats.inProgress} 
+                  icon="inProgress" 
+                />
+                <JobSummaryStats 
+                  title="Failed" 
+                  value={jobStats.failed} 
+                  icon="failed" 
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle>Recent Jobs</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {recentJobs.length === 0 ? (
+                        <div className="text-center py-6">
+                          <p className="text-gray-500 dark:text-gray-400 mb-4">No jobs found</p>
+                          <Button onClick={handleCreateJob}>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Your First Job
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {recentJobs.map(job => (
+                            <JobStatusCard 
+                              key={job.id} 
+                              job={job} 
+                              onClick={() => handleViewJob(job.id)} 
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle>Usage</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {rateLimitStatus && <RateLimitIndicator status={rateLimitStatus} />}
+                      {!rateLimitStatus && <div className="text-sm text-gray-500">Rate limit information unavailable</div>}
+                      
+                      <Separator className="my-4" />
+                      
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500 dark:text-gray-400">Records Generated</span>
+                          <span className="font-medium">{jobStats.recordsGenerated.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-sm text-gray-500 dark:text-gray-400">Total Data Size</span>
+                          <span className="font-medium">{(jobStats.totalDataSize / (1024 * 1024)).toFixed(2)} MB</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

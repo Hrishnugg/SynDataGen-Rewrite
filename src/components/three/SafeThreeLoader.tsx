@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
-import { isBrowser } from '@/utils/isBrowser';
+import { isBrowser } from '@/lib/utils/isBrowser';
 import ThreeComponentMap from './ThreeComponentMap';
 
 interface SafeThreeLoaderProps {
   fallback: React.ReactNode;
   componentName: string;
-  componentProps?: any;
+  componentProps?: Record<string, unknown>;
 }
 
 /**

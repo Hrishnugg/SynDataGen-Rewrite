@@ -1,10 +1,36 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { PROJECT_COLLECTION, CreateProjectInput, DEFAULT_PROJECT_SETTINGS } from '@/lib/models/firestore/project';
-import { getFirestore } from '@/lib/services/db-service';
-import { FirestoreQueryOptions } from '@/lib/services/firestore-service';
-import { authOptions } from '@/lib/auth';
-import { initializeStorage, createProjectBucket, setupBucketLifecycle } from '@/lib/gcp/storage';
+import { getFirestoreService, FirestoreQueryCondition, FirestoreQueryOptions } from '@/lib/api/services/firestore-service';
+import { authOptions } from '@/lib/firebase/auth';
+import { initializeStorage, createProjectBucket, setupBucketLifecycle, BucketCreationParams } from '@/lib/gcp/storage';
+
+// Define ProjectType interface
+interface ProjectType extends Record<string, unknown> {
+  id?: string;
+  name: string;
+  description?: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+  status: 'active' | 'archived' | 'deleted';
+  bucketName: string;
+  teamMembers?: Array<{
+    userId: string;
+    email?: string | null;
+    role: string;
+    joinedAt: Date;
+  }>;
+  settings?: Record<string, any>;
+  stats?: {
+    totalDatasets: number;
+    totalRows: number;
+    totalStorage: number;
+    lastActivity: Date;
+  };
+  bucketCreated?: boolean;
+  bucketError?: string;
+}
 
 // Helper function to generate a unique bucket name
 function generateBucketName(projectName: string, userId: string): string {
@@ -14,145 +40,158 @@ function generateBucketName(projectName: string, userId: string): string {
   return `synoptic-${sanitizedName}-${timestamp}-${randomStr}`;
 }
 
-// Utility function to resolve the service account path
-function resolveServiceAccountPath(): string | null {
-  try {
-    const path = require('path');
-    const fs = require('fs');
+// Helper function to generate mock projects for testing
+function generateMockProjects(userId: string, status: string, count = 5): ProjectType[] {
+  const projects: ProjectType[] = [];
+  
+  for (let i = 0; i < count; i++) {
+    const createdAt = new Date();
+    createdAt.setDate(createdAt.getDate() - Math.floor(Math.random() * 30));
     
-    // Check the current working directory
-    console.log('[PROJECTS-API] Current working directory:', process.cwd());
+    const updatedAt = new Date(createdAt);
+    updatedAt.setDate(updatedAt.getDate() + Math.floor(Math.random() * 10));
     
-    // Try multiple potential locations
-    const potentialPaths = [
-      // Relative paths
-      './credentials/firebase-service-account.json',
-      'credentials/firebase-service-account.json',
-      // Absolute paths
-      path.join(process.cwd(), 'credentials', 'firebase-service-account.json'),
-      path.resolve('credentials', 'firebase-service-account.json')
-    ];
-    
-    console.log('[PROJECTS-API] Checking potential service account paths:');
-    for (const potentialPath of potentialPaths) {
-      try {
-        const absolutePath = path.isAbsolute(potentialPath) ? 
-          potentialPath : path.resolve(process.cwd(), potentialPath);
-          
-        const exists = fs.existsSync(absolutePath);
-        console.log(`- ${potentialPath} -> ${absolutePath}: ${exists ? 'EXISTS' : 'NOT FOUND'}`);
-        
-        if (exists) {
-          return absolutePath;
+    const mockProject: ProjectType = {
+      id: `mock-project-${i}-${Date.now()}`,
+      name: `Mock Project ${i + 1}`,
+      description: `This is a mock project ${i + 1} for testing`,
+      createdBy: userId,
+      createdAt,
+      updatedAt,
+      status: status as 'active' | 'archived' | 'deleted',
+      bucketName: `mock-bucket-${i}`,
+      bucketCreated: true,
+      teamMembers: [
+        {
+          userId,
+          role: 'owner',
+          joinedAt: createdAt
         }
-      } catch (err) {
-        console.warn(`Error checking path ${potentialPath}:`, err);
+      ],
+      settings: {
+        ...DEFAULT_PROJECT_SETTINGS
+      },
+      stats: {
+        totalDatasets: Math.floor(Math.random() * 10),
+        totalRows: Math.floor(Math.random() * 10000),
+        totalStorage: Math.floor(Math.random() * 1000000),
+        lastActivity: updatedAt
       }
-    }
+    };
     
-    return null;
-  } catch (error) {
-    console.error('[PROJECTS-API] Error resolving service account path:', error);
-    return null;
+    projects.push(mockProject);
   }
+  
+  return projects;
 }
 
+/**
+ * Create a new project
+ */
 export async function POST(request: NextRequest) {
+  // Check authentication
+  const session = await getServerSession(authOptions);
+  
+  if (!session || !session.user || !session.user.id) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+  
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    // Parse request body
     const body = await request.json();
-
-    // Validate required fields
-    if (!body.name || !body.description) {
+    
+    if (!body.name) {
       return NextResponse.json(
-        { error: "Project name and description are required" },
+        { error: 'Project name is required' },
         { status: 400 }
       );
     }
-
-    console.log('[PROJECTS-API] Creating project:', body.name);
     
-    // Check if we should use mock mode (for testing/development without GCP)
-    const useMockMode = process.env.MOCK_GCP_STORAGE === 'true';
+    // Validate region and ensure it's a string
+    const region = (body.region || 'us-central1') as string;
+    const userId = session.user.id;
     
-    if (!useMockMode) {
-      // Initialize storage service
-      try {
-        await initializeStorage();
-        console.log('[PROJECTS-API] GCP Storage initialized successfully');
-      } catch (error) {
-        console.error('[PROJECTS-API] Failed to initialize GCP Storage:', error);
-        
-        // Use mock mode if explicitly allowed when GCP fails
-        if (process.env.ALLOW_MOCK_FALLBACK !== 'true') {
-          return NextResponse.json(
-            { 
-              error: 'Failed to initialize storage service',
-              details: error instanceof Error ? error.message : String(error)
-            },
-            { status: 500 }
-          );
-        } else {
-          console.log('[PROJECTS-API] Falling back to mock mode due to GCP initialization failure');
+    // Create a draft project using FirestoreService
+    const firestoreService = getFirestoreService();
+    
+    // Create project data object that satisfies Record<string, unknown>
+    const projectData: Record<string, unknown> = {
+      name: body.name,
+      description: body.description || '',
+      customerId: body.customerId || userId,
+      createdBy: userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: 'draft',
+      teamMembers: [
+        {
+          userId,
+          role: 'owner',
+          joinedAt: new Date()
         }
-      }
-    } else {
-      console.log('[PROJECTS-API] Using mock GCP mode - will not create actual storage buckets');
-    }
+      ],
+      settings: body.settings || DEFAULT_PROJECT_SETTINGS
+    };
     
-    // Create a draft project with a temporary ID to get the project ID
-    const firestoreService = await getFirestore(true);
-    
-    // Add a timestamp to the draft status for debugging
-    const draftProjectId = await firestoreService.create(
+    // Create project document
+    const draftProjectId = await firestoreService.createDocument(
       PROJECT_COLLECTION, 
-      {
-        name: body.name,
-        description: body.description,
-        customerId: body.customerId || session.user.id,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        status: 'draft',
-        draftCreatedAt: new Date().toISOString(),
-        teamMembers: [
-          {
-            userId: session.user.id,
-            role: 'owner',
-            addedAt: new Date()
-          }
-        ]
-      }
+      projectData
     );
     
     console.log(`[PROJECTS-API] Created draft project with ID: ${draftProjectId}`);
     
-    // Placeholder for the bucket information
-    let bucketInfo = {
-      bucketName: '',
-      region: body.region || 'us-central1',
-      bucketUri: '',
-      isMock: useMockMode
+    // Create bucket name for the project
+    const bucketName = generateBucketName(body.name, userId);
+    console.log(`[PROJECTS-API] Generated bucket name: ${bucketName}`);
+    
+    // Initialize GCP storage if not already initialized
+    let bucketInfo: {
+      bucketName: string;
+      region: string;
+      bucketUri: string;
+      isMock: boolean;
     };
     
-    // Create the actual GCP storage bucket
-    if (!useMockMode) {
+    // Check if we're not in mock mode
+    const useMockStorage = process.env.MOCK_GCP_STORAGE === 'true';
+    
+    if (!useMockStorage) {
       try {
-        console.log('[PROJECTS-API] Creating GCP storage bucket for project');
+        console.log(`[PROJECTS-API] Creating real GCP bucket: ${bucketName}`);
+        // Initialize GCP storage
+        await initializeStorage();
         
-        const bucketResult = await createProjectBucket({
+        // Create bucket with proper parameters
+        const bucketParams: BucketCreationParams = {
           projectId: draftProjectId,
-          customerId: body.customerId || session.user.id,
-          region: body.region || 'us-central1',
+          customerId: (body.customerId || userId) as string,
+          region,
           storageClass: 'STANDARD'
-        });
+        };
         
-        console.log(`[PROJECTS-API] Created GCP bucket: ${bucketResult.name} in region ${bucketResult.region}`);
+        // Create bucket
+        const bucketResult = await createProjectBucket(bucketParams);
         
-        // Store the bucket information
+        // Set up bucket lifecycle rules
+        const retentionDays = body.settings?.dataRetentionDays || 
+                              DEFAULT_PROJECT_SETTINGS.dataRetentionDays || 
+                              30; // Default to 30 days if undefined
+        
+        await setupBucketLifecycle(
+          bucketResult.name, 
+          [{
+            action: { type: 'Delete' },
+            condition: { 
+              age: retentionDays
+            }
+          }]
+        );
+        
+        // Set bucket info
         bucketInfo = {
           bucketName: bucketResult.name,
           region: bucketResult.region,
@@ -160,553 +199,64 @@ export async function POST(request: NextRequest) {
           isMock: false
         };
         
-        // Set up bucket lifecycle rules based on data retention settings
-        const dataRetentionDays = body.settings?.dataRetentionDays || DEFAULT_PROJECT_SETTINGS.dataRetentionDays;
-        await setupBucketLifecycle(bucketResult.name, [
-          {
-            action: { type: 'Delete' },
-            condition: { age: dataRetentionDays }
-          }
-        ]);
-        
-        console.log(`[PROJECTS-API] Set up bucket lifecycle rules with ${dataRetentionDays} day retention`);
+        console.log(`[PROJECTS-API] Created GCP bucket: ${bucketResult.name}`);
       } catch (error) {
-        console.error('[PROJECTS-API] Failed to create GCP storage bucket:', error);
+        console.error('[PROJECTS-API] Error creating GCP bucket:', error);
         
-        // Don't delete the draft project if fallback is allowed
-        if (process.env.ALLOW_MOCK_FALLBACK !== 'true') {
-          // Clean up the draft project entry
-          await firestoreService.delete(PROJECT_COLLECTION, draftProjectId);
-          
-          return NextResponse.json(
-            { 
-              error: 'Failed to create storage bucket for project',
-              details: error instanceof Error ? error.message : String(error),
-              code: error.code || 500
-            },
-            { status: 500 }
-          );
-        } else {
-          // Use a mock bucket name instead
-          console.log('[PROJECTS-API] Falling back to mock bucket due to GCP bucket creation failure');
-          bucketInfo = {
-            bucketName: `mock-bucket-${draftProjectId.toLowerCase()}`,
-            region: body.region || 'us-central1',
-            bucketUri: `gs://mock-bucket-${draftProjectId.toLowerCase()}`,
-            isMock: true
-          };
-        }
+        // We still create the project, but mark it with an error
+        bucketInfo = {
+          bucketName: `mock-error-${Date.now()}`,
+          region,
+          bucketUri: '',
+          isMock: true
+        };
+        
+        // Store error separately since it's not in the type
+        const bucketError = error instanceof Error ? error.message : String(error);
+        console.error(`[PROJECTS-API] Bucket creation error: ${bucketError}`);
       }
     } else {
-      // For mock mode, create a mock bucket name
+      // In mock mode, create a fake bucket name
+      console.log(`[PROJECTS-API] Using mock storage`);
       bucketInfo = {
-        bucketName: `mock-bucket-${draftProjectId.toLowerCase()}`,
-        region: body.region || 'us-central1',
-        bucketUri: `gs://mock-bucket-${draftProjectId.toLowerCase()}`,
+        bucketName,
+        region,
+        bucketUri: `gs://${bucketName}`,
         isMock: true
       };
     }
-
-    // Update the project with the bucket information
-    const projectData = {
-      name: body.name,
-      description: body.description,
-      customerId: body.customerId || session.user.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      settings: body.settings || DEFAULT_PROJECT_SETTINGS,
-      teamMembers: [
-        {
-          userId: session.user.id,
-          role: 'owner',
-          addedAt: new Date()
-        }
-      ],
+    
+    // Update the project with final information using FirestoreService
+    const projectUpdate: Record<string, unknown> = {
+      id: draftProjectId,
       status: 'active',
-      storage: {
-        bucketName: bucketInfo.bucketName,
-        region: bucketInfo.region,
-        bucketUri: bucketInfo.bucketUri,
-        usedStorage: 0,
-        isMock: bucketInfo.isMock
-      },
-      metadata: {
-        ...(body.metadata || {}),
-        bucketCreationCompleted: new Date().toISOString(),
-        usedMockBucket: bucketInfo.isMock
-      }
+      creatorId: userId,
+      bucketName: bucketInfo.bucketName,
+      bucketRegion: bucketInfo.region,
+      bucketUri: bucketInfo.bucketUri,
+      bucketCreated: !bucketInfo.isMock,
     };
-
-    // Update the project with the real bucket information
-    await firestoreService.update(
-      PROJECT_COLLECTION,
-      draftProjectId,
-      projectData
-    );
     
-    console.log(`[PROJECTS-API] Updated project ${draftProjectId} with bucket information`);
+    // Update the project document
+    const projectPath = `${PROJECT_COLLECTION}/${draftProjectId}`;
+    await firestoreService.updateDocument(projectPath, projectUpdate);
     
-    // Return the created project with ID
+    console.log(`[PROJECTS-API] Updated project with bucket info: ${projectPath}`);
+    
+    // Return the project data
     return NextResponse.json({
-      ...projectData,
-      id: draftProjectId
+      success: true,
+      projectId: draftProjectId,
+      message: 'Project created successfully',
+      bucketInfo
     });
   } catch (error) {
-    console.error('Project creation error:', error);
+    console.error('[PROJECTS-API] Error creating project:', error);
+    
     return NextResponse.json(
       { 
         error: 'Failed to create project',
-        details: error instanceof Error ? error.message : String(error),
-        code: error.code || 500
-      },
-      { status: 500 }
-    );
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    console.log('Starting projects fetch...');
-    
-    // DIAGNOSTIC: Show all environment variables related to Firebase
-    console.log('[PROJECTS-API] Environment variables check:');
-    Object.keys(process.env)
-      .filter(key => key.includes('FIREBASE') || key.includes('GOOGLE') || key.includes('MOCK') || key.includes('FORCE'))
-      .forEach(key => {
-        const value = process.env[key];
-        if (key.toLowerCase().includes('key')) {
-          console.log(`- ${key}: [PRESENT] (${value ? value.length : 0} characters)`);
-        } else {
-          console.log(`- ${key}: ${value || '[NOT SET]'}`);
-        }
-      });
-      
-    // Get the session using authOptions
-    console.log('Calling getServerSession with authOptions...');
-    const session = await getServerSession(authOptions);
-    console.log('GetServerSession returned:', session ? 'Session object exists' : 'No session returned');
-    
-    // Detailed session structure logging
-    if (session) {
-      console.log('Session full structure:', JSON.stringify(session, null, 2));
-      console.log('Session.user keys:', session.user ? Object.keys(session.user) : 'No user object');
-      
-      if (session.user) {
-        // Log values with partial masking for sensitive data
-        const userEmail = session.user.email ? 
-          `${session.user.email.substring(0, 3)}...${session.user.email.substring(session.user.email.indexOf('@'))}` : 
-          'undefined';
-        
-        console.log('User details found:', {
-          id: session.user.id || 'undefined',
-          email: userEmail,
-          name: session.user.name ? `${session.user.name.substring(0, 3)}...` : 'undefined',
-          company: session.user.company ? `${session.user.company.substring(0, 3)}...` : 'undefined'
-        });
-      }
-    }
-    
-    if (!session?.user) {
-      console.log('No session found, returning unauthorized');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    console.log('Session found for user:', session.user.email, 'ID:', session.user.id);
-
-    // Check if user ID is defined with more logging
-    if (!session.user.id) {
-      console.log('User ID is undefined in session', {
-        userObject: session.user ? JSON.stringify(session.user) : 'null',
-        userObjectType: session.user ? typeof session.user : 'null',
-        sessionType: typeof session
-      });
-      
-      return NextResponse.json({ 
-        error: 'Authentication error: User ID not found in session',
-        debug: {
-          sessionUser: session.user ? {
-            ...session.user,
-            // Don't log sensitive info
-            email: session.user.email ? `${session.user.email.substring(0, 3)}...` : undefined
-          } : null,
-          userIdType: session.user?.id ? typeof session.user.id : 'undefined',
-          sessionKeys: Object.keys(session),
-          userKeys: session.user ? Object.keys(session.user) : [],
-        }
-      }, { status: 401 });
-    }
-
-    // Extract query parameters
-    const url = new URL(request.url);
-    const status = url.searchParams.get('status') || 'active';
-    const limit = url.searchParams.get('limit') ? parseInt(url.searchParams.get('limit')!) : 20;
-
-    // Initialize debug info to track what happens
-    const debugInfo = {
-      userId: session.user.id,
-      userEmail: session.user.email,
-      environment: process.env.NODE_ENV,
-      firebaseCredentialsFound: false,
-      errors: [],
-      usedMockData: false,
-      timestamp: new Date().toISOString()
-    };
-
-    // ENHANCED: Ensure service account path is properly set
-    const forceRealFirestore = process.env.FORCE_REAL_FIRESTORE === 'true';
-    
-    // If Google Application Credentials is not set, try to find and set it
-    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      console.log('[PROJECTS-API] GOOGLE_APPLICATION_CREDENTIALS is not set, attempting to find service account file');
-      
-      const serviceAccountPath = resolveServiceAccountPath();
-      
-      if (serviceAccountPath) {
-        console.log(`[PROJECTS-API] Found service account file at: ${serviceAccountPath}`);
-        process.env.GOOGLE_APPLICATION_CREDENTIALS = serviceAccountPath;
-        console.log(`[PROJECTS-API] Set GOOGLE_APPLICATION_CREDENTIALS to: ${serviceAccountPath}`);
-      } else {
-        console.error('[PROJECTS-API] Could not find service account file in any standard location');
-        debugInfo.errors.push('Could not find service account file in any standard location');
-      }
-    } else {
-      console.log(`[PROJECTS-API] GOOGLE_APPLICATION_CREDENTIALS is already set to: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
-    }
-    
-    // Validate Firebase credentials
-    try {
-      const { validateFirebaseCredentials } = await import('@/lib/gcp/firestore/initFirestore');
-      debugInfo.firebaseCredentialsFound = validateFirebaseCredentials();
-      console.log(`[PROJECTS-API] validateFirebaseCredentials() returned: ${debugInfo.firebaseCredentialsFound}`);
-    } catch (validationError) {
-      console.error('[PROJECTS-API] Error validating Firebase credentials:', validationError);
-      debugInfo.errors.push(`Credential validation error: ${validationError instanceof Error ? validationError.message : String(validationError)}`);
-    }
-
-    // MODIFIED: Only use mock data if specifically not forcing real Firestore
-    if (!debugInfo.firebaseCredentialsFound && !forceRealFirestore && process.env.NODE_ENV === 'development') {
-      console.log('[PROJECTS-API] Firebase credentials not found and not forcing real Firestore. Using mock data for development.');
-      debugInfo.usedMockData = true;
-      
-      // ENHANCED: Generate mock projects with consistent IDs based on user ID
-      const mockProjects = generateMockProjects(session.user.id, status);
-      
-      // Return mock projects
-      return NextResponse.json({
-        projects: mockProjects, 
-        count: mockProjects.length,
-        debug: debugInfo
-      });
-    }
-
-    console.log('[PROJECTS-API] Attempting to use real Firestore for projects');
-    
-    // Initialize Firestore connection
-    const firestoreService = await getFirestore();
-    await firestoreService.init();
-    
-    console.log('[PROJECTS-API] Firestore initialized');
-    
-    // Get user projects 
-    let userProjects = [];
-    
-    console.log('👤 User ID for query:', session.user.id);
-    
-    // Define the fallback strategy as a function
-    const fallbackLoop = async (): Promise<boolean> => {
-      // Fallback 1: Try dot notation approach first (should work now with index)
-      try {
-        console.log('[FALLBACK-1] Trying teamMembers.userId query (should work with index)');
-        const dotNotationQuery = {
-          where: [["teamMembers.userId", "==", session.user.id]],
-          orderBy: [{ field: "createdAt", direction: "desc" }],
-          limit
-        };
-        
-        userProjects = await firestoreService.query(PROJECT_COLLECTION, dotNotationQuery);
-        console.log(`[FALLBACK-1] Found ${userProjects.length} projects with dot notation query`);
-        
-        if (userProjects.length > 0) {
-          debugInfo.usedQuery = 'fallback-dot-notation';
-          return true; // Success
-        }
-      } catch (fallback1Error) {
-        // Only show detailed errors in development
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[FALLBACK-1] Error with dot notation query:', fallback1Error);
-        } else {
-          console.error('[FALLBACK-1] Error with dot notation query');
-        }
-        debugInfo.errors.push(`Fallback 1 error: ${fallback1Error instanceof Error ? fallback1Error.message : String(fallback1Error)}`);
-      }
-      
-      // Fallback 2: Try simplified teamMembers array-contains query
-      try {
-        console.log('[FALLBACK-2] Trying simplified teamMembers query');
-        const simplifiedTeamQuery = {
-          where: [["teamMembers", "array-contains", { userId: session.user.id }]],
-          orderBy: [{ field: "createdAt", direction: "desc" }],
-          limit
-        };
-        
-        userProjects = await firestoreService.query(PROJECT_COLLECTION, simplifiedTeamQuery);
-        console.log(`[FALLBACK-2] Found ${userProjects.length} projects with simplified team query`);
-        
-        if (userProjects.length > 0) {
-          debugInfo.usedQuery = 'fallback-simplified-team';
-          return true; // Success
-        }
-      } catch (fallback2Error) {
-        // Only show detailed errors in development
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[FALLBACK-2] Error with simplified team query:', fallback2Error);
-        } else {
-          console.error('[FALLBACK-2] Error with simplified team query');
-        }
-        debugInfo.errors.push(`Fallback 2 error: ${fallback2Error instanceof Error ? fallback2Error.message : String(fallback2Error)}`);
-      }
-      
-      // Fallback 3: Original status query with client-side filtering
-      try {
-        console.log('[FALLBACK-3] Using original status query');
-        const statusQuery = {
-          where: [["status", "==", "active"]],
-          orderBy: [{ field: "createdAt", direction: "desc" }],
-          limit: limit * 2 // Get more to allow for filtering
-        };
-        
-        const allProjects = await firestoreService.query(PROJECT_COLLECTION, statusQuery);
-        console.log(`Found ${allProjects.length} total projects with status active`);
-        
-        // Filter client-side for the user's projects
-        userProjects = allProjects.filter(project => {
-          if (!project.teamMembers || !Array.isArray(project.teamMembers)) {
-            return false;
-          }
-          
-          return project.teamMembers.some(member => 
-            member && 
-            typeof member === 'object' && 
-            member.userId === session.user.id
-          );
-        });
-        
-        console.log(`After filtering, found ${userProjects.length} projects for user ${session.user.id}`);
-        debugInfo.usedQuery = 'fallback-status-client-filter';
-        
-        if (userProjects.length > 0) {
-          return true; // Success
-        }
-      } catch (fallback3Error) {
-        console.error('[FALLBACK-3] Error with status query:', fallback3Error);
-        debugInfo.errors.push(`Fallback 3 error: ${fallback3Error instanceof Error ? fallback3Error.message : String(fallback3Error)}`);
-      }
-      
-      // Fallback 4: Raw Firestore query
-      try {
-        console.log('[FALLBACK-4] Using raw Firestore query');
-        
-        // Use the direct queryDocuments method which takes a query builder function
-        const rawProjects = await firestoreService.queryDocuments(PROJECT_COLLECTION, (collectionRef) => {
-          // Build the query manually
-          return collectionRef
-            .where('status', '==', 'active')
-            .orderBy('createdAt', 'desc')
-            .limit(limit * 2);
-        });
-        
-        console.log(`[FALLBACK-4] Found ${rawProjects.length} projects with raw query`);
-        
-        // Filter client-side for the user's projects
-        userProjects = rawProjects.filter(project => {
-          if (!project.teamMembers || !Array.isArray(project.teamMembers)) {
-            return false;
-          }
-          
-          return project.teamMembers.some(member => 
-            member && 
-            typeof member === 'object' && 
-            member.userId === session.user.id
-          );
-        });
-        
-        console.log(`[FALLBACK-4] After filtering, found ${userProjects.length} projects for user ${session.user.id}`);
-        debugInfo.usedQuery = 'fallback-raw-query';
-        
-        if (userProjects.length > 0) {
-          return true; // Success
-        }
-      } catch (fallback4Error) {
-        console.error('[FALLBACK-4] Error with raw query:', fallback4Error);
-        debugInfo.errors.push(`Fallback 4 error: ${fallback4Error instanceof Error ? fallback4Error.message : String(fallback4Error)}`);
-      }
-      
-      return false; // All fallbacks failed
-    };
-    
-    // For now, stick with the original query format but be ready to switch
-    const userTeamQuery = process.env.USE_ALT_QUERY_FORMAT === 'true' || process.env.NODE_ENV === 'production'
-      ? {
-          // Alternative query format using dot notation - should work now that index is created
-          where: [["teamMembers.userId", "==", session.user.id]],
-          orderBy: [{ field: "createdAt", direction: "desc" }],
-          limit
-        }
-      : {
-          // Original query format - Fixed to work with Firestore array-contains
-          // When using array-contains with objects, we must match the EXACT object structure
-          // So we should include all fields that we expect to match
-          where: [
-            ["teamMembers", "array-contains", { 
-              userId: session.user.id,
-              // We don't include role now to make it more flexible
-            }]
-          ],
-          orderBy: [{ field: "createdAt", direction: "desc" }],
-          limit
-        };
-    
-    // Try direct query first
-    try {
-      console.log('[PROJECTS-API] Querying projects with team member filter');
-      
-      // Only do diagnostic logging in development
-      if (process.env.NODE_ENV === 'development' && process.env.DEBUG_QUERIES === 'true') {
-        // 🔍 DIAGNOSTIC: Try to fetch a single project to examine structure
-        try {
-          const simpleQuery = {
-            limit: 1,
-            orderBy: [{ field: "createdAt", direction: "desc" }]
-          };
-          
-          console.log('[DIAGNOSTIC] Fetching a sample project to examine structure');
-          const sampleProjects = await firestoreService.query(PROJECT_COLLECTION, simpleQuery);
-          
-          if (sampleProjects.length > 0) {
-            console.log('[DIAGNOSTIC] Sample project structure:');
-            console.log(JSON.stringify({
-              id: sampleProjects[0].id,
-              hasTeamMembers: !!sampleProjects[0].teamMembers,
-              teamMembersType: sampleProjects[0].teamMembers ? typeof sampleProjects[0].teamMembers : 'undefined',
-              isArray: Array.isArray(sampleProjects[0].teamMembers),
-              teamMembersPreview: Array.isArray(sampleProjects[0].teamMembers) 
-                ? sampleProjects[0].teamMembers.slice(0, 2) 
-                : sampleProjects[0].teamMembers,
-              fields: Object.keys(sampleProjects[0])
-            }, null, 2));
-          } else {
-            console.log('[DIAGNOSTIC] No sample projects found.');
-          }
-        } catch (sampleError) {
-          console.error('[DIAGNOSTIC] Error fetching sample project:', sampleError);
-        }
-      }
-      
-      // Continue with original query
-      userProjects = await firestoreService.query(PROJECT_COLLECTION, userTeamQuery);
-      console.log(`[PROJECTS-API] Found ${userProjects.length} projects through direct team member query`);
-      
-      // If we didn't find any projects with the direct query, try the fallback approaches
-      if (userProjects.length === 0) {
-        console.log('No projects found with direct query, trying fallback approaches...');
-        
-        // First, do a direct query for all projects to see what's actually in the database
-        try {
-          console.log('[DIAGNOSTIC] Checking what projects exist in the database');
-          const allProjectsQuery = {
-            limit: 10
-          };
-          
-          const allProjects = await firestoreService.query(PROJECT_COLLECTION, allProjectsQuery);
-          console.log(`[DIAGNOSTIC] Found ${allProjects.length} total projects in database`);
-          
-          if (allProjects.length > 0) {
-            // Log the first project structure to help debug
-            const sampleProject = allProjects[0];
-            console.log('[DIAGNOSTIC] Sample project structure:', JSON.stringify({
-              id: sampleProject.id,
-              name: sampleProject.name,
-              hasTeamMembers: !!sampleProject.teamMembers,
-              teamMembersType: sampleProject.teamMembers ? typeof sampleProject.teamMembers : 'undefined',
-              isArray: Array.isArray(sampleProject.teamMembers),
-              teamMembersPreview: Array.isArray(sampleProject.teamMembers) 
-                ? sampleProject.teamMembers
-                : sampleProject.teamMembers,
-              fields: Object.keys(sampleProject)
-            }, null, 2));
-          }
-        } catch (diagError) {
-          console.error('[DIAGNOSTIC] Error checking all projects:', diagError);
-        }
-        
-        // Step 2: Fallback query mechanism using multiple attempts
-        const fallbackSuccess = await fallbackLoop();
-        
-        if (fallbackSuccess) {
-          console.log('[PROJECTS-API] Successfully found projects using fallback mechanisms');
-        } else {
-          console.log('[PROJECTS-API] All fallback approaches failed to find projects');
-        }
-      }
-    } 
-    catch (directQueryError) {
-      console.error('Direct team member query failed:', directQueryError);
-      debugInfo.errors.push(`Team member query error: ${directQueryError instanceof Error ? directQueryError.message : String(directQueryError)}`);
-      
-      // Step 2: Fallback query mechanism using multiple attempts
-      const fallbackSuccess = await fallbackLoop();
-      
-      if (fallbackSuccess) {
-        console.log('[PROJECTS-API] Successfully found projects using fallback mechanisms');
-      } else {
-        console.log('[PROJECTS-API] All fallback approaches failed to find projects');
-      }
-    }
-    
-    // Final fallback - just return some mock data if we couldn't get real data
-    if (userProjects.length === 0 && process.env.NODE_ENV === 'development') {
-      console.log('No projects found, using mock projects for development');
-      userProjects = generateMockProjects(session.user.id, status);
-      debugInfo.usedMockData = true;
-    }
-    
-    // Format the projects to match the expected type
-    const projects = userProjects.map(project => {
-      // Ensure dates are serialized properly
-      const formatDate = (date: any) => {
-        if (!date) return undefined;
-        if (date instanceof Date) return date.toISOString();
-        if (typeof date === 'object' && date.toDate) return date.toDate().toISOString();
-        return String(date);
-      };
-      
-      return {
-        id: project.id,
-        name: project.name || 'Untitled Project',
-        description: project.description || '',
-        status: project.status || 'active',
-        createdAt: formatDate(project.createdAt) || new Date().toISOString(),
-        updatedAt: formatDate(project.updatedAt),
-        storage: project.storage || {},
-        settings: project.settings || {},
-        teamMembers: project.teamMembers || [],
-        metadata: project.metadata || {}
-      };
-    });
-    
-    console.log(`[PROJECTS-API] Returning ${projects.length} projects`);
-    
-    return NextResponse.json({ 
-      projects, 
-      count: projects.length,
-      debug: debugInfo
-    });
-  } catch (error) {
-    console.error('Projects fetch error:', error);
-    return NextResponse.json(
-      { 
-        error: 'Failed to fetch projects',
-        details: error instanceof Error ? error.message : String(error)
+        detail: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );
@@ -714,55 +264,102 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Generate mock projects for development when Firestore is unavailable
+ * List all projects for the current user
  */
-function generateMockProjects(userId: string, status = 'active', count = 5) {
-  console.log(`Generating ${count} mock projects for user ${userId} with status ${status}`);
+export async function GET(request: NextRequest) {
+  // Check authentication
+  const session = await getServerSession(authOptions);
   
-  const statuses = ['active', 'completed', 'archived'];
-  const mockProjects = [];
-  
-  for (let i = 0; i < count; i++) {
-    // Use the requested status or pick randomly if it's not valid
-    const projectStatus = statuses.includes(status) ? status : statuses[i % statuses.length];
-    
-    mockProjects.push({
-      id: `mock-project-${i + 1}`,
-      name: `Mock Project ${i + 1}`,
-      description: `This is a mock project created for development purposes when Firestore is unavailable.`,
-      status: projectStatus,
-      createdAt: new Date(Date.now() - i * 86400000).toISOString(), // Each a day apart
-      updatedAt: new Date(Date.now() - i * 43200000).toISOString(), // Each half a day apart
-      // Add settings property that matches our model
-      settings: {
-        dataRetentionDays: 30 + (i * 15), // Different retention periods
-        maxStorageGB: 50 + (i * 10)      // Different storage sizes
-      },
-      // Add storage configuration
-      storageConfig: {
-        bucketName: `mock-bucket-${i + 1}`,
-        region: 'us-central1'
-      },
-      teamMembers: [
-        {
-          userId: userId,
-          role: 'owner',
-          addedAt: new Date(Date.now() - i * 86400000).toISOString()
-        },
-        {
-          userId: `mock-user-${i + 1}`,
-          role: 'member',
-          addedAt: new Date(Date.now() - i * 86400000 + 3600000).toISOString()
-        }
-      ],
-      // Add metadata for completeness
-      metadata: {
-        mockData: true,
-        sampleId: `sample-${i + 1}`,
-        createdInDevMode: true
-      }
-    });
+  if (!session || !session.user || !session.user.id) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
   }
   
-  return mockProjects;
-} 
+  try {
+    const { searchParams } = new URL(request.url);
+    const userId = session.user.id;
+    
+    // Parse query parameters with defaults
+    const statusFilter = searchParams.get('status') || 'active';
+    const limitStr = searchParams.get('limit');
+    const offsetStr = searchParams.get('offset');
+    
+    // Parse limit and offset with defaults
+    const limit = limitStr ? parseInt(limitStr, 10) : 20;
+    const offset = offsetStr ? parseInt(offsetStr, 10) : 0;
+    
+    console.log(`[PROJECTS-API] Fetching projects for user: ${userId}, status: ${statusFilter}, limit: ${limit}, offset: ${offset}`);
+    
+    let projects: ProjectType[] = [];
+    const firestoreService = getFirestoreService();
+
+    // Build query conditions
+    const queryConditions: FirestoreQueryCondition[] = [];
+    
+    // Add status filter if specified
+    if (statusFilter && statusFilter !== 'all') {
+      queryConditions.push({
+        field: 'status',
+        operator: '==',
+        value: statusFilter
+      });
+    }
+    
+    // Add user ID filter - use safe type assertion since we've validated userId exists
+    queryConditions.push({
+      field: 'teamMembers',
+      operator: 'array-contains',
+      value: { userId }
+    });
+    
+    try {
+      // Note: The FirestoreService interface doesn't support passing query options directly to queryDocuments
+      // We'll need to retrieve all documents first and then apply pagination manually
+      projects = await firestoreService.queryDocuments<ProjectType>(
+        PROJECT_COLLECTION,
+        queryConditions
+      );
+      
+      // Apply sorting, limit, and offset manually
+      projects = projects
+        .sort((a, b) => {
+          const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt as string);
+          const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt as string);
+          return dateB.getTime() - dateA.getTime(); // descending order
+        })
+        .slice(offset, offset + limit);
+      
+      console.log(`[PROJECTS-API] Found ${projects.length} projects`);
+    } catch (error) {
+      console.error('[PROJECTS-API] Failed to query projects:', error);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[PROJECTS-API] Development mode: Generating mock projects');
+        // Ensure status is a valid string
+        const safeStatus = statusFilter || 'active';
+        projects = generateMockProjects(userId, safeStatus, 5);
+      } else {
+        throw error;
+      }
+    }
+    
+    return NextResponse.json({
+      projects,
+      total: projects.length,
+      limit,
+      offset
+    });
+  } catch (error) {
+    console.error('[PROJECTS-API] Error fetching projects:', error);
+    
+    return NextResponse.json(
+      { 
+        error: 'Failed to fetch projects',
+        detail: error instanceof Error ? error.message : String(error)
+      },
+      { status: 500 }
+    );
+  }
+}

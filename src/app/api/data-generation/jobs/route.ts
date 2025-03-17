@@ -6,10 +6,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { jobManagementService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
+import { jobService } from '@/features/data-generation/services/service-provider';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
+import { logger } from '@/lib/utils/logger';
+
+// Define JobData interface to match what the service expects
+interface JobData {
+  parameters: {
+    config: any;
+    customerId: string;
+    projectId: string;
+  };
+}
+
+// Use mock service in development environment instead of returning mock data
+// Service is now provided by the service provider
+const useService = jobService;
 
 // Schema for job creation
 const jobConfigSchema = z.object({
@@ -45,7 +58,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -64,17 +77,26 @@ export async function POST(request: NextRequest) {
     
     const { projectId, ...config } = validationResult.data;
     
-    // Create job
-    const result = await jobManagementService.createJob(customerId, projectId, config);
+    // Create job using the service
+    // Wrap config in a JobData compatible object
+    const jobData: JobData = {
+      parameters: {
+        config,
+        customerId,
+        projectId
+      }
+    };
     
-    if (result.status === 'rejected') {
+    const result = await useService.createJob('dataGeneration', jobData);
+    
+    if ((result as any).status === 'rejected') {
       return NextResponse.json(
-        { error: result.message || 'Job creation failed' },
+        { error: (result as any).message || 'Job creation failed' },
         { status: 429 }
       );
     }
     
-    return NextResponse.json({ jobId: result.jobId }, { status: 201 });
+    return NextResponse.json({ jobId: (result as any).jobId }, { status: 201 });
   } catch (error) {
     logger.error('Error creating job', error);
     return NextResponse.json(
@@ -92,7 +114,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -126,10 +148,24 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Get job history
-    const jobs = await jobManagementService.getJobHistory(customerId, validationResult.data);
+    const { limit, offset, status, startDate, endDate } = validationResult.data;
     
-    return NextResponse.json({ jobs });
+    // Use listJobs method from the interface instead of getJobHistory
+    // Create a filter object for the listJobs method
+    const filter = {
+      customerId,
+      status,
+      createdAfter: startDate,
+      createdBefore: endDate
+    };
+    
+    // Calculate page from offset and limit
+    const page = offset ? Math.floor(offset / limit) + 1 : 1;
+    
+    // Get job history using the listJobs method
+    const result = await useService.listJobs(filter, page, limit);
+    
+    return NextResponse.json(result);
   } catch (error) {
     logger.error('Error getting job history', error);
     return NextResponse.json(
@@ -137,4 +173,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

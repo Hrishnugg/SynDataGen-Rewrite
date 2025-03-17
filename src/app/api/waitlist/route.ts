@@ -1,22 +1,23 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { headers } from 'next/headers';
-import { getRateLimitConfig, updateRateLimit } from '@/lib/rate-limit';
-import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/email';
+import { getRateLimitConfig, updateRateLimit } from '@/lib/utils/rate-limit';
+import { sendWaitlistNotification, sendWaitlistConfirmation } from '@/lib/utils/email';
 import { Resend } from 'resend';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 import { 
   WAITLIST_COLLECTION, 
   WaitlistSubmission, 
   CreateWaitlistInput 
 } from '@/lib/models/firestore/waitlist';
+import { FirestoreQueryOptions } from '@/lib/gcp/firestore';
+import { CollectionReference } from 'firebase-admin/firestore';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: NextRequest) {
   try {
     // Get IP address for rate limiting
-    const forwardedFor = headers().get('x-forwarded-for');
-    const ip = forwardedFor ? forwardedFor.split(',')[0] : 'unknown';
+    const forwardedFor = request.headers.get('x-forwarded-for') || '';
+    const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'unknown';
     
     // Check rate limit
     const rateLimitConfig = getRateLimitConfig(ip);
@@ -61,14 +62,13 @@ export async function POST(request: NextRequest) {
     // Update rate limit counter
     updateRateLimit(ip);
     
-    // Get Firestore service
-    const firestoreService = getFirestore();
-    await firestoreService.init();
+    // Get Firestore service - await the Promise
+    const firestoreService = await getFirestore();
     
     // Check if entry already exists
-    const existingSubmissions = await firestoreService.query<WaitlistSubmission>(
+    const existingSubmissions = await firestoreService.query(
       WAITLIST_COLLECTION,
-      (collection) => collection.where('email', '==', email).limit(1)
+      { where: [{ field: 'email', operator: '==', value: email }], limit: 1 }
     );
     
     if (existingSubmissions && existingSubmissions.length > 0) {
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prepare submission data
+    // Prepare submission data with proper types
     const submissionData = {
       email,
       name,

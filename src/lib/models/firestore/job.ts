@@ -5,6 +5,7 @@
  */
 
 import { Timestamp } from 'firebase-admin/firestore';
+import { ProjectMetadata } from '@/types/metadata';
 
 export const JOB_COLLECTION = 'jobs';
 
@@ -66,7 +67,7 @@ export interface DataGenerationJob {
     };
   };
   
-  metadata?: Record<string, any>; // Flexible metadata field
+  metadata?: ProjectMetadata; // Flexible metadata field
 }
 
 /**
@@ -91,7 +92,7 @@ export interface CreateJobInput {
   outputConfig: {
     destination: string;
   };
-  metadata?: Record<string, any>;
+  metadata?: ProjectMetadata;
 }
 
 /**

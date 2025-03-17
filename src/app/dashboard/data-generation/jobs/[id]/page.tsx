@@ -10,21 +10,23 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/ui-card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, Download, Play, Square, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Download, Play, Square } from 'lucide-react';
+import { RefreshCw } from '@/components/icons';
 import { DataTable } from '@/components/data-generation/data-viewer/data-table';
 import { DataRetentionIndicator } from '@/components/data-generation/job-management/data-retention-indicator';
-import { JobStatus, JobDetails } from '@/lib/models/data-generation/types';
+import { JobStatus, JobDetails, JobStatusValue, JobProgressType } from '@/lib/models/data-generation';
 import { toast } from '@/components/ui/use-toast';
 import { formatDistanceToNow, format } from 'date-fns';
+import { dataGenerationClient } from '@/features/data-generation/services/client';
 
 // Mock data for development
 const mockJobDetails: JobDetails = {
   id: 'job-123',
   name: 'Customer Data Generation',
-  status: 'completed' as JobStatus,
+  status: 'completed' as JobStatusValue,
   progress: 100,
   recordsGenerated: 10000,
   createdAt: new Date(Date.now() - 86400000).toISOString(),
@@ -82,18 +84,33 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [previewColumns, setPreviewColumns] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [jobId, setJobId] = useState<string | null>(null);
   
-  // Fetch job details on component mount
+  // Set the job ID after component mount
   useEffect(() => {
-    fetchJobDetails();
-  }, [params.id]);
+    const setParamId = async () => {
+      const { id } = await params;
+      setJobId(id);
+    };
+    
+    setParamId();
+  }, [params]);
+  
+  // Fetch job details when jobId is available
+  useEffect(() => {
+    if (jobId) {
+      fetchJobDetails();
+    }
+  }, [jobId]);
   
   // Fetch job details
   const fetchJobDetails = async () => {
+    if (!jobId) return;
+    
     setIsLoading(true);
     
     try {
-      const details = await dataGenerationClient.getJobDetails(params.id);
+      const details = await dataGenerationClient.getJobDetails(jobId);
       setJobDetails(details);
       
       // Fetch preview data if job is completed
@@ -113,8 +130,10 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Fetch preview data
   const fetchPreviewData = async () => {
+    if (!jobId) return;
+    
     try {
-      const data = await dataGenerationClient.getJobPreviewData(params.id);
+      const data = await dataGenerationClient.getJobPreviewData(jobId);
       
       if (data && data.length > 0) {
         // Extract column definitions from the first row
@@ -137,15 +156,17 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Handle job cancellation
   const handleCancelJob = async () => {
+    if (!jobId) return;
+    
     try {
-      await dataGenerationClient.cancelJob(params.id);
+      await dataGenerationClient.cancelJob(jobId);
       
       // Refresh job details
       fetchJobDetails();
       
       toast({
         title: 'Job cancelled',
-        description: `Job ${params.id.slice(0, 8)} has been cancelled.`,
+        description: `Job ${jobId.slice(0, 8)} has been cancelled.`,
       });
     } catch (error) {
       toast({
@@ -158,15 +179,17 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Handle job resumption
   const handleResumeJob = async () => {
+    if (!jobId) return;
+    
     try {
-      await dataGenerationClient.resumeJob(params.id);
+      await dataGenerationClient.resumeJob(jobId);
       
       // Refresh job details
       fetchJobDetails();
       
       toast({
         title: 'Job resumed',
-        description: `Job ${params.id.slice(0, 8)} has been resumed.`,
+        description: `Job ${jobId.slice(0, 8)} has been resumed.`,
       });
     } catch (error) {
       toast({
@@ -179,7 +202,8 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Navigate to job download
   const handleDownloadJob = () => {
-    router.push(`/dashboard/data-generation/jobs/${params.id}/download`);
+    if (!jobId) return;
+    router.push(`/dashboard/data-generation/jobs/${jobId}/download`);
   };
   
   // Navigate back to jobs list
@@ -189,17 +213,18 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Handle extending retention period
   const handleExtendRetention = async () => {
-    if (!jobDetails) return;
+    if (!jobDetails || !jobId) return;
     
     try {
-      await dataGenerationClient.extendJobRetention(params.id);
+      // Default to extending by 30 days
+      await dataGenerationClient.extendJobRetention(jobId, 30);
       
       // Refresh job details
       fetchJobDetails();
       
       toast({
         title: 'Retention period extended',
-        description: 'The data retention period for this job has been extended.',
+        description: 'The data retention period for this job has been extended by 30 days.',
       });
     } catch (error) {
       toast({
@@ -212,10 +237,10 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   
   // Handle requesting early deletion
   const handleRequestEarlyDeletion = async () => {
-    if (!jobDetails) return;
+    if (!jobDetails || !jobId) return;
     
     try {
-      await dataGenerationClient.requestEarlyDeletion(params.id);
+      await dataGenerationClient.requestEarlyDeletion(jobId);
       
       // Refresh job details
       fetchJobDetails();
@@ -234,7 +259,7 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
   };
   
   // Get status badge color
-  const getStatusColor = (status: JobStatus['status']) => {
+  const getStatusColor = (status: JobStatusValue) => {
     switch (status) {
       case 'completed':
         return 'bg-green-500';
@@ -246,6 +271,12 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
         return 'bg-blue-500';
       case 'paused':
         return 'bg-orange-500';
+      case 'queued':
+        return 'bg-purple-500';
+      case 'pending':
+        return 'bg-gray-500';
+      case 'accepted':
+        return 'bg-blue-300';
       default:
         return 'bg-gray-500';
     }
@@ -375,33 +406,40 @@ export default function JobDetailsPage({ params }: { params: { id: string } }) {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Progress</h3>
-                  <p className="text-base font-medium">{jobDetails.progress}%</p>
+                  <p className="text-base font-medium">
+                    {typeof jobDetails.progress === 'number' 
+                      ? `${jobDetails.progress}%` 
+                      : `${jobDetails.progress.percentComplete}%`}
+                  </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Created</h3>
                   <p className="text-base font-medium">
-                    {formatDate(jobDetails.createdAt)}
+                    {jobDetails.createdAt && formatDate(jobDetails.createdAt)}
                     <span className="text-sm text-gray-500 ml-2">
-                      ({formatRelativeTime(jobDetails.createdAt)})
+                      {jobDetails.createdAt && `(${formatRelativeTime(jobDetails.createdAt)})`}
                     </span>
                   </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Last Updated</h3>
                   <p className="text-base font-medium">
-                    {formatDate(jobDetails.updatedAt)}
+                    {jobDetails.updatedAt && formatDate(jobDetails.updatedAt)}
                     <span className="text-sm text-gray-500 ml-2">
-                      ({formatRelativeTime(jobDetails.updatedAt)})
+                      {jobDetails.updatedAt && `(${formatRelativeTime(jobDetails.updatedAt)})`}
                     </span>
                   </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Records Generated</h3>
-                  <p className="text-base font-medium">{jobDetails.recordsGenerated.toLocaleString()} / {jobDetails.targetRecords.toLocaleString()}</p>
+                  <p className="text-base font-medium">
+                    {jobDetails.recordsGenerated.toLocaleString()}
+                    {jobDetails.targetRecords && ` / ${jobDetails.targetRecords.toLocaleString()}`}
+                  </p>
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Output Format</h3>
-                  <p className="text-base font-medium">{jobDetails.outputFormat}</p>
+                  <p className="text-base font-medium">{jobDetails.outputFormat || 'N/A'}</p>
                 </div>
               </div>
               

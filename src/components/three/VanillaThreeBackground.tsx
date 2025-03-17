@@ -25,10 +25,10 @@ export default function VanillaThreeBackground() {
       renderer.setSize(window.innerWidth, window.innerHeight);
       
       // Add renderer to the DOM
-      while (containerRef.current.firstChild) {
-        containerRef.current.removeChild(containerRef.current.firstChild);
+      while (containerRef.current?.firstChild) {
+        containerRef.current?.removeChild(containerRef.current?.firstChild);
       }
-      containerRef.current.appendChild(renderer.domElement);
+      containerRef.current?.appendChild(renderer.domElement);
       
       // Add lights
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -86,7 +86,7 @@ export default function VanillaThreeBackground() {
         renderer.dispose();
         
         if (containerRef.current && renderer.domElement) {
-          containerRef.current.removeChild(renderer.domElement);
+          containerRef.current?.removeChild(renderer.domElement);
         }
       };
     }).catch(error => {

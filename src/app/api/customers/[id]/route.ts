@@ -8,7 +8,7 @@ import {
   CUSTOMER_AUDIT_LOG_COLLECTION,
   auditLogToFirestore
 } from '@/lib/models/firestore/customer';
-import { getFirestore } from '@/lib/services/db-service';
+import { getFirestore } from '@/lib/api/services/db-service';
 
 // Define the params type as a Promise
 type IdParams = Promise<{ id: string }>;
@@ -28,7 +28,7 @@ export async function GET(
     }
 
     // Admin check 
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -40,7 +40,7 @@ export async function GET(
     const firestoreService = await getFirestore();
     
     // Get customer from Firestore
-    const customer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const customer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -71,7 +71,7 @@ export async function PATCH(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -83,7 +83,7 @@ export async function PATCH(
     const firestoreService = await getFirestore();
     
     // Get current customer data for audit log and validation
-    const existingCustomer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const existingCustomer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!existingCustomer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
@@ -105,13 +105,13 @@ export async function PATCH(
       
       // Check if email is already in use by another customer
       if (updateData.email !== existingCustomer.email) {
-        const existingCustomers = await firestoreService.query<Customer>(
+        const existingCustomers = await firestoreService.query(
           CUSTOMER_COLLECTION, 
           { 
             where: [{ field: 'email', operator: '==', value: updateData.email }],
             limit: 1
           }
-        );
+        ) as Customer[];
         
         if (existingCustomers && existingCustomers.length > 0) {
           return NextResponse.json(
@@ -162,7 +162,7 @@ export async function PATCH(
     );
 
     // Get updated customer
-    const updatedCustomer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const updatedCustomer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
 
     return NextResponse.json(updatedCustomer);
   } catch (error) {
@@ -189,7 +189,7 @@ export async function DELETE(
     }
 
     // Admin check
-    const isAdmin = !!(session.user as any)?.role === 'admin';
+    const isAdmin = (session.user as any)?.role === 'admin';
     if (!isAdmin) {
       return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
     }
@@ -201,7 +201,7 @@ export async function DELETE(
     const firestoreService = await getFirestore();
     
     // Get current customer data
-    const existingCustomer = await firestoreService.getById<Customer>(CUSTOMER_COLLECTION, customerId);
+    const existingCustomer = await firestoreService.getById(CUSTOMER_COLLECTION, customerId) as Customer | null;
     
     if (!existingCustomer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });

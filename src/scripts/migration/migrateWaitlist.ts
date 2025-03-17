@@ -52,8 +52,14 @@ async function connectToMongoDB(): Promise<{ client: MongoClient; db: Db; collec
     log('MongoDB connection established');
     
     const db = client.db(MONGODB_DB_NAME);
-    const collection = db.collection(MONGODB_WAITLIST_COLLECTION);
-    
+    const collection = db ? (
+   if (db) {
+     if (db) {
+       db.collection(MONGODB_WAITLIST_COLLECTION);
+ }
+   }
+     }
+
     return { client, db, collection };
   } catch (error: any) {
     log(`MongoDB connection error: ${error.message}`);
@@ -152,7 +158,7 @@ async function loadWaitlistToFirestore(waitlists: WaitlistSubmission[]): Promise
         if (batchResult.success) {
           result.success += batch.length;
           log(`Successfully wrote batch of ${batch.length} waitlist submissions to Firestore`);
-        } else {
+        ) : (
           for (let j = 0; j < batchResult.results.length; j++) {
             const opResult = batchResult.results[j];
             if (!opResult.success) {
@@ -160,7 +166,7 @@ async function loadWaitlistToFirestore(waitlists: WaitlistSubmission[]): Promise
               result.errors.push({
                 id: batch[j].id,
                 error: opResult.error
-              });
+              ););
               log(`Failed to write waitlist submission ${batch[j].id}: ${opResult.error}`);
             } else {
               result.success++;

@@ -1,3 +1,5 @@
+import { CustomerMetadata } from '@/types/metadata';
+
 /**
  * Firestore Customer Model
  * 
@@ -55,7 +57,7 @@ export interface Customer {
     storageQuota: number;        // Total storage quota in GB
     maxProjects: number;         // Maximum allowed projects
   };
-  metadata: Record<string, any>; // Flexible metadata field
+  metadata: CustomerMetadata; // Flexible metadata field
 }
 
 /**
@@ -94,7 +96,7 @@ export interface CreateCustomerInput {
     storageQuota?: number;
     maxProjects?: number;
   };
-  metadata?: Record<string, any>;
+  metadata?: CustomerMetadata;
 }
 
 /**

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { getFirebaseFirestore } from "@/lib/firebase";
-import { getCustomerById } from "@/lib/customers";
-import { rotateServiceAccountKey } from "@/lib/service-accounts";
-import { createAuditLog } from "@/lib/audit-logs";
+import { authOptions } from "@/lib/firebase/auth";
+import { getFirebaseFirestore } from "@/lib/firebase/firebase";
+import CustomerService from "@/features/customers/services/customers";
+import { rotateServiceAccountKey } from "@/lib/api/services/service-accounts";
+import { createAuditLog } from "@/lib/api/services/audit-logs";
 
 // Define the params type as a Promise
 type IdParams = Promise<{ id: string }>;
@@ -19,7 +19,7 @@ export async function POST(
   try {
     // Check if user is authenticated and is an admin
     const session = await getServerSession(authOptions);
-    if (!session?.user?.isAdmin) {
+    if (!session?.user || (session.user as any)?.role !== 'admin') {
       return NextResponse.json(
         { error: "Unauthorized - Admin access required" },
         { status: 403 }
@@ -27,7 +27,8 @@ export async function POST(
     }
 
     const { id } = await params;
-    const customer = await getCustomerById(id);
+    const customerService = new CustomerService();
+    const customer = await customerService.getCustomer(id);
     
     if (!customer) {
       return NextResponse.json(
@@ -43,10 +44,10 @@ export async function POST(
     await createAuditLog({
       action: "SERVICE_ACCOUNT_KEY_ROTATED",
       resource: `customers/${id}`,
-      userId: session.user.id,
+      userId: session.user.id || 'system',
       metadata: {
         customerId: id,
-        serviceAccountEmail: result.email
+        serviceAccountKeyReference: result // result is a string (key reference)
       }
     });
 
@@ -58,4 +59,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

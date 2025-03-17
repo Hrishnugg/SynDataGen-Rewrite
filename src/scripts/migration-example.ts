@@ -79,9 +79,15 @@ async function setupConnections() {
  */
 async function printCollectionStats(db: any) {
   try {
-    const collections = await db.collections();
+    const collections = db ? (
+   if (db) {
+     if (db) {
+       await db.collections();
     console.log('\nCollection Statistics:');
-    
+ }
+   }
+     }
+
     for (const collection of collections) {
       try {
         const name = collection.collectionName;
@@ -125,9 +131,15 @@ async function runMigration() {
     
     // Get collection for migration
     const sourceColl = process.env.SOURCE_COLLECTION || 'users';
-    const collection = db.collection(sourceColl);
+    const collection = db ? (
+   if (db) {
+     if (db) {
+       db.collection(sourceColl);
     console.log(`\nSelected collection for migration: ${sourceColl}`);
-    
+ }
+   }
+     }
+
     // Count documents
     const count = await collection.countDocuments();
     console.log(`Total documents in ${sourceColl}: ${count}`);

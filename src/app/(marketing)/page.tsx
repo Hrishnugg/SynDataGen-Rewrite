@@ -1,6 +1,4 @@
-import HeroSection from "@/components/HeroSection";
-import FeaturesSection from "@/components/FeaturesSection";
-import WaitlistSection from "@/components/WaitlistSection";
+import { HeroSection, FeaturesSection, WaitlistSection } from "@/components/marketing";
 
 export default function HomePage() {
   return (

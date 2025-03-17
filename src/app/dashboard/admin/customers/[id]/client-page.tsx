@@ -9,7 +9,7 @@ import {
   CardFooter, 
   CardHeader, 
   CardTitle 
-} from "@/components/ui/Card";
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,8 +18,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FiAlertTriangle, FiCheckCircle, FiEdit, FiKey, FiRefreshCw, FiTrash, FiUserCheck } from "react-icons/fi";
 import { toast } from "sonner";
-import CustomerServiceAccountPanel from "@/components/dashboard/CustomerServiceAccountPanel";
-import { ClientPageProps } from "@/lib/page-utils";
+import CustomerServiceAccountPanel from "@/features/dashboard/components/CustomerServiceAccountPanel";
+import { ClientPageProps } from "@/lib/utils/page-utils";
 
 // Define the params type for this specific page
 type CustomerDetailParams = {

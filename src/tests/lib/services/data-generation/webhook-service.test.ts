@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { FirestoreWebhookService } from '@/lib/services/data-generation/webhook-service';
+import { FirestoreWebhookService } from '@/features/data-generation/services/webhook-service';
 import { WebhookConfig, JobStatus } from '@/lib/models/data-generation/types';
 import fetch from 'node-fetch';
 import crypto from 'crypto';

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRecentAuditLogs } from '@/lib/audit-logs';
+import { getRecentAuditLogs } from '@/lib/api/services/audit-logs';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { logger } from '@/lib/logger';
+import { authOptions } from '@/lib/firebase/auth';
+import { logger } from '@/lib/utils/logger';
 
 export async function GET(request: NextRequest) {
   try {

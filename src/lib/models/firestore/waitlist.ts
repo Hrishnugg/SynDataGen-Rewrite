@@ -1,3 +1,5 @@
+import { WaitlistMetadata } from '@/types/metadata';
+
 /**
  * Firestore Waitlist Model
  * 
@@ -19,7 +21,7 @@ export interface WaitlistSubmission {
   createdAt: Date;       // Submission timestamp
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;        // Admin notes
-  metadata: Record<string, any>; // Additional submission data
+  metadata: WaitlistMetadata; // Additional submission data
 }
 
 /**
@@ -33,7 +35,7 @@ export interface CreateWaitlistInput {
   useCase: string;
   dataVolume?: string;
   industry?: string;
-  metadata?: Record<string, any>;
+  metadata?: WaitlistMetadata;
 }
 
 /**

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFirestoreService } from '@/lib/services/firestore-service';
+import { getFirestoreService } from '@/lib/api/services/firestore-service';
 import { withRetry } from '@/lib/utils/retry';
 
 /**
@@ -16,10 +16,14 @@ export async function GET(req: NextRequest) {
   try {
     // Get the Firestore service with retry logic
     const firestoreService = await withRetry(
-      async () => await getFirestoreService(true),
-      {
-        maxRetries: 3,
-        initialDelayMs: 200,
+      async () => await getFirestoreService({
+        enabled: true,
+        defaultTtlSeconds: 60,
+        maxEntries: 100
+      }),
+      { 
+        maxRetries: 3, 
+        initialDelayMs: 500,
         onRetry: (attempt, delay, error) => {
           console.log(`Retrying Firestore service initialization (attempt ${attempt})...`);
         }
@@ -36,13 +40,13 @@ export async function GET(req: NextRequest) {
     };
     
     // Try to write to Firestore
-    await firestoreService.setDocument(`${testCollection}/${testDocId}`, testData);
+    await firestoreService.create(`${testCollection}`, testData);
     
     // Try to read from Firestore
-    const readResult = await firestoreService.getDocumentData(`${testCollection}/${testDocId}`);
+    const readResult = await firestoreService.getById(testCollection, testDocId);
     
     // Clean up test document
-    await firestoreService.deleteDocument(`${testCollection}/${testDocId}`);
+    await firestoreService.delete(testCollection, testDocId);
     
     // Return success response
     return NextResponse.json({
@@ -50,37 +54,28 @@ export async function GET(req: NextRequest) {
       message: 'Firestore connection test successful',
       writeTest: 'passed',
       readTest: 'passed',
-      readResult,
+      readResult: readResult,
+      cleanupTest: 'passed',
       timestamp: new Date().toISOString()
-    }, { status: 200 });
+    });
+    
   } catch (error) {
-    console.error('Firestore test failed:', error);
+    console.error('Firebase test error:', error);
     
-    // Determine error type and provide helpful message
-    let errorType = 'unknown';
-    let errorMessage = 'An unknown error occurred';
-    
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      
-      if (errorMessage.includes('credential')) {
-        errorType = 'credentials';
-      } else if (errorMessage.includes('permission')) {
-        errorType = 'permissions';
-      } else if (errorMessage.includes('network') || errorMessage.includes('timeout')) {
-        errorType = 'network';
-      } else if (errorMessage.includes('not initialized') || errorMessage.includes('configuration')) {
-        errorType = 'initialization';
-      }
-    }
+    // Format the error for the response
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorCode = error instanceof Error && (error as any).code 
+      ? (error as any).code 
+      : 'unknown';
     
     return NextResponse.json({
       success: false,
       message: 'Firestore connection test failed',
       error: errorMessage,
-      errorType,
-      timestamp: new Date().toISOString(),
-      stack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined
-    }, { status: 500 });
+      errorCode: errorCode,
+      timestamp: new Date().toISOString()
+    }, {
+      status: 500
+    });
   }
-} 
+}

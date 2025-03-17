@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { FirestoreJobManagementService } from '@/lib/services/data-generation/job-management-service';
-import { BasePipelineService } from '@/lib/services/data-generation/pipeline-service';
-import { FirestoreWebhookService } from '@/lib/services/data-generation/webhook-service';
+import { FirestoreJobManagementService } from '@/features/data-generation/services/job-management-service';
+import { BasePipelineService } from '@/features/data-generation/services/pipeline-service';
+import { FirestoreWebhookService } from '@/features/data-generation/services/webhook-service';
 import { JobConfiguration, JobStatus, WebhookConfig, JobCreationResponse } from '@/lib/models/data-generation/types';
 import fetch from 'node-fetch';
 

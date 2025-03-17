@@ -6,10 +6,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { jobManagementService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
+import { getJobManagementService } from '@/features/data-generation/services/job-management-service';
+import { logger } from '@/lib/utils/logger';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
+import { MockJobManagementService } from '@/features/data-generation/services/mock-service';
+
+// Use mock service in development environment instead of returning mock data
+const useService = process.env.NODE_ENV === 'development' 
+  ? new MockJobManagementService() 
+  : getJobManagementService();
 
 // Schema for retention policy update
 const retentionPolicySchema = z.object({
@@ -24,14 +30,14 @@ export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const customerId = session.user.id;
     
-    // Get retention policy
-    const retentionDays = await jobManagementService.getJobRetentionPolicy(customerId);
+    // Get retention policy using the mock service
+    const retentionDays = await useService.getJobRetentionPolicy(customerId);
     
     return NextResponse.json({ retentionDays });
   } catch (error) {
@@ -51,7 +57,7 @@ export async function PUT(request: NextRequest) {
   try {
     // Get authenticated user
     const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
+    if (!session || !session.user || !session.user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -59,28 +65,28 @@ export async function PUT(request: NextRequest) {
     
     // Parse and validate request body
     const body = await request.json();
-    const validationResult = retentionPolicySchema.safeParse(body);
+    const validatedData = retentionPolicySchema.safeParse(body);
     
-    if (!validationResult.success) {
+    if (!validatedData.success) {
       return NextResponse.json(
-        { error: 'Invalid request body', details: validationResult.error.format() },
+        { error: 'Invalid request body', details: validatedData.error },
         { status: 400 }
       );
     }
     
-    const { retentionDays } = validationResult.data;
+    const { retentionDays } = validatedData.data;
     
-    // Update retention policy
-    const success = await jobManagementService.setJobRetentionPolicy(customerId, retentionDays);
+    // Update retention policy using the mock service
+    const success = await useService.setJobRetentionPolicy(customerId, retentionDays);
     
-    if (!success) {
+    if (success) {
+      return NextResponse.json({ success: true, retentionDays });
+    } else {
       return NextResponse.json(
         { error: 'Failed to update retention policy' },
-        { status: 400 }
+        { status: 500 }
       );
     }
-    
-    return NextResponse.json({ success: true, retentionDays });
   } catch (error) {
     logger.error('Error updating retention policy', error);
     return NextResponse.json(
@@ -88,4 +94,4 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

@@ -53,8 +53,14 @@ async function connectToMongoDB(): Promise<{ client: MongoClient; db: Db; collec
     log('MongoDB connection established');
     
     const db = client.db(MONGODB_DB_NAME);
-    const collection = db.collection(MONGODB_CUSTOMERS_COLLECTION);
-    
+    const collection = db ? (
+   if (db) {
+     if (db) {
+       db.collection(MONGODB_CUSTOMERS_COLLECTION);
+ }
+   }
+     }
+
     return { client, db, collection };
   } catch (error: any) {
     log(`MongoDB connection error: ${error.message}`);
@@ -206,7 +212,7 @@ async function loadCustomersToFirestore(customers: Customer[]): Promise<{ succes
         if (batchResult.success) {
           result.success += batch.length;
           log(`Successfully wrote batch of ${batch.length} customers to Firestore`);
-        } else {
+        ) : (
           for (let j = 0; j < batchResult.results.length; j++) {
             const opResult = batchResult.results[j];
             if (!opResult.success) {
@@ -214,7 +220,7 @@ async function loadCustomersToFirestore(customers: Customer[]): Promise<{ succes
               result.errors.push({
                 id: batch[j].id,
                 error: opResult.error
-              });
+              ););
               log(`Failed to write customer ${batch[j].id}: ${opResult.error}`);
             } else {
               result.success++;

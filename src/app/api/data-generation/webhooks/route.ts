@@ -6,10 +6,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { webhookService } from '@/lib/services/data-generation';
-import { logger } from '@/lib/logger';
+import { webhookService } from '@/features/data-generation/services/webhook-service';
+import { logger } from '@/lib/utils/logger';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions } from '@/lib/firebase/auth';
 
 // Schema for webhook registration
 const webhookConfigSchema = z.object({
@@ -85,7 +85,6 @@ export async function GET(request: NextRequest) {
     
     // Get webhooks with optional filtering
     const webhooks = await webhookService.getWebhooks({ 
-      url: url || undefined, 
       event: event || undefined 
     });
     

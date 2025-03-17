@@ -133,17 +133,16 @@ export async function withRetry<T>(
 }
 
 /**
- * Create a wrapped version of a function with built-in retry logic
- * 
- * @param fn The function to wrap with retry logic
- * @param options Retry configuration options
- * @returns A new function that will retry on failure
+ * Creates a new function that wraps the provided function with retry logic
+ * @param fn Function to retry
+ * @param options Retry options
+ * @returns Function with retry logic
  */
 export function createRetryFunction<T extends (...args: any[]) => Promise<any>>(
   fn: T,
   options: RetryOptions = {}
-): T {
-  return ((...args: Parameters<T>): ReturnType<T> => {
-    return withRetry(() => fn(...args), options) as ReturnType<T>;
-  }) as T;
+): (...args: Parameters<T>) => Promise<Awaited<ReturnType<T>>> {
+  return async (...args: Parameters<T>): Promise<Awaited<ReturnType<T>>> => {
+    return withRetry(() => fn(...args), options) as Promise<Awaited<ReturnType<T>>>;
+  };
 } 

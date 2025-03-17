@@ -1,3 +1,5 @@
+import { ProjectMetadata } from '@/types/metadata';
+
 /**
  * Firestore Data Generation Job Model
  * 
@@ -47,7 +49,7 @@ export interface DataGenerationJob {
     };
   };
   
-  metadata?: Record<string, any>; // Additional job metadata
+  metadata?: ProjectMetadata; // Additional job metadata
 }
 
 /**
@@ -76,7 +78,7 @@ export interface CreateDataGenerationJobInput {
     };
   };
   
-  metadata?: Record<string, any>;
+  metadata?: ProjectMetadata;
 }
 
 /**
