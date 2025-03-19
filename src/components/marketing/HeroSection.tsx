@@ -32,6 +32,15 @@ export default function HeroSection() {
   const paragraphBg = theme === 'light' 
     ? 'bg-white/60 backdrop-blur-md text-gray-800 shadow-md' 
     : 'backdrop-blur-sm bg-black/20 text-white';
+    
+  // Function to handle smooth scrolling to the waitlist section
+  const scrollToWaitlist = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    const waitlistElement = document.getElementById('waitlist');
+    if (waitlistElement) {
+      waitlistElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center w-full overflow-hidden bg-gray-950 dark:bg-gray-950">
@@ -117,12 +126,13 @@ export default function HeroSection() {
           style={{ pointerEvents: 'auto' }} // Enable pointer events for this element
           className="mt-6"
         >
-          <Link 
-            href="/waitlist" 
+          <a 
+            href="#waitlist" 
+            onClick={scrollToWaitlist}
             className="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg px-8 py-4 text-lg transition-colors duration-300 shadow-lg hover:shadow-xl"
           >
             Join Waitlist <FiArrowRight className="ml-2" />
-          </Link>
+          </a>
         </motion.div>
       </div>
     </section>
