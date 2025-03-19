@@ -1,3 +1,4 @@
+import React from 'react';
 /**
  * Firestore Service Implementation
  * 
@@ -57,107 +58,277 @@ export class FirestoreServiceImpl implements FirestoreService {
   private firestoreInstance: Firestore | null = null;
   private isMock: boolean = false;
 
+  // Track initialization promise
+  private initPromise: Promise<void> | null = null;
+
+  // Static tracking for initialization state
+  private static instanceState = {
+    initAttempts: 0,
+    initSuccesses: 0,
+    initFailures: 0,
+    lastInitError: null as Error | null,
+    initInProgress: false,
+    instanceInitialized: false
+  };
+
   constructor(optionsOrIsMock?: { isMock?: boolean; firestoreInstance?: Firestore } | boolean) {
+    const traceId = Math.random().toString(36).substring(2, 8);
+    logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] FirestoreServiceImpl constructor called with ${optionsOrIsMock ? typeof optionsOrIsMock === 'boolean' ? 'mockMode: ' + optionsOrIsMock : 'options object' : 'no arguments'}`);
+    
+    // Initialize instance state if not already set up
+    if (!FirestoreServiceImpl.instanceState) {
+      FirestoreServiceImpl.instanceState = {
+        initAttempts: 0,
+        initSuccesses: 0,
+        initFailures: 0,
+        lastInitError: null,
+        initInProgress: false,
+        instanceInitialized: false
+      };
+    }
+    
+    // Handle constructor overloading for backward compatibility
     if (typeof optionsOrIsMock === 'boolean') {
-      // Handle legacy constructor with boolean parameter
       this.isMock = optionsOrIsMock;
-    } else if (optionsOrIsMock) {
-      // Handle new constructor with options object
-      this.isMock = optionsOrIsMock.isMock || false;
+      logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] Initialized in ${this.isMock ? 'mock' : 'real'} mode`);
+    } else if (optionsOrIsMock && typeof optionsOrIsMock === 'object') {
+      this.isMock = !!optionsOrIsMock.isMock;
+      
       if (optionsOrIsMock.firestoreInstance) {
         this.firestoreInstance = optionsOrIsMock.firestoreInstance;
-        return; // Skip initialization if instance is provided
+        logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] Using provided Firestore instance`);
+        FirestoreServiceImpl.instanceState.instanceInitialized = true;
       }
+      
+      logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] Initialized with options: isMock=${this.isMock}, hasInstance=${!!this.firestoreInstance}`);
+    } else {
+      this.isMock = false;
+      logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] Initialized in default mode (real)`);
     }
-    this.initializeInternal();
+    
+    logger.debug(`[CONSTRUCTOR-TRACE-${traceId}] Constructor complete, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
   }
 
-  // Private initialization method
-  private async initializeInternal(): Promise<void> {
+  // Initialize the Firestore instance
+  private async initializeInternal(options?: any): Promise<void> {
+    const initId = Math.random().toString(36).substring(2, 8);
+    
+    // Update static state tracking
+    FirestoreServiceImpl.instanceState.initAttempts++;
+    FirestoreServiceImpl.instanceState.initInProgress = true;
+    
+    logger.debug(`[INIT-TRACE-${initId}] initializeInternal started, mockMode: ${this.isMock}, options: ${options ? 'provided' : 'not provided'}, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
+    
+    // Check if already initialized
+    if (this.firestoreInstance) {
+      logger.debug(`[INIT-TRACE-${initId}] Firestore instance already exists, skipping initialization`);
+      FirestoreServiceImpl.instanceState.initInProgress = false;
+      FirestoreServiceImpl.instanceState.instanceInitialized = true;
+      FirestoreServiceImpl.instanceState.initSuccesses++;
+      return;
+    }
+
+    // Skip initialization in mock mode
+    if (this.isMock) {
+      logger.debug(`[INIT-TRACE-${initId}] Running in mock mode, skipping initialization`);
+      FirestoreServiceImpl.instanceState.initInProgress = false;
+      return;
+    }
+
+    const startTime = Date.now();
+    
     try {
-      // Try to get the GCP Firestore instance first
-      this.firestoreInstance = getFirestoreInstance();
-      logger.debug('Initialized FirestoreService with GCP Firestore');
-    } catch (error: any) {
-      logger.debug('Failed to initialize GCP Firestore, falling back to Firebase Firestore', error);
+      // Try to initialize using Firebase first
+      logger.debug(`[INIT-TRACE-${initId}] Attempting to initialize via Firebase`);
       try {
-        // Fall back to Firebase Firestore
-        this.firestoreInstance = await getFirebaseFirestore();
-        logger.debug('Initialized FirestoreService with Firebase Firestore');
-      } catch (fallbackError: any) {
-        logger.error('Failed to initialize Firestore service', fallbackError);
-        if (!this.isMock) {
-          throw new Error('Failed to initialize Firestore service: ' + 
-            (fallbackError instanceof Error ? fallbackError.message : 'Unknown error'));
-        } else {
-          logger.warn('Running in mock mode, continuing without Firestore instance');
+        const firebaseFirestore = await getFirebaseFirestore();
+        if (firebaseFirestore) {
+          this.firestoreInstance = firebaseFirestore;
+          logger.debug(`[INIT-TRACE-${initId}] Successfully initialized via Firebase (${Date.now() - startTime}ms)`);
+          FirestoreServiceImpl.instanceState.initSuccesses++;
+          FirestoreServiceImpl.instanceState.instanceInitialized = true;
+          return;
         }
+      } catch (error: any) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.warn(`[INIT-TRACE-${initId}] Failed to initialize via Firebase: ${errorMessage}`);
       }
+
+      // If Firebase initialization fails, try GCP Firestore
+      logger.debug(`[INIT-TRACE-${initId}] Attempting to initialize via GCP Firestore`);
+      try {
+        const gcpFirestore = getFirestoreInstance();
+        if (gcpFirestore) {
+          this.firestoreInstance = gcpFirestore;
+          logger.debug(`[INIT-TRACE-${initId}] Successfully initialized via GCP Firestore (${Date.now() - startTime}ms)`);
+          FirestoreServiceImpl.instanceState.initSuccesses++;
+          FirestoreServiceImpl.instanceState.instanceInitialized = true;
+          return;
+        }
+      } catch (error: any) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.warn(`[INIT-TRACE-${initId}] Failed to initialize via GCP Firestore: ${errorMessage}`);
+      }
+
+      // If we get here, both initialization methods failed
+      logger.error(`[INIT-TRACE-${initId}] Failed to initialize Firestore via both Firebase and GCP`);
+      FirestoreServiceImpl.instanceState.initFailures++;
+      FirestoreServiceImpl.instanceState.lastInitError = new Error('Failed to initialize Firestore via both methods');
+      throw new FirestoreServiceError('Failed to initialize Firestore via any method', 'init_failure');
+    } finally {
+      FirestoreServiceImpl.instanceState.initInProgress = false;
+      logger.debug(`[INIT-TRACE-${initId}] initializeInternal completed in ${Date.now() - startTime}ms, instance exists: ${!!this.firestoreInstance}, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
     }
   }
 
   // Public initialize method to implement the interface
   async initialize(firestoreInstance?: Firestore): Promise<void> {
+    const initId = Math.random().toString(36).substring(2, 8);
+    logger.debug(`[FIRESTORE-DEBUG] initialize called (id: ${initId}), call stack: ${new Error().stack}`);
     if (firestoreInstance) {
+      logger.debug(`[FIRESTORE-DEBUG] Using provided Firestore instance (id: ${initId})`);
       this.firestoreInstance = firestoreInstance;
-      logger.debug('Initialized FirestoreService with provided Firestore instance');
-    } else {
+    } else if (!this.firestoreInstance) {
+      logger.debug(`[FIRESTORE-DEBUG] No instance provided, calling initializeInternal (id: ${initId})`);
       await this.initializeInternal();
+    } else {
+      logger.debug(`[FIRESTORE-DEBUG] Firestore instance already exists, skipping initialization (id: ${initId})`);
     }
-    return Promise.resolve();
   }
 
   // Backward compatibility init method
   async init(options?: any): Promise<void> {
-    if (options) {
-      logger.debug('Initializing Firestore with options', options);
+    const traceId = Math.random().toString(36).substring(2, 8);
+    logger.debug(`[IMPL-TRACE-${traceId}] FirestoreServiceImpl.init called with options: ${JSON.stringify(options || {})}`);
+    
+    if (this.isMock) {
+      logger.debug(`[IMPL-TRACE-${traceId}] Running in mock mode, skipping initialization`);
+      return Promise.resolve();
     }
-    await this.initializeInternal();
-    return Promise.resolve();
+
+    if (this.initPromise) {
+      logger.debug(`[IMPL-TRACE-${traceId}] Initialization already in progress, returning existing promise`);
+      return this.initPromise;
+    }
+
+    // Create a new initialization promise
+    this.initPromise = this.initializeInternal(options)
+      .then(() => {
+        logger.debug(`[IMPL-TRACE-${traceId}] Firestore initialization completed successfully, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
+      })
+      .catch((error) => {
+        logger.error(`[IMPL-TRACE-${traceId}] Firestore initialization failed, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`, error);
+        throw error;
+      });
+
+    return this.initPromise;
   }
 
-  private ensureFirestoreInstance(): Firestore {
-    if (!this.firestoreInstance && !this.isMock) {
-      logger.debug('Firestore instance not initialized, attempting to initialize');
-      this.initializeInternal().catch(error => {
-        logger.error('Error initializing Firestore instance', error);
-      });
-      
-      if (!this.firestoreInstance) {
-        throw new FirestoreServiceError('Firestore instance is not available', 'not_initialized');
+  private async ensureFirestoreInstance(): Promise<Firestore> {
+    const traceId = Math.random().toString(36).substring(2, 8);
+    
+    // If instance exists, return it immediately
+    if (this.firestoreInstance) {
+      logger.debug(`[ENSURE-TRACE-${traceId}] Firestore instance already exists, returning immediately`);
+      return this.firestoreInstance;
+    }
+    
+    // If in mock mode, throw an error since we can't create a real instance
+    if (this.isMock) {
+      logger.debug(`[ENSURE-TRACE-${traceId}] Running in mock mode, returning null instance`);
+      return null as unknown as Firestore;
+    }
+    
+    logger.debug(`[ENSURE-TRACE-${traceId}] Firestore instance not initialized, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
+    
+    // If there's an ongoing initialization, wait for it
+    if (this.initPromise) {
+      logger.debug(`[ENSURE-TRACE-${traceId}] Waiting for existing initialization promise to resolve`);
+      try {
+        await this.initPromise;
+        logger.debug(`[ENSURE-TRACE-${traceId}] Existing initialization completed, instance exists: ${!!this.firestoreInstance}, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
+        
+        // If initialization succeeded but instance is still null, something went wrong
+        if (!this.firestoreInstance) {
+          logger.error(`[ENSURE-TRACE-${traceId}] Initialization completed but firestoreInstance is still null! Attempting emergency initialization`);
+          // Try initializing again as emergency measure
+          await this.initializeInternal();
+        }
+      } catch (error) {
+        logger.error(`[ENSURE-TRACE-${traceId}] Error waiting for initialization`, error);
+        // If there was an error in the initialization, try again
+        logger.debug(`[ENSURE-TRACE-${traceId}] Previous initialization failed, attempting again`);
+        await this.initializeInternal();
+      }
+    } else {
+      // No initialization in progress, start one
+      logger.debug(`[ENSURE-TRACE-${traceId}] No initialization in progress, starting new initialization`);
+      this.initPromise = this.initializeInternal();
+      try {
+        await this.initPromise;
+        logger.debug(`[ENSURE-TRACE-${traceId}] New initialization completed, instance exists: ${!!this.firestoreInstance}, state: ${JSON.stringify(FirestoreServiceImpl.instanceState)}`);
+      } catch (error) {
+        logger.error(`[ENSURE-TRACE-${traceId}] Error during new initialization`, error);
+        throw error;
       }
     }
     
-    return this.firestoreInstance as Firestore;
+    // Final check to ensure we have an instance
+    if (!this.firestoreInstance) {
+      const error = new Error('Failed to initialize Firestore instance after multiple attempts');
+      logger.error(`[ENSURE-TRACE-${traceId}] Firestore instance still null after initialization attempts`, error);
+      throw error;
+    }
+    
+    logger.debug(`[ENSURE-TRACE-${traceId}] Returning Firestore instance (id: ${(this.firestoreInstance as any)._id || 'unknown'})`);
+    return this.firestoreInstance;
   }
 
-  collection(path: string): CollectionReference<DocumentData> | null {
+  async collection(path: string): Promise<CollectionReference<DocumentData> | null> {
+    const traceId = Math.random().toString(36).substring(2, 10);
+    logger.debug(`[PROMISE-TRACE-${traceId}] collection(${path}) called`);
+    
     if (this.isMock) {
-      logger.debug(`[MOCK] Getting collection reference for path: ${path}`);
-      return null;
+      logger.debug(`[PROMISE-TRACE-${traceId}] [MOCK] Getting collection reference for path: ${path}`);
+      return Promise.resolve(null);
     }
     
     try {
-      const firestore = this.ensureFirestoreInstance();
-      return firestore.collection(path);
+      logger.debug(`[PROMISE-TRACE-${traceId}] Awaiting ensureFirestoreInstance in collection(${path})`);
+      // Use proper await instead of then/catch chain
+      const firestore = await this.ensureFirestoreInstance();
+      
+      logger.debug(`[PROMISE-TRACE-${traceId}] Got Firestore instance, getting collection for path: ${path}`);
+      const collectionRef = firestore.collection(path);
+      logger.debug(`[PROMISE-TRACE-${traceId}] Successfully got collection for path: ${path}`);
+      return collectionRef;
     } catch (error) {
-      logger.error(`Error getting collection reference for path: ${path}`, error);
-      return null;
+      logger.error(`[PROMISE-TRACE-${traceId}] Error getting collection reference for path: ${path}`, error);
+      return Promise.resolve(null);
     }
   }
 
-  doc(path: string): DocumentReference<DocumentData> | null {
+  async doc(path: string): Promise<DocumentReference<DocumentData> | null> {
+    const traceId = Math.random().toString(36).substring(2, 10);
+    logger.debug(`[PROMISE-TRACE-${traceId}] doc(${path}) called`);
+    
     if (this.isMock) {
-      logger.debug(`[MOCK] Getting document reference for path: ${path}`);
-      return null;
+      logger.debug(`[PROMISE-TRACE-${traceId}] [MOCK] Getting document reference for path: ${path}`);
+      return Promise.resolve(null);
     }
     
     try {
-      const firestore = this.ensureFirestoreInstance();
-      return firestore.doc(path);
+      logger.debug(`[PROMISE-TRACE-${traceId}] Awaiting ensureFirestoreInstance in doc(${path})`);
+      // Use proper await instead of then/catch chain
+      const firestore = await this.ensureFirestoreInstance();
+      
+      logger.debug(`[PROMISE-TRACE-${traceId}] Got Firestore instance, getting doc for path: ${path}`);
+      const docRef = firestore.doc(path);
+      logger.debug(`[PROMISE-TRACE-${traceId}] Successfully got doc for path: ${path}`);
+      return docRef;
     } catch (error) {
-      logger.error(`Error getting document reference for path: ${path}`, error);
-      return null;
+      logger.error(`[PROMISE-TRACE-${traceId}] Error getting document reference for path: ${path}`, error);
+      return Promise.resolve(null);
     }
   }
 
@@ -168,7 +339,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return `mock-doc-${Date.now()}`;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       
       // Check if the path includes a document ID
       const pathParts = collectionPath.split('/');
@@ -217,7 +388,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return { id: 'mock-doc', mockField: 'mockValue' } as unknown as T;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const docRef = firestore.doc(path);
       const doc = await docRef.get();
       
@@ -247,7 +418,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const docRef = firestore.doc(path);
       await docRef.update(data as DocumentData);
       
@@ -270,7 +441,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const docRef = firestore.doc(path);
       await docRef.delete();
       
@@ -299,7 +470,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return [{ id: 'mock-doc', mockField: 'mockValue' }] as unknown as T[];
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const collectionRef = firestore.collection(collectionPath);
       
       let query: Query<DocumentData> = collectionRef;
@@ -398,7 +569,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return [{ id: 'mock-doc', mockField: 'mockValue' }];
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const collectionRef = firestore.collection(collectionPath);
       
       let query: Query<DocumentData> = collectionRef;
@@ -473,7 +644,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         };
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const collectionRef = firestore.collection(collectionPath);
       
       const page = options.page || 1;
@@ -581,7 +752,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return true;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const docRef = firestore.doc(path);
       const doc = await docRef.get();
       
@@ -605,7 +776,7 @@ export class FirestoreServiceImpl implements FirestoreService {
         return 10;
       }
 
-      const firestore = this.ensureFirestoreInstance();
+      const firestore = await this.ensureFirestoreInstance();
       const collectionRef = firestore.collection(collectionPath);
       
       let query: Query<DocumentData> = collectionRef;
@@ -635,15 +806,64 @@ export class FirestoreServiceImpl implements FirestoreService {
 
 // Singleton instance
 let firestoreServiceInstance: FirestoreService | null = null;
+let serviceInitCount = 0;
+let isInitializing = false;
+let initPromise: Promise<FirestoreService> | null = null;
 
 export function getFirestoreService(options?: any, forceInitialize: boolean = false): FirestoreService {
+  serviceInitCount++;
+  const serviceId = serviceInitCount;
+  const traceId = Math.random().toString(36).substring(2, 8);
+  logger.debug(`[SERVICE-TRACE-${traceId}] getFirestoreService called (call #${serviceId}), forceInitialize: ${forceInitialize}, instance exists: ${!!firestoreServiceInstance}, initializing: ${isInitializing}`);
+  
+  // If already initialized and not forcing reinitialization, return the existing instance
+  if (firestoreServiceInstance && !forceInitialize) {
+    logger.debug(`[SERVICE-TRACE-${traceId}] Returning existing FirestoreService instance (call #${serviceId})`);
+    return firestoreServiceInstance;
+  }
+  
+  // If we're already in the process of initializing, don't start a new initialization
+  if (isInitializing && initPromise && !forceInitialize) {
+    logger.debug(`[SERVICE-TRACE-${traceId}] Initialization in progress (call #${serviceId}), returning partially initialized instance`);
+    // We throw away the result here since we only care about side effects -
+    // the singleton will be populated by the first call
+    initPromise.catch(err => {
+      logger.error(`[SERVICE-TRACE-${traceId}] Initialization promise rejected (call #${serviceId})`, err);
+    });
+    // Return the existing instance, which might not be fully initialized yet
+    // This is safe because the actual DB operations will wait for initialization
+    return firestoreServiceInstance as FirestoreService;
+  }
+  
+  // Create a new instance if needed
   if (!firestoreServiceInstance || forceInitialize) {
-    firestoreServiceInstance = new FirestoreServiceImpl(false);
+    logger.debug(`[SERVICE-TRACE-${traceId}] Creating new FirestoreServiceImpl instance (call #${serviceId})`);
+    
+    isInitializing = true;
+    const instance = new FirestoreServiceImpl(false);
+    firestoreServiceInstance = instance;
+    
+    // Initialize the instance if options are provided
     if (options) {
-      firestoreServiceInstance.init(options).catch(error => {
-        logger.error('Error initializing Firestore service', error);
-      });
+      logger.debug(`[SERVICE-TRACE-${traceId}] Initializing new instance with options (call #${serviceId})`);
+      initPromise = instance.init(options)
+        .then(() => {
+          logger.debug(`[SERVICE-TRACE-${traceId}] Instance initialization completed (call #${serviceId})`);
+          isInitializing = false;
+          return instance;
+        })
+        .catch(error => {
+          logger.error(`[SERVICE-TRACE-${traceId}] Error initializing Firestore service (call #${serviceId})`, error);
+          isInitializing = false;
+          throw error;
+        });
+    } else {
+      // Mark initialization as complete if no options were provided
+      logger.debug(`[SERVICE-TRACE-${traceId}] No options provided, skipping explicit initialization (call #${serviceId})`);
+      isInitializing = false;
     }
   }
-  return firestoreServiceInstance as FirestoreService;
+  
+  logger.debug(`[SERVICE-TRACE-${traceId}] Returning FirestoreService instance (call #${serviceId})`);
+  return firestoreServiceInstance;
 }

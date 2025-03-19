@@ -1,3 +1,4 @@
+import React from 'react';
 /**
  * Firestore Service Interface
  * 
@@ -79,13 +80,13 @@ export interface IFirestoreService {
    * Get a collection reference
    * @param path Path to the collection
    */
-  collection(path: string): CollectionReference | null;
+  collection(path: string): Promise<CollectionReference | null>;
   
   /**
    * Get a document reference
    * @param path Path to the document
    */
-  doc(path: string): DocumentReference | null;
+  doc(path: string): Promise<DocumentReference | null>;
   
   /**
    * Create a document
