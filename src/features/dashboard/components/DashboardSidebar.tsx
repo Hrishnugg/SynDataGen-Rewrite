@@ -103,23 +103,23 @@ const DashboardSidebar = () => {
 
   return (
     <aside className={cn(
-      "h-full bg-white dark:bg-dark-secondary shadow-sm transition-all duration-300 ease-in-out",
+      "h-full bg-white dark:bg-dark-secondary shadow-sm transition-all duration-300 ease-in-out border-r border-gray-200 dark:border-gray-800",
       collapsed ? "w-16" : "w-full"
     )}>
-      <div className="p-4 overflow-y-auto h-full relative">
+      <div className="p-4 overflow-y-auto h-full relative flex flex-col min-h-[calc(100vh-4rem)]">
         {/* Toggle button */}
         <button 
           onClick={toggleSidebar}
-          className="absolute top-4 right-3 p-1.5 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
+          className="absolute top-4 right-3 p-1.5 rounded-md bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors z-10"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <FiChevronRight className="w-4 h-4" /> : <FiChevronLeft className="w-4 h-4" />}
         </button>
 
-        <nav className="space-y-6 mt-8">
+        <nav className="space-y-6 mt-8 flex-1">
           <div>
             {!collapsed && (
-              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+              <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-3">
                 Main
               </h3>
             )}
@@ -129,7 +129,7 @@ const DashboardSidebar = () => {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                      "flex items-center gap-4 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                       collapsed ? "justify-center" : "",
                       item.active
                         ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -137,8 +137,8 @@ const DashboardSidebar = () => {
                     )}
                     title={collapsed ? item.title : ""}
                   >
-                    {item.icon}
-                    {!collapsed && item.title}
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {!collapsed && <span>{item.title}</span>}
                   </Link>
                 </li>
               ))}
@@ -148,7 +148,7 @@ const DashboardSidebar = () => {
           {isAdmin && (
             <div>
               {!collapsed && (
-                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-3">
                   Admin
                 </h3>
               )}
@@ -158,7 +158,7 @@ const DashboardSidebar = () => {
                     <Link
                       href={item.href}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                        "flex items-center gap-4 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                         collapsed ? "justify-center" : "",
                         item.active
                           ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -166,8 +166,8 @@ const DashboardSidebar = () => {
                       )}
                       title={collapsed ? item.title : ""}
                     >
-                      {item.icon}
-                      {!collapsed && item.title}
+                      <span className="flex-shrink-0">{item.icon}</span>
+                      {!collapsed && <span>{item.title}</span>}
                     </Link>
                   </li>
                 ))}
@@ -175,6 +175,12 @@ const DashboardSidebar = () => {
             </div>
           )}
         </nav>
+        
+        <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="text-xs text-gray-500 dark:text-gray-400 px-3">
+            {!collapsed && <span>© 2025 Synoptic</span>}
+          </div>
+        </div>
       </div>
     </aside>
   );

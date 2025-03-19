@@ -44,7 +44,7 @@ export default function HeroSection() {
           touchAction: 'none' // Prevent touch actions from interfering with mouse events
         }}
       >
-        <DreamyParticlesBackground />
+        <DreamyParticlesBackground theme={particleTheme} />
       </div>
 
       {/* Content overlay with specific z-index to layer above particles but not block mouse events */}

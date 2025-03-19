@@ -18,6 +18,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
     if (!mountRef.current) return;
     
     // Update theme reference
+    console.log('Initializing ThemedParticles (clean version) with theme:', theme);
     themeRef.current = theme;
     
     // Scene setup
@@ -210,6 +211,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
     const screenWidthFactor = isLandscape ? 0.85 : 0.85; // Increased for better visibility at 100% zoom
     const calculatedWidth = visibleWidthAtZDepth * screenWidthFactor;
     
+    console.log({
       screenWidthFactor,
       calculatedWidth,
       visibleWidthAtZDepth
@@ -340,6 +342,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       // Select different wave equations for each wave to create varied but smooth patterns
       let waveType = w % 3; // 0, 1, or 2 - different wave patterns
       
+      console.log({
         waveHeight,
         waveType,
         gridWidth,
@@ -399,6 +402,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
         
         // For every 1000th particle, log detailed position info
         if (i % 1000 === 0) {
+          console.log({
             screenPosition,
             calculatedWidth,
             scaleFactor,
@@ -473,11 +477,12 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       }
       
       // Log summary of wave particle positions
+      console.log({
         xRange: [waveParticleRanges.minX, waveParticleRanges.maxX],
         yRange: [waveParticleRanges.minY, waveParticleRanges.maxY],
         zRange: [waveParticleRanges.minZ, waveParticleRanges.maxZ],
         visibleWidthAtZDepth: visibleWidthAtZDepth,
-        calculatedWidth: calculatedWidth,
+        calculatedWidth: calculatedWidth
       });
       
       particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
@@ -567,6 +572,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
     }
     
     // Log overall position ranges for all wave particles
+    console.log({
       xRangeVsVisibleWidth: [
         waveParticleRanges.minX / (visibleWidthAtZDepth / 2), 
         waveParticleRanges.maxX / (visibleWidthAtZDepth / 2)
@@ -602,6 +608,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
         minZ: Infinity, maxZ: -Infinity
       };
       
+      console.log({
         count: BACKGROUND_PARTICLE_COUNT,
         visibleWidthAtZDepth,
         visibleHeightAtZDepth
@@ -646,6 +653,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
         
         // For select particles, log detailed position info
         if (i % 1000 === 0) {
+          console.log({
             x,
             y,
             z,
@@ -726,6 +734,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       }
       
       // Log summary of background particle positions
+      console.log({
         xRangeVsVisibleWidth: [
           bgParticleRanges.minX / (visibleWidthAtZDepth / 2), 
           bgParticleRanges.maxX / (visibleWidthAtZDepth / 2)
@@ -1236,6 +1245,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       line.visible = false; // Keep line hidden
       scene.add(line);
       
+      console.log({
         leftEdge: -newVisibleWidthAtZDepth/2,
         rightEdge: newVisibleWidthAtZDepth/2,
         center: 0
@@ -1246,6 +1256,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       camera.position.set(0, 0, cameraDistance);
       camera.lookAt(0, 0, 0);
       
+      console.log({
         position: camera.position.toArray(),
         lookAt: [0, 0, 0]
       });
@@ -1255,6 +1266,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       // Keep the global center offset consistent across viewport changes
       sceneContainer.position.set(0, 0, 0);
       
+      console.log({
         sceneContainerPosition: sceneContainer.position.toArray()
       });
       
@@ -1262,6 +1274,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
       const newScreenWidthFactor = newIsLandscape ? 0.85 : 0.85;
       const newCalculatedWidth = newVisibleWidthAtZDepth * newScreenWidthFactor;
       
+      console.log({
         newScreenWidthFactor,
         newCalculatedWidth
       });
@@ -1292,6 +1305,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
           // CRITICAL FIX: Recreate calculatedWidth with the same algorithm as initial creation 
           const newCalculatedWidth = newVisibleWidthAtZDepth * initialScreenWidthFactor;
           
+          console.log({
             originalVisibleWidth: visibleWidthAtZDepth,
             newVisibleWidth: newVisibleWidthAtZDepth,
             originalCalculatedWidth: calculatedWidth,
@@ -1362,6 +1376,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
             // Log the first few particles for verification
             for (let i = 0; i < 5; i++) {
               const ix = i * 3;
+                console.log({
                 x: positions[ix],
                 y: positions[ix + 1],
                 z: positions[ix + 2],
@@ -1419,6 +1434,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
           const widthRatio = newVisibleWidthAtZDepth / visibleWidthAtZDepth;
           const heightRatio = newVisibleHeightAtZDepth / visibleHeightAtZDepth;
           
+          console.log({
             widthRatio,
             heightRatio,
             visibleWidthAtZDepth,
@@ -1443,6 +1459,7 @@ const WaveformParticles = ({ theme = 'dark' }) => {
             
             // Record first few positions for debugging
             if (i < 5) {
+                console.log({
                 originalX,
                 newX: x,
                 ratio: x / originalX,

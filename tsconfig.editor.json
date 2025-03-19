@@ -15,7 +15,8 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "incremental": true,
     "plugins": [
       {
@@ -36,36 +37,12 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "src/scripts/**/*.tsx"
   ],
   "exclude": [
     "node_modules",
     ".next",
-    "out",
-    "next.config.js",
-    "postcss.config.js",
-    "tailwind.config.js",
-    "jest.config.js",
-    "jest.setup.js",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.stories.tsx",
-    "src/scripts/**/*",
-    "src/lib/migration/**/*"
-  ],
-  "originalExclude": [
-    "node_modules",
-    ".next",
-    "out",
-    "next.config.js",
-    "postcss.config.js",
-    "tailwind.config.js",
-    "jest.config.js",
-    "jest.setup.js",
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "**/*.stories.tsx",
-    "src/scripts/**/*",
-    "src/lib/migration/**/*"
+    "out"
   ]
-}
+} 

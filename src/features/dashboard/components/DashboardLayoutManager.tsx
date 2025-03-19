@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import DashboardSidebar from "./DashboardSidebar";
+import DashboardHeader from "./DashboardHeader";
 
 interface DashboardLayoutManagerProps {
   children: React.ReactNode;
@@ -51,17 +52,21 @@ export default function DashboardLayoutManager({ children }: DashboardLayoutMana
   }, []);
   
   return (
-    <div className="flex flex-col md:flex-row pt-16">
-      <div className={`md:fixed md:left-0 md:top-16 md:bottom-0 overflow-y-auto transition-all duration-300 ease-in-out ${
-        isSidebarCollapsed ? "md:w-16" : "md:w-64"
-      }`}>
-        <DashboardSidebar />
+    <div className="flex flex-col min-h-screen">
+      <DashboardHeader />
+      
+      <div className="flex flex-col md:flex-row flex-1">
+        <div className={`md:fixed md:left-0 md:top-16 md:bottom-0 overflow-y-auto transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? "md:w-16" : "md:w-64"
+        }`}>
+          <DashboardSidebar />
+        </div>
+        <main className={`flex-1 p-6 transition-all duration-300 ease-in-out ${
+          isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
+        }`}>
+          {children}
+        </main>
       </div>
-      <main className={`flex-1 p-6 transition-all duration-300 ease-in-out ${
-        isSidebarCollapsed ? "md:ml-16" : "md:ml-64"
-      }`}>
-        {children}
-      </main>
     </div>
   );
 } 
