@@ -126,6 +126,12 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
       updatedAt: new Date(),
       status: 'draft',
+      // Initialize storage object with placeholder values
+      storage: {
+        bucketName: '', // Will be populated after bucket creation
+        region: region,
+        usedStorage: 0
+      },
       teamMembers: [
         {
           userId,
@@ -229,13 +235,24 @@ export async function POST(request: NextRequest) {
     // Update the project with final information using FirestoreService
     const projectUpdate: Record<string, unknown> = {
       id: draftProjectId,
-      status: 'active',
+      status: 'active',  // Critical: Update from draft to active status
       creatorId: userId,
-      bucketName: bucketInfo.bucketName,
-      bucketRegion: bucketInfo.region,
-      bucketUri: bucketInfo.bucketUri,
+      // Properly structure storage fields according to Project interface
+      storage: {
+        bucketName: bucketInfo.bucketName,
+        region: bucketInfo.region,
+        usedStorage: 0  // Initialize with zero storage used
+      },
+      // Keep these fields for backward compatibility
       bucketCreated: !bucketInfo.isMock,
+      bucketUri: bucketInfo.bucketUri,
     };
+    
+    // Log the update structure for debugging
+    console.log(`[PROJECTS-API] Updating project ${draftProjectId} with structure:`, JSON.stringify({
+      ...projectUpdate,
+      path: `${PROJECT_COLLECTION}/${draftProjectId}`
+    }));
     
     // Update the project document
     const projectPath = `${PROJECT_COLLECTION}/${draftProjectId}`;
@@ -307,31 +324,321 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Add user ID filter - use safe type assertion since we've validated userId exists
-    queryConditions.push({
-      field: 'teamMembers',
-      operator: 'array-contains',
-      value: { userId }
-    });
+    // Use a different approach for teamMembers - we need to query for teamMembers where userId matches
+    // Without trying to match the exact object structure (which would fail because of joinedAt)
+    // Firebase doesn't support complex queries on array fields, so simplest solution is to query by userId
+    if (statusFilter && statusFilter !== 'all') {
+      console.log(`[PROJECTS-API] Fetching projects for user ${userId} with status ${statusFilter}`);
+      // Try using the full path to userId within the array for the query
+      queryConditions.push({
+        field: 'teamMembers',
+        operator: 'array-contains',
+        value: { userId } // Query only on userId, ignoring other fields
+      });
+    } else {
+      // If no status filter, just get all the user's projects
+      queryConditions.push({
+        field: 'teamMembers',
+        operator: 'array-contains',
+        value: { userId } // Query only on userId, ignoring other fields
+      });
+    }
+    
+    // Log exact query conditions for debugging
+    console.log(`[PROJECTS-API] Query conditions:`, JSON.stringify(queryConditions));
     
     try {
-      // Note: The FirestoreService interface doesn't support passing query options directly to queryDocuments
-      // We'll need to retrieve all documents first and then apply pagination manually
-      projects = await firestoreService.queryDocuments<ProjectType>(
+      // First try with both conditions
+      const rawProjects = await firestoreService.queryDocuments<ProjectType>(
         PROJECT_COLLECTION,
         queryConditions
       );
       
-      // Apply sorting, limit, and offset manually
-      projects = projects
-        .sort((a, b) => {
-          const dateA = a.updatedAt instanceof Date ? a.updatedAt : new Date(a.updatedAt as string);
-          const dateB = b.updatedAt instanceof Date ? b.updatedAt : new Date(b.updatedAt as string);
-          return dateB.getTime() - dateA.getTime(); // descending order
-        })
-        .slice(offset, offset + limit);
+      // Manual conversion of Firebase timestamp objects to proper Date objects
+      projects = rawProjects.map(project => {
+        try {
+          // Create a clean version of the project with converted dates
+          const convertedProject = { ...project };
+          
+          // Handle createdAt field
+          if (project.createdAt && typeof project.createdAt === 'object' && 'toDate' in project.createdAt) {
+            convertedProject.createdAt = (project.createdAt as any).toDate();
+          }
+          
+          // Handle updatedAt field
+          if (project.updatedAt && typeof project.updatedAt === 'object' && 'toDate' in project.updatedAt) {
+            convertedProject.updatedAt = (project.updatedAt as any).toDate();
+          }
+          
+          return convertedProject;
+        } catch (conversionError) {
+          console.error(`[PROJECTS-API] Error converting project dates:`, conversionError);
+          return project; // Return original project as fallback
+        }
+      });
       
-      console.log(`[PROJECTS-API] Found ${projects.length} projects`);
+      // Log the raw projects count
+      console.log(`[PROJECTS-API] Raw projects count with full conditions: ${projects.length}`);
+      
+      // If no projects found with full query, try with just status filter to debug
+      if (projects.length === 0 && statusFilter && statusFilter !== 'all') {
+        console.log(`[PROJECTS-API] No projects found with full query, trying with just status filter`);
+        
+        const statusOnlyConditions: FirestoreQueryCondition[] = [{
+          field: 'status',
+          operator: '==' as const,
+          value: statusFilter
+        }];
+        
+        const rawStatusFilteredProjects = await firestoreService.queryDocuments<ProjectType>(
+          PROJECT_COLLECTION,
+          statusOnlyConditions
+        );
+        
+        // Apply the same timestamp conversion
+        const statusFilteredProjects = rawStatusFilteredProjects.map(project => {
+          try {
+            // Create a clean version of the project with converted dates
+            const convertedProject = { ...project };
+            
+            // Handle createdAt field
+            if (project.createdAt && typeof project.createdAt === 'object' && 'toDate' in project.createdAt) {
+              convertedProject.createdAt = (project.createdAt as any).toDate();
+            }
+            
+            // Handle updatedAt field
+            if (project.updatedAt && typeof project.updatedAt === 'object' && 'toDate' in project.updatedAt) {
+              convertedProject.updatedAt = (project.updatedAt as any).toDate();
+            }
+            
+            return convertedProject;
+          } catch (conversionError) {
+            console.error(`[PROJECTS-API] Error converting status-filtered project dates:`, conversionError);
+            return project; // Return original project as fallback
+          }
+        });
+        
+        console.log(`[PROJECTS-API] Projects with status '${statusFilter}' only: ${statusFilteredProjects.length}`);
+        
+        // If we found projects with just status filter, use them directly and log structure
+        if (statusFilteredProjects.length > 0) {
+          console.log(`[PROJECTS-API] Using status-filtered projects instead of empty combined query results`);
+          
+          // Log the structure of the first status-filtered project for debugging
+          const firstProject = statusFilteredProjects[0];
+          console.log(`[PROJECTS-API] First status-filtered project:`, JSON.stringify({
+            id: firstProject.id,
+            status: firstProject.status,
+            updatedAt: firstProject.updatedAt,
+            updatedAtType: typeof firstProject.updatedAt,
+            createdAt: firstProject.createdAt,
+            createdAtType: typeof firstProject.createdAt,
+            // Log the team members structure which is key to the issue
+            hasTeamMembers: !!firstProject.teamMembers,
+            teamMembersCount: firstProject.teamMembers?.length || 0,
+            teamMembersExample: firstProject.teamMembers && firstProject.teamMembers.length > 0 
+              ? JSON.stringify(firstProject.teamMembers[0]) 
+              : 'none'
+          }));
+          
+          // Use these projects directly
+          projects = statusFilteredProjects;
+        } else {
+          // If we still found nothing with status filter, try to get all projects to see if any exist
+          console.log(`[PROJECTS-API] Trying to get all projects regardless of status`);
+          
+          const rawAllProjects = await firestoreService.queryDocuments<ProjectType>(
+            PROJECT_COLLECTION, 
+            []
+          );
+          
+          // Apply the same timestamp conversion
+          const allProjects = rawAllProjects.map(project => {
+            try {
+              // Create a clean version of the project with converted dates
+              const convertedProject = { ...project };
+              
+              // Handle createdAt field
+              if (project.createdAt && typeof project.createdAt === 'object' && 'toDate' in project.createdAt) {
+                convertedProject.createdAt = (project.createdAt as any).toDate();
+              }
+              
+              // Handle updatedAt field
+              if (project.updatedAt && typeof project.updatedAt === 'object' && 'toDate' in project.updatedAt) {
+                convertedProject.updatedAt = (project.updatedAt as any).toDate();
+              }
+              
+              return convertedProject;
+            } catch (conversionError) {
+              console.error(`[PROJECTS-API] Error converting all-projects dates:`, conversionError);
+              return project; // Return original project as fallback
+            }
+          });
+          
+          console.log(`[PROJECTS-API] Total projects in collection: ${allProjects.length}`);
+          
+          // Log structure of first few projects if any exist
+          if (allProjects.length > 0) {
+            console.log(`[PROJECTS-API] First project overall structure:`, 
+              JSON.stringify({
+                id: allProjects[0].id,
+                status: allProjects[0].status,
+                hasTeamMembers: !!allProjects[0].teamMembers,
+                teamMembersLength: allProjects[0].teamMembers?.length || 0,
+                hasStorage: !!allProjects[0].storage,
+                hasBucketName: !!allProjects[0].bucketName
+              })
+            );
+            
+            // Check if there are projects that need structure migration
+            const projectsToMigrate = allProjects.filter(project => {
+              // Safely access properties with type checking
+              const projectAny = project as any; // Use any for migration compatibility
+              return project.status === 'active' && 
+                    projectAny.bucketName && // Has old bucketName field
+                    (!projectAny.storage || !projectAny.storage.bucketName); // Missing proper storage structure
+            });
+            
+            if (projectsToMigrate.length > 0) {
+              console.log(`[PROJECTS-API] Found ${projectsToMigrate.length} projects that need structure migration`);
+              
+              // Auto-fix up to 5 projects to prevent too many updates at once
+              const projectsToFix = projectsToMigrate.slice(0, 5);
+              
+              for (const project of projectsToFix) {
+                try {
+                  console.log(`[PROJECTS-API] Migrating project ${project.id} to proper structure`);
+                  
+                  // Create proper storage object from root fields using any type for migration
+                  const projectAny = project as any;
+                  const storage = {
+                    bucketName: projectAny.bucketName || '',
+                    region: projectAny.bucketRegion || 'us-central1',
+                    usedStorage: 0
+                  };
+                  
+                  // Update the project with proper structure
+                  await firestoreService.updateDocument(`${PROJECT_COLLECTION}/${project.id}`, {
+                    storage
+                  });
+                  
+                  console.log(`[PROJECTS-API] Successfully migrated project ${project.id}`);
+                } catch (migrationError) {
+                  console.error(`[PROJECTS-API] Failed to migrate project ${project.id}:`, migrationError);
+                }
+              }
+              
+              // Try the status-only query again after migration
+              if (projectsToFix.length > 0) {
+                console.log(`[PROJECTS-API] Retrying query after migration`);
+                
+                const rawMigratedProjects = await firestoreService.queryDocuments<ProjectType>(
+                  PROJECT_COLLECTION,
+                  statusOnlyConditions
+                );
+                
+                // Apply the same timestamp conversion
+                const migratedProjects = rawMigratedProjects.map(project => {
+                  try {
+                    // Create a clean version of the project with converted dates
+                    const convertedProject = { ...project };
+                    
+                    // Handle createdAt field
+                    if (project.createdAt && typeof project.createdAt === 'object' && 'toDate' in project.createdAt) {
+                      convertedProject.createdAt = (project.createdAt as any).toDate();
+                    }
+                    
+                    // Handle updatedAt field
+                    if (project.updatedAt && typeof project.updatedAt === 'object' && 'toDate' in project.updatedAt) {
+                      convertedProject.updatedAt = (project.updatedAt as any).toDate();
+                    }
+                    
+                    return convertedProject;
+                  } catch (conversionError) {
+                    console.error(`[PROJECTS-API] Error converting migrated project dates:`, conversionError);
+                    return project; // Return original project as fallback
+                  }
+                });
+                
+                console.log(`[PROJECTS-API] Projects after migration: ${migratedProjects.length}`);
+                
+                // Use these projects if we found any
+                if (migratedProjects.length > 0) {
+                  console.log(`[PROJECTS-API] Using migrated projects`);
+                  projects = migratedProjects;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Log details of projects found
+      if (projects.length > 0) {
+        // Log structure of first project for debugging (omitting large fields)
+        const debugProject = { ...projects[0] };
+        delete debugProject.settings; // Remove large fields for cleaner logs
+        console.log(`[PROJECTS-API] First project structure:`, JSON.stringify(debugProject));
+      }
+      
+      // Log the unsorted projects to debug
+      if (projects.length > 0) {
+        console.log(`[PROJECTS-API] Before sorting - Project sample:`, JSON.stringify({
+          id: projects[0].id,
+          updatedAt: projects[0].updatedAt,
+          updatedAtType: typeof projects[0].updatedAt,
+          hasUpdatedAt: 'updatedAt' in projects[0],
+          status: projects[0].status,
+        }));
+      }
+      
+      try {
+        // Apply sorting with error handling
+        if (projects.length > 0) {
+          // First check if projects have valid updatedAt fields
+          const projectsWithDates = projects.map(project => {
+            let validDate;
+            try {
+              // Try to convert to a JavaScript Date
+              if (project.updatedAt instanceof Date) {
+                validDate = project.updatedAt;
+              } else if (typeof project.updatedAt === 'string') {
+                validDate = new Date(project.updatedAt);
+              } else if (project.updatedAt && typeof project.updatedAt === 'object' && 'toDate' in project.updatedAt) {
+                // Handle Firestore Timestamp objects
+                validDate = (project.updatedAt as { toDate(): Date }).toDate();
+              } else {
+                console.log(`[PROJECTS-API] Project ${project.id} has invalid updatedAt:`, project.updatedAt);
+                // Use current date as fallback
+                validDate = new Date();
+              }
+              return { ...project, _validDate: validDate };
+            } catch (dateError) {
+              console.error(`[PROJECTS-API] Error parsing date for project ${project.id}:`, dateError);
+              // Use current date as fallback
+              return { ...project, _validDate: new Date() };
+            }
+          });
+          
+          // Now sort using the validated dates
+          projectsWithDates.sort((a, b) => {
+            return b._validDate.getTime() - a._validDate.getTime(); // descending order
+          });
+          
+          // Remove the temporary _validDate property
+          projects = projectsWithDates.map(({ _validDate, ...rest }) => rest);
+        }
+        
+        // Apply pagination
+        projects = projects.slice(offset, offset + limit);
+        
+        console.log(`[PROJECTS-API] Found ${projects.length} projects after sorting and pagination (offset: ${offset}, limit: ${limit})`);
+      } catch (sortError) {
+        console.error('[PROJECTS-API] Error during sorting and pagination:', sortError);
+        // Fallback: Just apply pagination without sorting in case of error
+        projects = projects.slice(offset, offset + limit);
+        console.log(`[PROJECTS-API] Fallback: applied pagination only, found ${projects.length} projects`);
+      }
     } catch (error) {
       console.error('[PROJECTS-API] Failed to query projects:', error);
       
