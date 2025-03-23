@@ -1,7 +1,7 @@
 "use client"
 
 import { DataTable } from "@/components/ui/data-table"
-import { columns, Project } from "@/app/dashboard/projects/columns"
+import { columns, Project } from "@/features/projects/components/columns"
 import { Card, CardContent } from "@/components/ui/card"
 
 interface ProjectDataTableProps {

@@ -6,7 +6,7 @@ import { FiAlertTriangle } from "react-icons/fi";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Plus, RefreshCw } from "lucide-react";
 import { ProjectDataTable } from "@/features/projects/components/project-data-table";
-import { Project } from "./columns";
+import { Project } from "@/features/projects/components/columns";
 import CreateProjectModal from "@/features/projects/components/CreateProjectModal";
 import { toast } from "sonner";
 
@@ -39,8 +39,12 @@ export default function ProjectsPage() {
           name: project.name,
           description: project.description || "",
           status: project.status || "active",
-          createdAt: project.createdAt || new Date().toISOString(),
-          updatedAt: project.updatedAt,
+          createdAt: project.createdAt 
+            ? new Date(project.createdAt).toISOString() 
+            : new Date().toISOString(),
+          updatedAt: project.updatedAt 
+            ? new Date(project.updatedAt).toISOString() 
+            : undefined,
           owner: project.owner,
           teamMembers: project.teamMembers || []
         }));
