@@ -1,0 +1,909 @@
+openapi: 3.1.0
+info:
+  title: Synoptic Data Generation API
+  version: 1.0.0
+  description: API for managing synthetic data generation projects and jobs.
+servers:
+  - url: /api/v1 # Base path for API endpoints relative to the backend server URL
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: A short error code or key.
+        message:
+          type: string
+          description: A human-readable error message.
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional additional error details.
+      required:
+        - error
+        - message
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid # Assuming we use UUIDs for users
+          description: Unique identifier for the user.
+        name:
+          type: string
+          description: User's full name.
+        email:
+          type: string
+          format: email
+          description: User's email address.
+        company:
+          type: string
+          description: User's company name.
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the user was created.
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the user was last updated.
+      required:
+        - id
+        - name
+        - email
+        - company
+        - createdAt
+        - updatedAt
+
+    ProjectSettings:
+      type: object
+      properties:
+        dataRetentionDays:
+          type: integer
+          format: int32
+          description: Number of days to retain generated data.
+          default: 30
+        maxStorageGB:
+          type: integer
+          format: int32
+          description: Maximum storage quota in GB.
+          default: 50
+      required:
+        - dataRetentionDays
+        - maxStorageGB
+
+    ProjectStorage:
+      type: object
+      properties:
+        bucketName:
+          type: string
+          description: Name of the dedicated GCP Cloud Storage bucket.
+        region:
+          type: string
+          description: GCP region where the bucket is located.
+        usedStorageBytes:
+          type: integer
+          format: int64
+          description: Current storage usage in bytes (updated periodically).
+          readOnly: true # Indicate this is likely calculated/reported, not set by client
+      required:
+        - bucketName
+        - region
+
+    TeamMember:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: Unique identifier for the team member (references User ID).
+        role:
+          type: string
+          enum: [owner, admin, member, viewer]
+          description: Role of the team member within the project.
+        addedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the member was added.
+          readOnly: true
+      required:
+        - userId
+        - role
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the project.
+          readOnly: true
+        name:
+          type: string
+          description: Name of the project.
+        description:
+          type: string
+          description: Description of the project.
+        customerId:
+          type: string
+          format: uuid # Assuming customers also have UUIDs
+          description: ID of the customer who owns the project.
+          readOnly: true # Usually set based on authenticated user during creation
+        status:
+          type: string
+          enum: [active, archived] # Soft delete via status change? Or dedicated DELETE endpoint? Let's use status for now.
+          description: Status of the project.
+          default: active
+        storage:
+          $ref: '#/components/schemas/ProjectStorage'
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+        teamMembers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMember'
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the project was created.
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the project was last updated.
+          readOnly: true
+      required:
+        - id
+        - name
+        - description
+        - customerId
+        - status
+        - storage
+        - settings
+        - teamMembers
+        - createdAt
+        - updatedAt
+
+    CreateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+        # region: # Maybe region for bucket creation? To be decided in implementation.
+        #  type: string
+      required:
+        - name
+        - description
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        settings:
+          $ref: '#/components/schemas/ProjectSettings'
+        status:
+          type: string
+          enum: [active, archived]
+          description: Update project status (e.g., for archiving).
+      # Allow partial updates, so no required fields here
+
+    JobStatusValue:
+      type: string
+      enum: [queued, running, completed, failed, cancelled, paused, pending, accepted, rejected]
+      description: The current status of the data generation job.
+
+    JobProgress:
+      type: object
+      properties:
+        percentComplete:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        currentStep:
+          type: string
+          description: Description of the current processing step.
+        startTime:
+          type: string
+          format: date-time
+          description: Timestamp when the job started processing.
+        endTime:
+          type: string
+          format: date-time
+          description: Timestamp when the job finished (completed, failed, or cancelled).
+      required:
+        - percentComplete
+
+    JobError:
+      type: object
+      properties:
+        code:
+          type: string
+          description: An error code identifying the type of failure.
+        message:
+          type: string
+          description: A human-readable error message.
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional additional error details.
+      required:
+        - code
+        - message
+
+    JobInputDataset:
+      type: object
+      properties:
+        storageUri:
+          type: string
+          format: uri
+          description: GCS URI to the input dataset.
+        format:
+          type: string
+          description: Format of the input data (e.g., 'csv', 'json').
+      # Make optional
+
+    JobParameters:
+      type: object
+      properties:
+        dataType:
+          type: string
+          description: Type of synthetic data to generate (e.g., 'customer_profiles', 'transactions').
+        recordCount:
+          type: integer
+          format: int64
+          description: Number of records to generate.
+        format:
+          type: string
+          enum: [csv, json, parquet]
+          description: Desired output format.
+        quality:
+          type: string
+          enum: [draft, production]
+          description: Desired quality level of the generated data.
+        schemaDefinition: # Renamed from 'schema' to avoid conflict
+          type: object
+          description: Definition of the data schema to generate.
+          additionalProperties: true # Allow flexible schema definition
+        # Add other specific parameters needed for generation here
+      required:
+        - dataType
+        - recordCount
+        - format
+        - quality
+        - schemaDefinition
+
+    JobOutputConfig:
+      type: object
+      properties:
+        destinationUri: # Renamed from 'destination' for clarity
+          type: string
+          format: uri
+          description: GCS URI where the output data should be written (within the project bucket).
+      required:
+        - destinationUri
+
+    JobConfiguration:
+      type: object
+      properties:
+        inputDataset:
+          $ref: '#/components/schemas/JobInputDataset'
+        parameters:
+          $ref: '#/components/schemas/JobParameters'
+        outputConfig:
+          $ref: '#/components/schemas/JobOutputConfig'
+      required:
+        - parameters
+        - outputConfig
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the job.
+          readOnly: true
+        projectId:
+          type: string
+          format: uuid
+          description: ID of the project this job belongs to.
+          readOnly: true
+        customerId:
+          type: string
+          format: uuid
+          description: ID of the customer who owns the job.
+          readOnly: true
+        name:
+          type: string
+          description: Optional name for the job.
+        description:
+          type: string
+          description: Optional description for the job.
+        status:
+          $ref: '#/components/schemas/JobStatusValue'
+        progress:
+          $ref: '#/components/schemas/JobProgress'
+        error:
+          $ref: '#/components/schemas/JobError'
+        config:
+          $ref: '#/components/schemas/JobConfiguration'
+        outputUri: # Add direct link to output if available after completion
+            type: string
+            format: uri
+            description: GCS URI of the final generated data output.
+            readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the job was created.
+          readOnly: true
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the job was last updated.
+          readOnly: true
+        startedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the job started processing.
+          readOnly: true
+        completedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the job finished (completed, failed, or cancelled).
+          readOnly: true
+      required:
+        - id
+        - projectId
+        - customerId
+        - status
+        - config
+        - createdAt
+        - updatedAt
+
+    CreateJobRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        config:
+          $ref: '#/components/schemas/JobConfiguration'
+      required:
+        - name
+        - config
+
+  securitySchemes:
+    BearerAuth: # Or could be cookie-based session
+      type: http
+      scheme: bearer
+      bearerFormat: JWT # Or describe session cookie if used
+
+  responses: # Defined common responses here
+    UnauthorizedError:
+      description: Authentication information is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalServerError:
+      description: Internal server error occurred.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+security:
+  - BearerAuth: [] # Apply security globally, can override per-operation
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                company:
+                  type: string
+              required:
+                - name
+                - email
+                - password
+                - company
+      responses:
+        '201':
+          description: User registered successfully. Returns the created user details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input (e.g., email already exists, password too short).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError' # Use reference
+
+  /auth/login:
+    post:
+      summary: Log in a user
+      tags:
+        - Auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Login successful. Returns user details and session token/cookie info.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token: # Or describe session cookie mechanism
+                    type: string
+                    description: Session JWT (example if using tokens)
+        '401':
+          description: Invalid email or password.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError' # Use reference
+
+  /auth/session:
+    get:
+      summary: Get current user session information
+      tags:
+        - Auth
+      security:
+        - BearerAuth: [] # Requires authentication
+      responses:
+        '200':
+          description: Returns current logged-in user details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError' # Use reference
+        '500':
+          $ref: '#/components/responses/InternalServerError' # Use reference
+
+  /auth/logout:
+    post:
+      summary: Log out the current user
+      tags:
+        - Auth
+      security:
+        - BearerAuth: [] # Requires authentication
+      responses:
+        '204':
+          description: Logout successful. No content returned.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError' # Use reference
+        '500':
+          $ref: '#/components/responses/InternalServerError' # Use reference
+
+  /projects:
+    get:
+      summary: List projects for the current user
+      tags:
+        - Projects
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, archived]
+          description: Filter projects by status.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of projects to return.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of projects to skip for pagination.
+      responses:
+        '200':
+          description: A list of projects.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+                  total:
+                    type: integer
+                    description: Total number of projects matching the filter.
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new project
+      tags:
+        - Projects
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Project created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid input.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the project to operate on.
+    get:
+      summary: Get project details by ID
+      tags:
+        - Projects
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Project details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User does not have access to this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    patch: # Or PUT if full replacement is required
+      summary: Update project details
+      tags:
+        - Projects
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Project updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          description: Invalid input.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User does not have permission to update this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete a project # Or maybe just "Archive" if using status?
+      tags:
+        - Projects
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Project deleted successfully. No content.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User does not have permission to delete this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/jobs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId' # Reference common parameter
+    get:
+      summary: List data generation jobs for a project
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/JobStatusValue'
+          description: Filter jobs by status.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of jobs to return.
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of jobs to skip for pagination.
+      responses:
+        '200':
+          description: A list of data generation jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Job'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User does not have access to this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new data generation job for a project
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '201': # Or 202 Accepted if job runs async
+          description: Job created/accepted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job' # Return the initial job state
+        '400':
+          description: Invalid input (e.g., invalid config).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User cannot create jobs in this project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '429':
+          description: Rate limit exceeded for creating jobs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /jobs/{jobId}:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the data generation job.
+    get:
+      summary: Get data generation job details and status
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Job details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User does not have access to this job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete: # Using DELETE for cancellation request
+      summary: Cancel a running or queued data generation job
+      tags:
+        - Jobs
+      security:
+        - BearerAuth: []
+      responses:
+        '200': # Return updated job status after cancellation request
+           description: Job cancellation requested successfully. Returns updated job status.
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/Job'
+        '400':
+          description: Job cannot be cancelled (e.g., already completed or failed).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          description: Forbidden - User cannot cancel this job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '404':
+          description: Job not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '500':
+          $ref: '#/components/responses/InternalServerError' 

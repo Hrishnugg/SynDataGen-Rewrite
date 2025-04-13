@@ -1,6 +1,0 @@
-[2025-02-26T18:17:11.535Z] Starting waitlist migration from MongoDB to Firestore
-[2025-02-26T18:17:11.543Z] Firestore initialized
-[2025-02-26T18:17:11.543Z] Connecting to MongoDB...
-[2025-02-26T18:17:11.867Z] MongoDB connection established
-[2025-02-26T18:17:11.868Z] Extracting waitlist data from MongoDB...
-[2025-02-26T18:17:11.895Z] Extracted 0 waitlist submissions from MongoDB
