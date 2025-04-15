@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
   Navbar as ResizableNavbar,
@@ -21,6 +21,11 @@ import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 
 export default function LandingPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const navItems = [
     { name: "Features", link: "#features" },
@@ -35,14 +40,20 @@ export default function LandingPage() {
           <NavbarLogo />
           <NavItems items={navItems} />
           <div className="flex gap-2 items-center">
-            <HoverBorderGradient
-              containerClassName="rounded-full"
-              as="a"
-              href="/auth/login"
-              className="text-sm font-medium"
-            >
-              Login
-            </HoverBorderGradient>
+            {isMounted ? (
+              <HoverBorderGradient
+                containerClassName="rounded-full"
+                as="a"
+                href="/auth/login"
+                className="text-sm font-medium"
+              >
+                Login
+              </HoverBorderGradient>
+            ) : (
+              <NavbarButton href="/auth/login" variant="secondary">
+                Login
+              </NavbarButton>
+            )}
             <Link href="/auth/signup" className="no-underline">
               <button className="bg-slate-800 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-full p-px text-sm font-medium leading-6 text-white inline-block">
                 <span className="absolute inset-0 overflow-hidden rounded-full">
@@ -80,14 +91,20 @@ export default function LandingPage() {
               onItemClick={() => setIsMobileMenuOpen(false)}
             />
             <div className="flex flex-col gap-2 w-full mt-4">
-              <HoverBorderGradient
-                containerClassName="rounded-full w-full"
-                as="a"
-                href="/auth/login"
-                className="text-sm font-medium text-center"
-              >
-                Login
-              </HoverBorderGradient>
+              {isMounted ? (
+                <HoverBorderGradient
+                  containerClassName="rounded-full w-full"
+                  as="a"
+                  href="/auth/login"
+                  className="text-sm font-medium text-center"
+                >
+                  Login
+                </HoverBorderGradient>
+              ) : (
+                <NavbarButton href="/auth/login" variant="secondary" className="w-full">
+                  Login
+                </NavbarButton>
+              )}
               <Link href="/auth/signup" className="no-underline w-full">
                 <button className="bg-slate-800 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-full p-px text-sm font-medium leading-6 text-white inline-block w-full">
                   <span className="absolute inset-0 overflow-hidden rounded-full">

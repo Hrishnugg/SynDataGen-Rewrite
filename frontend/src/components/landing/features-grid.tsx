@@ -7,6 +7,9 @@ import Image from "next/image";
 import { IconUpload, IconCheck } from "@tabler/icons-react";
 import { TextRevealCard } from "@/components/ui/text-reveal-card";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
+import { IntegrationSkeleton } from "./integration-skeleton";
+import { PipelineSkeleton } from "./pipeline-skeleton";
+import { PerformanceSkeleton } from "./performance-skeleton";
 
 // Moved Card structure definitions before FeaturesGrid
 const CardSkeletonBody = ({ children, className, }: { children: React.ReactNode; className?: string; }) => {
@@ -814,21 +817,19 @@ export function FeaturesGrid() { // Renamed from ThreeColumnBentoGrid
               Integrate with your existing workflows via API or SDK.
             </CardDescription>
           </CardContent>
-          <CardSkeletonBody>
-            <SkeletonThree />
+          <CardSkeletonBody className="p-2">
+            <IntegrationSkeleton />
           </CardSkeletonBody>
         </Card>
         <Card className="md:col-span-2">
           <CardContent>
-            <CardTitle>Advanced Anonymization</CardTitle>
+            <CardTitle>Our Data Generation Pipeline</CardTitle>
             <CardDescription>
-              Utilize sophisticated techniques to guarantee data privacy.
+              Visualize our multi-stage process for generating safe, high-quality synthetic data.
             </CardDescription>
           </CardContent>
-          <CardSkeletonBody>
-             <div className="flex h-full items-center justify-center p-4 text-neutral-500 dark:text-neutral-400">
-                Placeholder for Advanced Anonymization Visual
-             </div>
+          <CardSkeletonBody className="p-4">
+            <PipelineSkeleton />
           </CardSkeletonBody>
         </Card>
         <Card className="md:col-span-1">
@@ -839,12 +840,7 @@ export function FeaturesGrid() { // Renamed from ThreeColumnBentoGrid
             </CardDescription>
           </CardContent>
           <CardSkeletonBody>
-            <TextRevealCard
-              text="**********"
-              revealText="John Doe"
-              className="!p-0 !bg-transparent !w-full h-full flex items-center justify-center text-center !border-none"
-            >
-            </TextRevealCard>
+            <PerformanceSkeleton />
           </CardSkeletonBody>
         </Card>
       </div>

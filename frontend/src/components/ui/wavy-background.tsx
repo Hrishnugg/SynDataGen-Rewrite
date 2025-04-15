@@ -66,13 +66,13 @@ export const WavyBackground = ({
     "#818cf8",
     "#c084fc",
     "#e879f9",
-    "#22d3ee",
+    "#234d96",
   ];
   const drawWave = (n: number) => {
     nt += getSpeed();
     for (i = 0; i < n; i++) {
       ctx.beginPath();
-      ctx.lineWidth = waveWidth || 50;
+      ctx.lineWidth = waveWidth || 25;
       ctx.strokeStyle = waveColors[i % waveColors.length];
       for (x = 0; x < w; x += 5) {
         var y = noise(x / 800, 0.3 * i, nt) * 100;
