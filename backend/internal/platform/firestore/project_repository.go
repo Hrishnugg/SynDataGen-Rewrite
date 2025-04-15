@@ -67,20 +67,28 @@ func (r *projectRepository) GetProjectByID(ctx context.Context, id string) (*cor
 }
 
 // buildProjectQuery constructs a Firestore query based on filters.
-func (r *projectRepository) buildProjectQuery(ctx context.Context, customerID string, statusFilter string) firestore.Query {
+// It filters projects where the given userID exists as a key in the teamMembers map.
+func (r *projectRepository) buildProjectQuery(ctx context.Context, userID string, statusFilter string) firestore.Query {
 	query := r.client.Collection(projectsCollection).Query
-	// Always filter by customer ID for security/isolation
-	query = query.Where("customerID", "==", customerID)
 
-	if statusFilter != "" && statusFilter != "all" { // Allow filtering by specific status
-		query = query.Where("status", "==", statusFilter)
-	}
+	// Filter by team membership: Check if the user's ID exists as a key in the teamMembers map.
+	// Firestore map field queries check for the existence of a key.
+	// Using '!=' with a non-existent value implicitly checks for key presence.
+	// See: https://firebase.google.com/docs/firestore/query-data/queries#query_operators
+	// Note: Ensure user IDs used here cannot contain characters problematic for field paths (like '.')
+	// If user IDs might contain '.', alternative approaches like an array of members might be needed.
+	query = query.Where(fmt.Sprintf("teamMembers.%s", userID), "!=", "__non_existent_value__") // Check for key existence
+
+	// TODO: Re-evaluate if filtering by project status is still needed or handled differently with RBAC.
+	// if statusFilter != "" && statusFilter != "all" { // Allow filtering by specific status
+	// 	query = query.Where("status", "==", statusFilter)
+	// }
 	return query
 }
 
-// ListProjects retrieves a list of projects, potentially filtered.
-func (r *projectRepository) ListProjects(ctx context.Context, customerID string, statusFilter string, limit, offset int) ([]*core.Project, error) {
-	query := r.buildProjectQuery(ctx, customerID, statusFilter)
+// ListProjects retrieves a list of projects where the user is a team member.
+func (r *projectRepository) ListProjects(ctx context.Context, userID string, statusFilter string, limit, offset int) ([]*core.Project, error) {
+	query := r.buildProjectQuery(ctx, userID, statusFilter)
 
 	// Apply sorting (e.g., by creation date descending)
 	query = query.OrderBy("createdAt", firestore.Desc)
@@ -121,9 +129,9 @@ func (r *projectRepository) ListProjects(ctx context.Context, customerID string,
 	return projects, nil
 }
 
-// CountProjects retrieves the total count of projects matching filters.
-func (r *projectRepository) CountProjects(ctx context.Context, customerID string, statusFilter string) (int, error) {
-	query := r.buildProjectQuery(ctx, customerID, statusFilter)
+// CountProjects retrieves the total count of projects where the user is a team member.
+func (r *projectRepository) CountProjects(ctx context.Context, userID string, statusFilter string) (int, error) {
+	query := r.buildProjectQuery(ctx, userID, statusFilter)
 
 	// Use aggregation query for count
 	aggregationQuery := query.NewAggregationQuery().WithCount("all")

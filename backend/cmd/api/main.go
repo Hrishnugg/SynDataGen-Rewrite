@@ -2,8 +2,10 @@ package main
 
 import (
 	"SynDataGen/backend/internal/auth"
+	"SynDataGen/backend/internal/job"
 	"SynDataGen/backend/internal/platform/firestore"
 	"SynDataGen/backend/internal/platform/logger"
+	"SynDataGen/backend/internal/platform/pipeline"
 	"SynDataGen/backend/internal/platform/storage"
 	"SynDataGen/backend/internal/project"
 	"context"
@@ -50,7 +52,7 @@ func initFirestore(ctx context.Context) (*fs.Client, error) {
 }
 
 // setupRouter configures the Gin router with routes and handlers.
-func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService) *gin.Engine {
+func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService) *gin.Engine {
 	router := gin.Default() // Includes logger and recovery middleware
 
 	// Health Check
@@ -69,7 +71,7 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService) *g
 			authRoutes.POST("/login", authHandlers.Login)
 
 			// Apply AuthMiddleware to protected auth routes
-			authRequired := authRoutes.Group("/")
+			authRequired := authRoutes.Group("")
 			authRequired.Use(auth.AuthMiddleware(authSvc))
 			{
 				authRequired.GET("/session", authHandlers.GetCurrentUser)
@@ -81,8 +83,8 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService) *g
 		project.RegisterProjectRoutes(apiV1, authSvc, projectSvc)
 
 		// --- Job Routes ---
-		// TODO: Add job routes here, likely under /projects/{projectId}/jobs
-		// job.RegisterJobRoutes(apiV1, authSvc, jobSvc, projectSvc) // Example
+		jobHandlers := job.NewJobHandler(jobSvc)
+		jobHandlers.RegisterRoutes(apiV1, auth.AuthMiddleware(authSvc))
 	}
 
 	return router
@@ -111,16 +113,28 @@ func main() {
 	// Initialize Repositories
 	userRepo := firestore.NewUserRepository(firestoreClient)
 	projectRepo := firestore.NewProjectRepository(firestoreClient)
-	// jobRepo := firestore.NewJobRepository(firestoreClient)       // TODO
+	jobRepo := firestore.NewJobRepository(firestoreClient, nil)
 
 	// Initialize Services
-	storageSvc := storage.NewGCPStorageService()
+	storageCfg := storage.Config{
+		GCPProjectID: getEnv("GCP_PROJECT_ID", ""),
+		Logger:       nil, // Allow service to use default logger for now
+	}
+	storageSvc, err := storage.NewGCPStorageService(ctx, storageCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize Storage Service: %v", err)
+	}
 	authSvc := auth.NewAuthService(userRepo)
-	projectSvc := project.NewProjectService(projectRepo, storageSvc)
-	// jobSvc := job.NewJobService(jobRepo, projectSvc)    // TODO
+	projectSvc := project.NewProjectService(projectRepo, userRepo, storageSvc)
+
+	// Initialize the stub pipeline client
+	pipelineClient := pipeline.NewStubPipelineClient(nil)
+
+	// Initialize Job Service - Pass the project *Service* for auth checks
+	jobSvc := job.NewJobService(jobRepo, projectSvc, pipelineClient)
 
 	// Setup Router
-	router := setupRouter(authSvc, projectSvc)
+	router := setupRouter(authSvc, projectSvc, jobSvc)
 
 	// Start Server
 	port := getEnv("PORT", "8080")

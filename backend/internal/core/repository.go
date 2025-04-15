@@ -62,8 +62,8 @@ type JobRepository interface {
 	// Add filtering/pagination parameters as needed.
 	ListJobsByProjectID(ctx context.Context, projectID string, limit, offset int) ([]*Job, int, error) // Returns jobs, total count, error
 
-	// UpdateJobStatus updates the status and potentially timestamps of a job.
-	UpdateJobStatus(ctx context.Context, jobID string, status JobStatus, startedAt, completedAt *time.Time, jobError string) error
+	// UpdateJobStatus updates the status and potentially timestamps and pipeline ID of a job.
+	UpdateJobStatus(ctx context.Context, jobID string, newStatus JobStatus, pipelineJobID string, startedAt, completedAt *time.Time, jobError string) error
 
 	// UpdateJobResult updates the result URI of a completed job.
 	UpdateJobResult(ctx context.Context, jobID string, resultURI string) error

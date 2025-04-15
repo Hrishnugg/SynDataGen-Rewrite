@@ -1,174 +1,200 @@
 package firestore
 
 import (
-	"SynDataGen/backend/internal/core"
-	"SynDataGen/backend/internal/platform/logger"
 	"context"
 	"fmt"
+	"log"
 	"time"
 
-	fs "cloud.google.com/go/firestore"
-	"go.uber.org/zap"
+	"cloud.google.com/go/firestore"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"SynDataGen/backend/internal/core"
 )
 
-const jobsCollection = "jobs"
+const jobCollection = "jobs"
 
 // jobRepository implements the core.JobRepository interface using Firestore.
 type jobRepository struct {
-	client *fs.Client
+	client *firestore.Client
+	logger *log.Logger
 }
 
 // NewJobRepository creates a new Firestore job repository.
-func NewJobRepository(client *fs.Client) core.JobRepository {
+func NewJobRepository(client *firestore.Client, logger *log.Logger) core.JobRepository {
+	if logger == nil {
+		logger = log.Default()
+	}
 	return &jobRepository{
 		client: client,
+		logger: logger,
 	}
 }
 
 // CreateJob adds a new job document to the Firestore 'jobs' collection.
 func (r *jobRepository) CreateJob(ctx context.Context, job *core.Job) error {
-	// Use the Job.ID as the Firestore document ID
 	if job.ID == "" {
-		// This should ideally be set by the service layer before calling the repo
-		logger.Logger.Error("Job ID is empty during CreateJob. Service layer must set this.")
-		return fmt.Errorf("job ID cannot be empty")
+		return fmt.Errorf("job ID cannot be empty") // Ensure ID is set before creation
 	}
+	r.logger.Printf("Creating job document with ID: %s", job.ID)
+	job.CreatedAt = time.Now().UTC()
+	job.UpdatedAt = job.CreatedAt // Set UpdatedAt initially
 
-	// Use the provided job.ID as the document ID
-	_, err := r.client.Collection(jobsCollection).Doc(job.ID).Set(ctx, job)
+	_, err := r.client.Collection(jobCollection).Doc(job.ID).Create(ctx, job)
 	if err != nil {
-		logger.Logger.Error("Failed to set job in Firestore", zap.String("jobId", job.ID), zap.Error(err))
-		return fmt.Errorf("firestore set job: %w", err)
+		if status.Code(err) == codes.AlreadyExists {
+			r.logger.Printf("Job document with ID %s already exists", job.ID)
+			return fmt.Errorf("job with ID %s already exists: %w", job.ID, err)
+		}
+		r.logger.Printf("Error creating job document %s: %v", job.ID, err)
+		return fmt.Errorf("failed to create job document %s in firestore: %w", job.ID, err)
 	}
-	logger.Logger.Info("Successfully created job in Firestore", zap.String("jobId", job.ID))
+	r.logger.Printf("Successfully created job document %s", job.ID)
 	return nil
 }
 
 // GetJobByID retrieves a job document by its ID from Firestore.
 func (r *jobRepository) GetJobByID(ctx context.Context, jobID string) (*core.Job, error) {
-	dsnap, err := r.client.Collection(jobsCollection).Doc(jobID).Get(ctx)
+	r.logger.Printf("Fetching job document with ID: %s", jobID)
+	dsnap, err := r.client.Collection(jobCollection).Doc(jobID).Get(ctx)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			// Return a standard error defined in core package (or create one)
-			return nil, core.ErrNotFound
+			r.logger.Printf("Job document %s not found", jobID)
+			return nil, core.ErrNotFound // Use predefined error
 		}
-		logger.Logger.Error("Failed to get job from Firestore", zap.String("jobId", jobID), zap.Error(err))
-		return nil, fmt.Errorf("firestore get job: %w", err)
+		r.logger.Printf("Error fetching job document %s: %v", jobID, err)
+		return nil, fmt.Errorf("failed to get job document %s from firestore: %w", jobID, err)
 	}
 
 	var job core.Job
 	if err := dsnap.DataTo(&job); err != nil {
-		logger.Logger.Error("Failed to decode job data from Firestore", zap.String("jobId", jobID), zap.Error(err))
-		return nil, fmt.Errorf("firestore decode job: %w", err)
+		r.logger.Printf("Error converting firestore data to Job struct for ID %s: %v", jobID, err)
+		return nil, fmt.Errorf("failed to decode job document %s: %w", jobID, err)
 	}
-	// Ensure the ID field is populated from the document snapshot ID
-	job.ID = dsnap.Ref.ID
+	job.ID = dsnap.Ref.ID // Assign the document ID to the struct
+	r.logger.Printf("Successfully fetched job document %s", jobID)
 	return &job, nil
 }
 
-// ListJobsByProjectID retrieves jobs for a specific project, ordered by creation date.
+// ListJobsByProjectID retrieves jobs associated with a project, with pagination.
 func (r *jobRepository) ListJobsByProjectID(ctx context.Context, projectID string, limit, offset int) ([]*core.Job, int, error) {
-	var jobs []*core.Job
-	// Query for jobs matching the project ID, ordered by creation time descending.
-	baseQuery := r.client.Collection(jobsCollection).Where("ProjectID", "==", projectID).OrderBy("CreatedAt", fs.Desc)
+	r.logger.Printf("Listing jobs for project %s (limit: %d, offset: %d)", projectID, limit, offset)
 
-	// Get total count for pagination info (can be expensive on large collections)
-	// Consider alternative strategies if performance becomes an issue.
-	countQuery := baseQuery
-	countSnapshots, err := countQuery.Documents(ctx).GetAll()
-	if err != nil {
-		logger.Logger.Error("Failed to count jobs in Firestore", zap.String("projectId", projectID), zap.Error(err))
-		return nil, 0, fmt.Errorf("firestore count jobs: %w", err)
-	}
-	totalCount := len(countSnapshots)
-
-	// Build the query with pagination
-	query := baseQuery
 	if limit <= 0 {
-		limit = 20 // Default limit if not specified or invalid
+		limit = 20 // Default limit
 	}
-	query = query.Limit(limit)
-
-	if offset > 0 {
-		// Firestore offset is inefficient. Prefer cursor-based pagination in production.
-		// This implementation uses offset for simplicity as per interface, but be aware.
-		query = query.Offset(offset)
-		logger.Logger.Warn("Using offset-based pagination for ListJobsByProjectID. Consider cursor-based for efficiency.", zap.String("projectId", projectID), zap.Int("offset", offset))
+	if offset < 0 {
+		offset = 0
 	}
 
-	// Execute the query
-	iter := query.Documents(ctx)
+	collRef := r.client.Collection(jobCollection)
+	baseQuery := collRef.Where("projectId", "==", projectID).OrderBy("createdAt", firestore.Desc)
+
+	// Get Total Count first (before applying limit/offset for pagination)
+	countQuery := baseQuery
+	countSnap, err := countQuery.Documents(ctx).GetAll()
+	if err != nil {
+		r.logger.Printf("Error counting jobs for project %s: %v", projectID, err)
+		return nil, 0, fmt.Errorf("failed to count jobs for project %s: %w", projectID, err)
+	}
+	totalCount := len(countSnap)
+	r.logger.Printf("Total jobs found for project %s: %d", projectID, totalCount)
+
+	// Apply pagination to the main query
+	pagedQuery := baseQuery.Offset(offset).Limit(limit)
+	iter := pagedQuery.Documents(ctx)
 	defer iter.Stop()
+
+	var jobs []*core.Job
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			logger.Logger.Error("Failed to iterate job documents", zap.String("projectId", projectID), zap.Error(err))
-			return nil, 0, fmt.Errorf("firestore iterate jobs: %w", err)
+			r.logger.Printf("Error iterating job documents for project %s: %v", projectID, err)
+			return nil, 0, fmt.Errorf("failed to iterate job documents for project %s: %w", projectID, err)
 		}
 
 		var job core.Job
 		if err := doc.DataTo(&job); err != nil {
-			logger.Logger.Error("Failed to decode job data during list", zap.String("docId", doc.Ref.ID), zap.Error(err))
-			continue // Skip problematic document
+			r.logger.Printf("Error converting firestore data to Job struct during list (doc ID %s): %v", doc.Ref.ID, err)
+			// Decide whether to skip this doc or return an error
+			continue // Skip corrupted document for now
 		}
-		job.ID = doc.Ref.ID // Ensure ID is set from Firestore doc ID
+		job.ID = doc.Ref.ID
 		jobs = append(jobs, &job)
 	}
 
-	// Return the fetched jobs, the total count, and no error
+	r.logger.Printf("Successfully listed %d jobs for project %s (page limit %d, offset %d)", len(jobs), projectID, limit, offset)
 	return jobs, totalCount, nil
 }
 
-// UpdateJobStatus updates specific fields of a job document.
-func (r *jobRepository) UpdateJobStatus(ctx context.Context, jobID string, newStatus core.JobStatus, startedAt, completedAt *time.Time, jobError string) error {
-	updates := []fs.Update{
-		{Path: "Status", Value: newStatus},
-		{Path: "Error", Value: jobError}, // Always update error (might clear previous error)
-	}
-	if startedAt != nil {
-		updates = append(updates, fs.Update{Path: "StartedAt", Value: startedAt})
-	} else {
-		// Explicitly set to nil if needed, otherwise Firestore might merge
-		// updates = append(updates, fs.Update{Path: "StartedAt", Value: nil})
-	}
-	if completedAt != nil {
-		updates = append(updates, fs.Update{Path: "CompletedAt", Value: completedAt})
-	} else {
-		// Explicitly set to nil if needed
-		// updates = append(updates, fs.Update{Path: "CompletedAt", Value: nil})
+// UpdateJobStatus updates specific fields of a job document (status, timestamps, error, pipeline ID).
+func (r *jobRepository) UpdateJobStatus(ctx context.Context, jobID string, newStatus core.JobStatus, pipelineJobID string, startedAt, completedAt *time.Time, jobError string) error {
+	r.logger.Printf("Updating status for job %s to %s (Pipeline ID: %s)", jobID, newStatus, pipelineJobID)
+
+	docRef := r.client.Collection(jobCollection).Doc(jobID)
+	updates := []firestore.Update{
+		{Path: "status", Value: newStatus},
+		{Path: "updatedAt", Value: time.Now().UTC()},
 	}
 
-	_, err := r.client.Collection(jobsCollection).Doc(jobID).Update(ctx, updates)
+	// Only add pipelineJobID update if it's not empty
+	if pipelineJobID != "" {
+		updates = append(updates, firestore.Update{Path: "pipelineJobId", Value: pipelineJobID})
+	}
+
+	if startedAt != nil {
+		updates = append(updates, firestore.Update{Path: "startedAt", Value: *startedAt})
+	}
+	if completedAt != nil {
+		updates = append(updates, firestore.Update{Path: "completedAt", Value: *completedAt})
+	}
+	if jobError != "" {
+		updates = append(updates, firestore.Update{Path: "error", Value: jobError})
+	} else {
+		// Ensure error field is cleared if status is not 'failed'
+		if newStatus != core.JobStatusFailed {
+			updates = append(updates, firestore.Update{Path: "error", Value: firestore.Delete})
+		}
+	}
+
+	_, err := docRef.Update(ctx, updates)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
+			r.logger.Printf("Job document %s not found for status update", jobID)
 			return core.ErrNotFound
 		}
-		logger.Logger.Error("Failed to update job status in Firestore", zap.String("jobId", jobID), zap.Error(err))
-		return fmt.Errorf("firestore update job status: %w", err)
+		r.logger.Printf("Error updating status for job %s: %v", jobID, err)
+		return fmt.Errorf("failed to update status for job %s: %w", jobID, err)
 	}
-	logger.Logger.Info("Successfully updated job status", zap.String("jobId", jobID), zap.String("newStatus", string(newStatus)))
+
+	r.logger.Printf("Successfully updated status for job %s", jobID)
 	return nil
 }
 
-// UpdateJobResult updates the result URI field of a job document.
+// UpdateJobResult updates the result URI of a completed job document.
 func (r *jobRepository) UpdateJobResult(ctx context.Context, jobID string, resultURI string) error {
-	updates := []fs.Update{
-		{Path: "ResultURI", Value: resultURI},
+	r.logger.Printf("Updating result URI for job %s", jobID)
+	docRef := r.client.Collection(jobCollection).Doc(jobID)
+	updates := []firestore.Update{
+		{Path: "resultUri", Value: resultURI},
+		{Path: "updatedAt", Value: time.Now().UTC()},
 	}
-	_, err := r.client.Collection(jobsCollection).Doc(jobID).Update(ctx, updates)
+
+	_, err := docRef.Update(ctx, updates)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
+			r.logger.Printf("Job document %s not found for result update", jobID)
 			return core.ErrNotFound
 		}
-		logger.Logger.Error("Failed to update job result URI in Firestore", zap.String("jobId", jobID), zap.Error(err))
-		return fmt.Errorf("firestore update job result: %w", err)
+		r.logger.Printf("Error updating result URI for job %s: %v", jobID, err)
+		return fmt.Errorf("failed to update result URI for job %s: %w", jobID, err)
 	}
-	logger.Logger.Info("Successfully updated job result URI", zap.String("jobId", jobID), zap.String("resultUri", resultURI))
+
+	r.logger.Printf("Successfully updated result URI for job %s", jobID)
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"SynDataGen/backend/internal/core"
 	"SynDataGen/backend/internal/platform/logger"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -39,7 +40,14 @@ func RegisterProjectRoutes(rg *gin.RouterGroup, authSvc auth.AuthService, projec
 		protectedRoutes.GET("/:projectId", h.GetProject)
 		protectedRoutes.PATCH("/:projectId", h.UpdateProject) // Using PATCH for partial updates
 		protectedRoutes.DELETE("/:projectId", h.DeleteProject)
-		// TODO: Add routes for team member management (/projects/{projectId}/members)
+
+		// Team Management Routes
+		teamRoutes := protectedRoutes.Group("/:projectId/team")
+		{
+			teamRoutes.POST("", h.InviteMember)                  // Invite a member
+			teamRoutes.PUT("/:memberId", h.UpdateTeamMemberRole) // Update a member's role
+			teamRoutes.DELETE("/:memberId", h.RemoveTeamMember)  // Remove a member (or self-leave)
+		}
 	}
 }
 
@@ -202,4 +210,127 @@ func (h *ProjectHandlers) DeleteProject(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// UpdateTeamMemberRole handles PUT /projects/:projectId/team/:memberId
+func (h *ProjectHandlers) UpdateTeamMemberRole(c *gin.Context) {
+	projectID := c.Param("projectId")
+	memberID := c.Param("memberId") // User ID of the member whose role is being changed
+
+	callerID, exists := auth.GetUserIDFromContext(c)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED", "message": "User ID not found in context"})
+		return
+	}
+
+	var req UpdateMemberRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Handle validation errors from `binding:"required,oneof=..."`
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_INPUT", "message": err.Error()})
+		return
+	}
+
+	// Validate the requested role from the DTO (already done by binding, but good practice)
+	if req.Role != core.RoleAdmin && req.Role != core.RoleMember && req.Role != core.RoleViewer {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_ROLE", "message": "Invalid role specified. Must be admin, member, or viewer."}) // Redundant due to binding oneof
+		return
+	}
+
+	project, err := h.Svc.UpdateMemberRole(c.Request.Context(), projectID, callerID, memberID, req.Role)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "PROJECT_NOT_FOUND", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectAccessDenied) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ACCESS_DENIED", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectUpdateFailed) {
+			logger.Logger.Error("Failed to update member role (service error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", memberID))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "UPDATE_MEMBER_FAILED", "message": "Internal server error updating member role"})
+		} else {
+			// Handle specific validation errors from the service (like member not found, cannot change owner, etc.)
+			// For now, map them to BadRequest or Forbidden depending on context
+			logger.Logger.Warn("Failed to update member role (validation error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", memberID))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "UPDATE_MEMBER_FAILED", "message": err.Error()}) // Or http.StatusForbidden depending on the error
+		}
+		return
+	}
+
+	// Return the updated project (including the updated team list)
+	c.JSON(http.StatusOK, project)
+}
+
+// RemoveTeamMember handles DELETE /projects/:projectId/team/:memberId
+func (h *ProjectHandlers) RemoveTeamMember(c *gin.Context) {
+	projectID := c.Param("projectId")
+	memberID := c.Param("memberId") // User ID of the member to be removed
+
+	callerID, exists := auth.GetUserIDFromContext(c)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED", "message": "User ID not found in context"})
+		return
+	}
+
+	project, err := h.Svc.RemoveMember(c.Request.Context(), projectID, callerID, memberID)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "PROJECT_NOT_FOUND", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectAccessDenied) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ACCESS_DENIED", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectUpdateFailed) {
+			logger.Logger.Error("Failed to remove member (service error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", memberID))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "REMOVE_MEMBER_FAILED", "message": "Internal server error removing member"})
+		} else {
+			// Handle specific validation errors from the service (like member not found, cannot remove owner, etc.)
+			logger.Logger.Warn("Failed to remove member (validation error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", memberID))
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "REMOVE_MEMBER_FAILED", "message": err.Error()})
+		}
+		return
+	}
+
+	// Return the updated project state (or StatusNoContent if preferred)
+	c.JSON(http.StatusOK, project) // Returning the updated project shows the member removed
+	// Or: c.Status(http.StatusNoContent)
+}
+
+// InviteMember handles POST /projects/:projectId/team
+func (h *ProjectHandlers) InviteMember(c *gin.Context) {
+	projectID := c.Param("projectId")
+
+	callerID, exists := auth.GetUserIDFromContext(c)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED", "message": "User ID not found in context"})
+		return
+	}
+
+	var req InviteMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Handle validation errors (e.g., missing userId, invalid role enum)
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_INPUT", "message": err.Error()})
+		return
+	}
+
+	// Call the service
+	project, err := h.Svc.InviteMember(c.Request.Context(), projectID, callerID, req)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "PROJECT_NOT_FOUND", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectAccessDenied) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ACCESS_DENIED", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectUpdateFailed) {
+			logger.Logger.Error("Failed to invite member (service error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", req.UserID))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "INVITE_MEMBER_FAILED", "message": "Internal server error inviting member"})
+		} else {
+			// Handle specific validation errors from the service (user already member, user not found)
+			logger.Logger.Warn("Failed to invite member (validation error)", zap.Error(err), zap.String("projectID", projectID), zap.String("callerID", callerID), zap.String("targetUserID", req.UserID))
+			// Map these specific validation errors to 400 Bad Request or 404 Not Found as appropriate
+			if err.Error() == fmt.Sprintf("user with ID %s not found", req.UserID) {
+				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND", "message": err.Error()})
+			} else {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVITE_MEMBER_FAILED", "message": err.Error()})
+			}
+		}
+		return
+	}
+
+	// Return the updated project with the new member
+	c.JSON(http.StatusOK, project)
 }

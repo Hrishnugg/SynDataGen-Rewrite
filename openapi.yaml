@@ -142,9 +142,14 @@ components:
         settings:
           $ref: '#/components/schemas/ProjectSettings'
         teamMembers:
-          type: array
-          items:
-            $ref: '#/components/schemas/TeamMember'
+          type: object
+          description: Map of User IDs to their roles within the project.
+          additionalProperties:
+            $ref: '#/components/schemas/Role'
+          example:
+            "user-id-1": "owner"
+            "user-id-2": "admin"
+            "user-id-3": "member"
         createdAt:
           type: string
           format: date-time
@@ -385,11 +390,51 @@ components:
         - name
         - config
 
+    Role:
+      type: string
+      enum: [owner, admin, member, viewer]
+      description: Role of a user within a project.
+
+    InviteMemberRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          description: The ID of the user to invite.
+        role:
+          type: string
+          # Allow inviting only as these roles
+          enum: [admin, member, viewer]
+          description: The role to assign to the invited user.
+      required:
+        - userId
+        - role
+
+    UpdateMemberRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          # Allow updating only to these roles
+          enum: [admin, member, viewer]
+          description: The new role to assign to the team member.
+      required:
+        - role
+
+    JobStatus:
+      type: string
+      enum: [pending, queued, running, completed, failed, cancelled]
+      description: The current status of the data generation job.
+
   securitySchemes:
     BearerAuth: # Or could be cookie-based session
       type: http
       scheme: bearer
       bearerFormat: JWT # Or describe session cookie if used
+    SessionCookieAuth: # Changed to reflect actual implementation
+      type: apiKey
+      in: cookie
+      name: session_token # Name of the session cookie used by auth service
 
   responses: # Defined common responses here
     UnauthorizedError:
@@ -407,6 +452,7 @@ components:
 
 security:
   - BearerAuth: [] # Apply security globally, can override per-operation
+  - SessionCookieAuth: [] # Apply security globally using session cookies
 
 paths:
   /auth/register:
@@ -905,5 +951,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse' # Added ErrorResponse ref
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/team:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      summary: Invite a user to the project team
+      tags:
+        - Team Management
+      security:
+        - BearerAuth: []
+      description: Adds an existing registered user to the project with a specified role. Requires Admin or Owner role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteMemberRequest'
+      responses:
+        '200':
+          description: Member invited successfully. Returns the updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /projects/{projectId}/team/{memberId}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/MemberId'
+    put:
+      summary: Update a team member's role
+      tags:
+        - Team Management
+      security:
+        - BearerAuth: []
+      description: Changes the role of an existing team member. Cannot change/assign Owner role. Requires Admin or Owner role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRoleRequest'
+      responses:
+        '200':
+          description: Member role updated successfully. Returns the updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Remove a team member from the project
+      tags:
+        - Team Management
+      security:
+        - BearerAuth: []
+      description: Removes a member from the project team. Admins/Owners can remove others (except the Owner). Members can remove themselves (leave), unless they are the last Owner.
+      responses:
+        '200':
+          description: Member removed successfully. Returns the updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
         '500':
           $ref: '#/components/responses/InternalServerError' 

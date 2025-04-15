@@ -12,6 +12,14 @@ import (
 	"go.uber.org/zap"
 )
 
+// CreateJobRequest defines the expected JSON body for creating a job.
+// Struct tags are used by Gin for binding and validation.
+type CreateJobRequest struct {
+	ProjectID string `json:"projectId" binding:"required"`
+	JobType   string `json:"jobType" binding:"required"`
+	JobConfig string `json:"jobConfig" binding:"required"`
+}
+
 // JobHandler handles HTTP requests for jobs.
 type JobHandler struct {
 	service JobService
@@ -65,15 +73,15 @@ func (h *JobHandler) CreateJob(c *gin.Context) {
 		return
 	}
 
-	// Ensure the project ID in the path matches the one in the body (if present, depends on DTO)
-	// For CreateJobRequest, the ProjectID is expected in the body.
+	// Ensure the project ID in the path matches the one in the body.
 	if req.ProjectID != projectID {
 		logger.Logger.Warn("Project ID mismatch between path and body", zap.String("pathProjectId", projectID), zap.String("bodyProjectId", req.ProjectID))
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Project ID mismatch between URL path and request body"})
 		return
 	}
 
-	job, err := h.service.CreateJob(c.Request.Context(), userID.(string), req)
+	// Call the service method with the correct arguments: context, projectID (from path), userID, request body struct
+	job, err := h.service.CreateJob(c.Request.Context(), projectID, userID.(string), req)
 	if err != nil {
 		logger.Logger.Error("Failed to create job via service", zap.Error(err), zap.String("userId", userID.(string)), zap.String("projectId", projectID))
 		if errors.Is(err, core.ErrNotFound) {
@@ -143,7 +151,8 @@ func (h *JobHandler) ListJobsByProject(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.ListJobsByProjectID(c.Request.Context(), projectID, userID.(string), limit, offset)
+	// Call the renamed service method
+	jobs, total, err := h.service.ListJobsByProject(c.Request.Context(), projectID, userID.(string), limit, offset)
 	if err != nil {
 		logger.Logger.Error("Failed to list jobs via service", zap.Error(err), zap.String("userId", userID.(string)), zap.String("projectId", projectID))
 		if errors.Is(err, core.ErrNotFound) {
@@ -157,5 +166,12 @@ func (h *JobHandler) ListJobsByProject(c *gin.Context) {
 		return
 	}
 
+	// Create the response structure (consider defining ListJobsResponse here or elsewhere)
+	resp := gin.H{
+		"jobs":   jobs,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	}
 	c.JSON(http.StatusOK, resp)
 }

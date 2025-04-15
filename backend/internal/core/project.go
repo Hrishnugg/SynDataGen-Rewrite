@@ -2,6 +2,16 @@ package core
 
 import "time"
 
+// Role defines the access level of a user within a project.
+type Role string
+
+const (
+	RoleOwner  Role = "owner"
+	RoleAdmin  Role = "admin"  // Can manage members, settings, jobs
+	RoleMember Role = "member" // Can manage jobs, view settings
+	RoleViewer Role = "viewer" // Can view project, jobs, settings (read-only)
+)
+
 // ProjectSettings defines configurable settings for a project.
 type ProjectSettings struct {
 	DataRetentionDays int `json:"dataRetentionDays" firestore:"dataRetentionDays"`
@@ -11,6 +21,7 @@ type ProjectSettings struct {
 // ProjectStorage details the Cloud Storage bucket associated with a project.
 type ProjectStorage struct {
 	BucketName       string `json:"bucketName" firestore:"bucketName"`
+	BucketURI        string `json:"bucketUri,omitempty" firestore:"bucketUri,omitempty"` // Added GCS URI (e.g., gs://bucket-name)
 	Region           string `json:"region" firestore:"region"`
 	UsedStorageBytes int64  `json:"usedStorageBytes" firestore:"usedStorageBytes"` // Updated periodically
 }
@@ -31,7 +42,7 @@ type Project struct {
 	Status      string          `json:"status" firestore:"status"`         // e.g., "active", "archived"
 	Storage     ProjectStorage  `json:"storage" firestore:"storage"`
 	Settings    ProjectSettings `json:"settings" firestore:"settings"`
-	TeamMembers []TeamMember    `json:"teamMembers" firestore:"teamMembers"`
+	TeamMembers map[string]Role `json:"teamMembers" firestore:"teamMembers"`
 	CreatedAt   time.Time       `json:"createdAt" firestore:"createdAt"`
 	UpdatedAt   time.Time       `json:"updatedAt" firestore:"updatedAt"`
 }
