@@ -132,13 +132,12 @@ const Logo = () => {
       className="font-normal flex space-x-2 items-center text-sm mr-4 text-black px-2 py-1 relative z-20"
     >
       {/* Placeholder for Synoptic logo - replace src */}
-      {/* <Image
-        src="/path/to/synoptic-logo-dark.png" 
+      { <Image
+        src="/synopticlogo3d.png" 
         alt="Synoptic Logo"
         width={30}
         height={30}
-      /> */}
-      <div className="w-[30px] h-[30px] bg-blue-500 rounded-full mr-2"></div> {/* Simple placeholder logo */}
+      /> }
       <span className="font-medium text-white">Synoptic</span> {/* Updated name */}
     </Link>
   );

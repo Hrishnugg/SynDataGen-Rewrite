@@ -25,68 +25,133 @@ export const PerformanceSkeleton = () => {
   const [needsReset, setNeedsReset] = useState(false);
   const meterControls = useAnimationControls();
   const incrementAmountRef = useRef(initialIncrementAmount);
+  const observerRef = useRef<HTMLDivElement>(null); // Observer target
+  const isVisible = useRef<boolean>(false); // Visibility tracker
+  const tickerIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for ticker interval
+  const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for score interval
 
   const currentScore = qualityScores[currentScoreIndex];
 
-  // Effect for the ticker acceleration and looping
-  useEffect(() => {
-    const interval = setInterval(() => {
+  // Function to start the ticker
+  const startTicker = () => {
+    if (tickerIntervalRef.current) clearInterval(tickerIntervalRef.current);
+    tickerIntervalRef.current = setInterval(() => {
       setRecordCount((prev) => {
-        // Ensure we add an integer amount
         const currentIncrement = Math.floor(incrementAmountRef.current);
         const newCount = prev + currentIncrement;
 
         if (newCount > loopThreshold) {
-          setNeedsReset(true); // Signal reset
-          return prev; // Keep current count until reset effect runs
+          setNeedsReset(true);
+          return prev;
         } else {
-          // Accelerate for next tick
           incrementAmountRef.current *= accelerationFactor;
           return newCount;
         }
       });
     }, tickerInterval);
+  };
 
-    return () => clearInterval(interval);
-  }, []); // Runs once on mount
+  // Function to stop the ticker
+  const stopTicker = () => {
+    if (tickerIntervalRef.current) {
+      clearInterval(tickerIntervalRef.current);
+      tickerIntervalRef.current = null;
+    }
+  };
 
-  // Effect to handle the reset when signaled
+  // Function to start the score cycle
+  const startScoreCycle = () => {
+      if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
+      scoreIntervalRef.current = setInterval(() => {
+        if (!needsReset) { // Don't advance if reset pending
+           setCurrentScoreIndex((prevIndex) => (prevIndex + 1) % qualityScores.length);
+        }
+      }, scoreInterval);
+  };
+
+   // Function to stop the score cycle
+   const stopScoreCycle = () => {
+      if (scoreIntervalRef.current) {
+        clearInterval(scoreIntervalRef.current);
+        scoreIntervalRef.current = null;
+      }
+   };
+
+  // Effect for the ticker acceleration and looping - NOW CONTROLLED BY OBSERVER
+  /* --- Original Effect Removed, logic moved to start/stop functions --- */
+
+  // Effect to handle the reset when signaled (No change needed)
   useEffect(() => {
     if (needsReset) {
       setRecordCount(initialRecordCount);
       setCurrentScoreIndex(0);
       incrementAmountRef.current = initialIncrementAmount;
-      // Reset meter quickly to the first score
       meterControls.start({
         width: `${qualityScores[0]}%`,
         transition: { duration: 0.1 },
       });
-      setNeedsReset(false); // Reset the flag
+      setNeedsReset(false);
+      // Restart intervals if visible after reset
+      if (isVisible.current) {
+          startTicker();
+          startScoreCycle();
+      }
     }
-  }, [needsReset, meterControls]); // Depends only on the reset flag
+  }, [needsReset, meterControls]);
 
-  // Effect for the quality score cycle and meter animation (separate from reset)
+  // Effect for the meter animation (No change needed for animation trigger)
   useEffect(() => {
-    // Animate meter bar to current score (when index changes)
     meterControls.start({
       width: `${currentScore}%`,
       transition: { duration: 0.5, ease: 'easeInOut' },
     });
+  }, [currentScore, meterControls]);
 
-    // Cycle through scores
-    const interval = setInterval(() => {
-      // Don't advance score if a reset is pending
-      if (!needsReset) { 
-         setCurrentScoreIndex((prevIndex) => (prevIndex + 1) % qualityScores.length);
+  // --- Intersection Observer Effect ---
+  useEffect(() => {
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entryIsVisible = entries[0]?.isIntersecting ?? false;
+        isVisible.current = entryIsVisible;
+
+        if (entryIsVisible) {
+            // Start intervals when becoming visible
+            startTicker();
+            startScoreCycle();
+        } else {
+            // Stop intervals when becoming hidden
+            stopTicker();
+            stopScoreCycle();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    // Initial check if already visible
+    if (isVisible.current) {
+        startTicker();
+        startScoreCycle();
+    }
+
+    // Cleanup function
+    return () => {
+      stopTicker(); // Stop ticker on unmount
+      stopScoreCycle(); // Stop score cycle on unmount
+      if (currentObserverRef) {
+        observer.unobserve(currentObserverRef);
       }
-    }, scoreInterval);
+      observer.disconnect();
+    };
+  }, []); // Run only once
 
-    return () => clearInterval(interval);
-    // Re-run when score index or reset status changes (to potentially restart interval correctly)
-  }, [currentScoreIndex, meterControls, currentScore, needsReset]); 
 
   return (
-    <div className="flex h-full w-full flex-col justify-center space-y-6 p-4">
+    <div ref={observerRef} className="flex h-full w-full flex-col justify-center space-y-6 p-4"> {/* Attach observer ref */}
       {/* Ticker Section */}
       <div className="text-center">
         {/* Updated Label */}

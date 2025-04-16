@@ -21,6 +21,8 @@ export const TextRevealCard = ({
   const [left, setLeft] = useState(0);
   const [localWidth, setLocalWidth] = useState(0);
   const [isMouseOver, setIsMouseOver] = useState(false);
+  const observerRef = useRef<HTMLDivElement>(null);
+  const [isStarsVisible, setIsStarsVisible] = useState(false);
 
   useEffect(() => {
     if (cardRef.current) {
@@ -29,6 +31,27 @@ export const TextRevealCard = ({
       setLeft(left);
       setLocalWidth(localWidth);
     }
+  }, []);
+
+  useEffect(() => {
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsStarsVisible(entries[0]?.isIntersecting ?? false);
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    return () => {
+      if (currentObserverRef) {
+        observer.unobserve(currentObserverRef);
+      }
+      observer.disconnect();
+    };
   }, []);
 
   function mouseMoveHandler(event: any) {
@@ -72,6 +95,8 @@ export const TextRevealCard = ({
         className
       )}
     >
+      <div ref={observerRef} className="absolute inset-0 pointer-events-none"></div>
+
       {children}
 
       <div className="h-40  relative flex items-center overflow-hidden">
@@ -116,7 +141,7 @@ export const TextRevealCard = ({
             {text}
           </p>
           <ClientOnly>
-            <MemoizedStars />
+            {isStarsVisible && <MemoizedStars />}
           </ClientOnly>
         </div>
       </div>

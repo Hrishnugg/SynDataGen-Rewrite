@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, useAnimationControls } from 'framer-motion';
 import {
   IconStack2,      // Placeholder for Data Preprocessing (Disks)
@@ -50,6 +50,10 @@ const loopBuffer = 500; // ms pause before looping
 export const PipelineSkeleton = () => {
   const containerControls = useAnimationControls();
   const lineGlowControls = useAnimationControls();
+  const observerRef = useRef<HTMLDivElement>(null); // Observer target
+  const isVisible = useRef<boolean>(false); // Visibility tracker
+  const isAnimating = useRef<boolean>(false); // Track if animation sequence is running
+
   // Create controls for each stage component (icon, dot, label)
   const stageControls = stages.map(() => ({
     icon: useAnimationControls(),
@@ -58,79 +62,213 @@ export const PipelineSkeleton = () => {
   }));
 
   useEffect(() => {
+    let isMounted = true; // Local flag for cleanup
+
     const sequence = async () => {
-      // --- Initial Reset (Run once before loop) ---
-      containerControls.set({ opacity: 0 }); // Ensure container starts hidden
-      lineGlowControls.set({ width: '0%', opacity: 0 });
-      stageControls.forEach((ctrl) => {
-        ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
-        ctrl.dot.set({ scale: 1, opacity: 0.5 }); 
-        ctrl.label.set({ opacity: 0.5 });
-      });
-      // --- End Initial Reset ---
+        // If already animating, don't start another sequence
+        if (isAnimating.current) return;
+        isAnimating.current = true;
 
-      while (true) {
-        // --- Start Cycle --- 
-        // Fade in container
-        await containerControls.start({
-          opacity: 1,
-          transition: { duration: fadeDuration },
-        });
-        // Make line glow element visible before animating width
-        lineGlowControls.start({ opacity: 1, transition: { duration: 0.1 } });
-
-        // --- Animate Through Stages --- 
-        let previousWidth = '0%';
-        for (let i = 0; i < stages.length; i++) {
-          const stage = stages[i];
-          const controls = stageControls[i];
-          
-          // Animate line glow to current stage position
-          await lineGlowControls.start({
-            width: stage.position,
-            transition: { duration: lineFillDuration, ease: 'linear' }, 
-          });
-
-          // Highlight current stage
-          controls.icon.start({ opacity: 1, scale: 1.1, transition: { duration: 0.3 } });
-          controls.dot.start({ scale: 1.3, opacity: 1, transition: { duration: 0.3 } });
-          controls.label.start({ opacity: 1, transition: { duration: 0.3 } });
-
-          // Pause at the node
-          await new Promise((resolve) => setTimeout(resolve, nodePauseDuration));
-        }
-
-        // --- End Cycle --- 
-        // Fade out container (implicitly hides everything)
-        await containerControls.start({
-          opacity: 0,
-          transition: { duration: fadeDuration, delay: 0.5 }, // Add slight delay before fade
-        });
-        
-        // --- Reset Children AFTER fade out --- (Moved from start of loop)
+        // --- Initial Reset (Run once before loop) ---
+        containerControls.set({ opacity: 0 }); // Ensure container starts hidden
         lineGlowControls.set({ width: '0%', opacity: 0 });
         stageControls.forEach((ctrl) => {
-          ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
-          ctrl.dot.set({ scale: 1, opacity: 0.5 }); 
-          ctrl.label.set({ opacity: 0.5 });
+            ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
+            ctrl.dot.set({ scale: 1, opacity: 0.5 });
+            ctrl.label.set({ opacity: 0.5 });
         });
-        // --- End Reset Children ---
+        // --- End Initial Reset ---
 
-        // Wait before looping
-        await new Promise((resolve) => setTimeout(resolve, loopBuffer));
-      }
+        while (isMounted) {
+            // --- Visibility Check ---
+            if (!isVisible.current) {
+                // If hidden, pause and reset animation state
+                isAnimating.current = false;
+                await new Promise(resolve => setTimeout(resolve, 200)); // Wait briefly
+                continue; // Skip to next loop iteration
+            }
+            // --- End Visibility Check ---
+
+
+            // --- Start Cycle --- 
+            // Fade in container
+            await containerControls.start({
+                opacity: 1,
+                transition: { duration: fadeDuration },
+            });
+            // Make line glow element visible before animating width
+            lineGlowControls.start({ opacity: 1, transition: { duration: 0.1 } });
+
+            // --- Animate Through Stages --- 
+            let previousWidth = '0%';
+            for (let i = 0; i < stages.length; i++) {
+                const stage = stages[i];
+                const controls = stageControls[i];
+                
+                // Animate line glow to current stage position
+                await lineGlowControls.start({
+                    width: stage.position,
+                    transition: { duration: lineFillDuration, ease: 'linear' }, 
+                });
+
+                // Highlight current stage
+                controls.icon.start({ opacity: 1, scale: 1.1, transition: { duration: 0.3 } });
+                controls.dot.start({ scale: 1.3, opacity: 1, transition: { duration: 0.3 } });
+                controls.label.start({ opacity: 1, transition: { duration: 0.3 } });
+
+                // Pause at the node
+                await new Promise((resolve) => setTimeout(resolve, nodePauseDuration));
+            }
+
+            // --- End Cycle --- 
+            // Fade out container (implicitly hides everything)
+            await containerControls.start({
+                opacity: 0,
+                transition: { duration: fadeDuration, delay: 0.5 }, // Add slight delay before fade
+            });
+            
+            // --- Reset Children AFTER fade out --- (Moved from start of loop)
+            lineGlowControls.set({ width: '0%', opacity: 0 });
+            stageControls.forEach((ctrl) => {
+                ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
+                ctrl.dot.set({ scale: 1, opacity: 0.5 }); 
+                ctrl.label.set({ opacity: 0.5 });
+            });
+            
+            await new Promise((resolve) => setTimeout(resolve, loopBuffer));
+        }
+        // Ensure animation flag is reset if loop exits unexpectedly
+        isAnimating.current = false;
     };
 
-    sequence();
-    
-    // Optional: Cleanup function if needed, though loop runs indefinitely
-    // return () => { /* stop animations */ };
+    // Initial call handled by observer effect
+    // sequence(); 
 
-  }, [containerControls, lineGlowControls, stageControls]);
+    // Optional: Cleanup function if needed, though loop runs indefinitely
+    return () => {
+        isMounted = false;
+        isAnimating.current = false;
+        // Consider stopping controls explicitly if needed
+        // containerControls.stop(); lineGlowControls.stop(); ...
+     };
+
+  }, [containerControls, lineGlowControls, stageControls]); // Removed observer refs from deps
+
+   // --- Intersection Observer Effect ---
+   useEffect(() => {
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entryIsVisible = entries[0]?.isIntersecting ?? false;
+        const previouslyVisible = isVisible.current;
+        isVisible.current = entryIsVisible;
+
+        // If becoming visible and animation isn't running, start it
+        if (entryIsVisible && !previouslyVisible && !isAnimating.current) {
+            // Start sequence only if not already animating
+            const startSeq = async () => {
+                if (!isAnimating.current) {
+                    // Find the sequence function from the other effect? 
+                    // This is tricky. Let's redefine the sequence start logic here.
+                    
+                    // --- Start Sequence Logic (Simplified from above) ---
+                    isAnimating.current = true;
+                    containerControls.set({ opacity: 0 });
+                    lineGlowControls.set({ width: '0%', opacity: 0 });
+                    stageControls.forEach((ctrl) => {
+                        ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
+                        ctrl.dot.set({ scale: 1, opacity: 0.5 });
+                        ctrl.label.set({ opacity: 0.5 });
+                    });
+
+                    while (isVisible.current) { // Use isVisible.current for the loop condition
+                        // Fade in container
+                        await containerControls.start({
+                        opacity: 1,
+                        transition: { duration: fadeDuration },
+                        });
+                        // Make line glow element visible before animating width
+                        lineGlowControls.start({ opacity: 1, transition: { duration: 0.1 } });
+                
+                        // --- Animate Through Stages --- 
+                        for (let i = 0; i < stages.length; i++) {
+                        if (!isVisible.current) break; // Check visibility within inner loop
+                        const stage = stages[i];
+                        const controls = stageControls[i];
+                        
+                        // Animate line glow to current stage position
+                        await lineGlowControls.start({
+                            width: stage.position,
+                            transition: { duration: lineFillDuration, ease: 'linear' }, 
+                        });
+                        if (!isVisible.current) break;
+                
+                        // Highlight current stage
+                        controls.icon.start({ opacity: 1, scale: 1.1, transition: { duration: 0.3 } });
+                        controls.dot.start({ scale: 1.3, opacity: 1, transition: { duration: 0.3 } });
+                        controls.label.start({ opacity: 1, transition: { duration: 0.3 } });
+                
+                        // Pause at the node
+                        await new Promise((resolve) => setTimeout(resolve, nodePauseDuration));
+                        }
+                        if (!isVisible.current) break;
+                
+                        // --- End Cycle --- 
+                        await containerControls.start({
+                        opacity: 0,
+                        transition: { duration: fadeDuration, delay: 0.5 }, 
+                        });
+                        if (!isVisible.current) break;
+                        
+                        // Reset children
+                        lineGlowControls.set({ width: '0%', opacity: 0 });
+                        stageControls.forEach((ctrl) => {
+                        ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
+                        ctrl.dot.set({ scale: 1, opacity: 0.5 }); 
+                        ctrl.label.set({ opacity: 0.5 });
+                        });
+                
+                        await new Promise((resolve) => setTimeout(resolve, loopBuffer));
+                    }
+                    isAnimating.current = false; // Reset flag when loop finishes or is interrupted
+                } 
+            }
+            startSeq();
+        }
+         // No need to explicitly stop if hidden, loop condition handles it.
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    // Initial check
+    if (isVisible.current && !isAnimating.current) {
+        // Define startSeq or call it here if needed for initial visible state
+         const startSeq = async () => { /* ... sequence logic ... */ } 
+        // startSeq(); // Potentially call if needed
+    }
+
+    return () => {
+        if (currentObserverRef) {
+            observer.unobserve(currentObserverRef);
+        }
+        observer.disconnect();
+        isVisible.current = false; // Reset visibility
+        isAnimating.current = false; // Reset animation flag
+        // Optionally stop controls if needed
+        containerControls.stop(); lineGlowControls.stop();
+        stageControls.forEach(s => { s.icon.stop(); s.dot.stop(); s.label.stop(); });
+    };
+  }, [containerControls, lineGlowControls, stageControls]); // Dependencies include animation controls
+
 
   return (
     // Container to control overall fade
-    <motion.div 
+    <motion.div
+      ref={observerRef} // Attach observer ref
       className="flex h-full w-full flex-col items-center justify-center space-y-6"
       animate={containerControls}
       initial={{ opacity: 0 }}

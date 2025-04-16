@@ -35,6 +35,10 @@ export const WavyBackground = ({
     ctx: any,
     canvas: any;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const observerRef = useRef<HTMLDivElement>(null); // Ref for observer target
+  const animationIdRef = useRef<number | null>(null); // Ref for animation frame ID
+  const isVisible = useRef<boolean>(false); // Ref to track visibility state
+
   const getSpeed = () => {
     switch (speed) {
       case "slow":
@@ -48,17 +52,21 @@ export const WavyBackground = ({
 
   const init = () => {
     canvas = canvasRef.current;
+    if (!canvas) return; // Exit if canvas not ready
+
     ctx = canvas.getContext("2d");
     w = ctx.canvas.width = window.innerWidth;
     h = ctx.canvas.height = window.innerHeight;
     ctx.filter = `blur(${blur}px)`;
     nt = 0;
+
     window.onresize = function () {
-      w = ctx.canvas.width = window.innerWidth;
-      h = ctx.canvas.height = window.innerHeight;
-      ctx.filter = `blur(${blur}px)`;
+        if (!canvasRef.current) return;
+        w = ctx.canvas.width = window.innerWidth;
+        h = ctx.canvas.height = window.innerHeight;
+        ctx.filter = `blur(${blur}px)`;
     };
-    render();
+    // Initial render call is handled by observer effect if visible
   };
 
   const waveColors = colors ?? [
@@ -69,6 +77,7 @@ export const WavyBackground = ({
     "#234d96",
   ];
   const drawWave = (n: number) => {
+    if (!ctx) return; // Ensure context exists
     nt += getSpeed();
     for (i = 0; i < n; i++) {
       ctx.beginPath();
@@ -83,36 +92,96 @@ export const WavyBackground = ({
     }
   };
 
-  let animationId: number;
   const render = () => {
+    // --- Animation Pause Logic ---
+    if (!isVisible.current) {
+      // If not visible, ensure animation is stopped and exit render loop
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+      return;
+    }
+    // --- End Animation Pause Logic ---
+
+    if (!ctx || !canvas) return; // Ensure context and canvas exist
+
     ctx.fillStyle = backgroundFill || "black";
     ctx.globalAlpha = waveOpacity || 0.5;
     ctx.fillRect(0, 0, w, h);
     drawWave(5);
-    animationId = requestAnimationFrame(render);
+    animationIdRef.current = requestAnimationFrame(render); // Request next frame ONLY if visible
   };
 
+  // --- Intersection Observer Effect ---
+  useEffect(() => {
+    const currentObserverRef = observerRef.current; // Capture ref value
+    if (!currentObserverRef) return; // Don't run if ref not set
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        const currentlyVisible = entry.isIntersecting;
+        isVisible.current = currentlyVisible; // Update visibility state
+
+        if (currentlyVisible) {
+          // If visible and animation isn't running, start it
+          if (animationIdRef.current === null) {
+            render(); // Start the animation loop
+          }
+        } else {
+          // If not visible and animation is running, stop it
+          if (animationIdRef.current !== null) {
+            cancelAnimationFrame(animationIdRef.current);
+            animationIdRef.current = null;
+          }
+        }
+      },
+      { threshold: 0.1 } // Trigger when 10% is visible/hidden
+    );
+
+    observer.observe(currentObserverRef);
+
+    // Cleanup function
+    return () => {
+      if (currentObserverRef) {
+        observer.unobserve(currentObserverRef);
+      }
+      observer.disconnect();
+      // Also cancel any pending frame on cleanup/unmount
+      if (animationIdRef.current !== null) {
+        cancelAnimationFrame(animationIdRef.current);
+        animationIdRef.current = null;
+      }
+    };
+  }, []); // Run only once on mount
+  // --- End Intersection Observer Effect ---
+
+  // --- Initialization and Safari Check Effect ---
   useEffect(() => {
     init();
-    return () => {
-      cancelAnimationFrame(animationId);
-    };
-  }, []);
+    // No need to call render() here, observer handles starting it
+    // No need for cancelAnimationFrame cleanup here, observer handles stopping it
 
-  const [isSafari, setIsSafari] = useState(false);
-  useEffect(() => {
     // I'm sorry but i have got to support it on safari.
     setIsSafari(
       typeof window !== "undefined" &&
         navigator.userAgent.includes("Safari") &&
         !navigator.userAgent.includes("Chrome")
     );
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Keep dependencies empty if init doesn't rely on props that change
+  // --- End Initialization and Safari Check Effect ---
+
+
+  const [isSafari, setIsSafari] = useState(false);
+  // useEffect(() => { ... Safari Check Logic Moved to Init Effect ... }, []); // This effect is now combined
 
   return (
     <div
+      ref={observerRef} // Attach observer ref here
       className={cn(
-        "h-screen flex flex-col items-center justify-center",
+        "h-screen flex flex-col items-center justify-center", // Ensure component has dimensions
         containerClassName
       )}
     >

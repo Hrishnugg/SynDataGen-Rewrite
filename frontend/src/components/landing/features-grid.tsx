@@ -43,6 +43,9 @@ const Card = ({ children, className, }: { children: React.ReactNode; className?:
 // Rebuilding Skeleton for Realistic Data Card with refined loop
 const RealisticDataSkeleton = () => {
   const controls = useAnimationControls();
+  const observerRef = useRef<HTMLDivElement>(null); // Observer target
+  const isVisible = useRef<boolean>(false); // Visibility tracker
+  const isMountedRef = useRef<boolean>(true); // Mount status tracker
 
   // Variants for the motion wrapper (controls fade + stagger)
   const wrapperVariants = {
@@ -91,39 +94,69 @@ const RealisticDataSkeleton = () => {
   const fadeOutDuration = 500; // 0.5 seconds fade out
 
   useEffect(() => {
-    let isMounted = true;
+    // isMountedRef.current = true; // Set mount status on mount
     const sequence = async () => {
       // Start hidden (setting initial state directly)
       controls.set("hidden");
       // Small delay before first animation
-      await new Promise(resolve => setTimeout(resolve, 50)); 
-      
-      while (isMounted) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      while (isMountedRef.current) {
+         // --- Visibility Check ---
+         if (!isVisible.current) {
+             await new Promise(resolve => setTimeout(resolve, 200)); // Wait if not visible
+             continue; // Skip animation iteration
+         }
+         // --- End Visibility Check ---
+
         // 1. Animate wrapper to visible (triggers row stagger)
         await controls.start("visible");
         // 2. Wait for stagger animation + loop pause
         await new Promise(resolve => setTimeout(resolve, staggerDuration * 1000 + loopPause));
-        if (!isMounted) break;
+        if (!isMountedRef.current) break;
         // 3. Animate wrapper opacity to 0 (smooth fade out)
         await controls.start({ opacity: 0, transition: { duration: fadeOutDuration / 1000 } });
         // 4. Wait for fade out + buffer before reset/loop
         await new Promise(resolve => setTimeout(resolve, fadeOutDuration + 50));
-        if (!isMounted) break;
+        if (!isMountedRef.current) break;
         // 5. Instantly reset to hidden (no animation) before next loop
-        controls.set("hidden"); 
+        controls.set("hidden");
       }
     };
 
     sequence();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false; // Set mount status on unmount
       controls.stop();
     };
-  }, [controls, staggerDuration]);
+  }, [controls, staggerDuration, loopPause, fadeOutDuration]); // Added loopPause & fadeOutDuration dependency
+
+  // --- Intersection Observer Effect ---
+  useEffect(() => {
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        isVisible.current = entries[0]?.isIntersecting ?? false;
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    return () => {
+      if (currentObserverRef) {
+        observer.unobserve(currentObserverRef);
+      }
+      observer.disconnect();
+      isVisible.current = false; // Ensure reset on unmount/disconnect
+    };
+  }, []); // Run only once
 
   return (
-    <div className="flex h-full flex-col items-center justify-center p-4">
+    <div ref={observerRef} className="flex h-full flex-col items-center justify-center p-4"> {/* Attach observer ref */}
       {/* Glassy container (non-motion) */}
       <div className="w-full max-w-xs rounded-md border border-neutral-700 bg-gradient-to-br from-black to-[#060e25] p-3 shadow-inner">
         {/* Motion wrapper for content fade and stagger control */}
@@ -231,6 +264,9 @@ const ScaleTestingSkeleton_V1 = () => {
 const ScaleTestingSkeleton_V2_Grid = () => {
   const controls = useAnimationControls();
   const [phase, setPhase] = useState<'initialPulsePhase' | 'gridFillPhase' | 'hidden'>('hidden');
+  const observerRef = useRef<HTMLDivElement>(null); // Observer target
+  const isVisible = useRef<boolean>(false); // Visibility tracker
+  const isMountedRef = useRef<boolean>(true); // Mount status tracker
 
   const rows = 7;
   const cols = 12;
@@ -304,39 +340,77 @@ const ScaleTestingSkeleton_V2_Grid = () => {
 
   // Effect 1: Manages the phase transitions over time (No changes needed here)
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
     const sequence = async () => {
       // Initial state sync
       setPhase("hidden");
       controls.set("hidden");
-      await new Promise(r => setTimeout(r, 100)); 
-      while (isMounted) {
+      await new Promise(r => setTimeout(r, 100));
+      while (isMountedRef.current) {
+        // --- Visibility Check ---
+        if (!isVisible.current) {
+            await new Promise(resolve => setTimeout(resolve, 200)); // Wait if not visible
+            continue; // Skip animation iteration
+        }
+        // --- End Visibility Check ---
+
         // Phase 1: Set phase, then trigger parent variant
         setPhase("initialPulsePhase");
         await controls.start("initialPulsePhase");
         await new Promise(r => setTimeout(r, initialPulseDuration));
-        if (!isMounted) break;
+        if (!isMountedRef.current) break;
 
         // Phase 2: Set phase, then trigger parent variant
         setPhase("gridFillPhase");
         await controls.start("gridFillPhase");
         await new Promise(r => setTimeout(r, gridFillDuration * 1000 + loopPause));
-        if (!isMounted) break;
+        if (!isMountedRef.current) break;
 
         // Phase 3: Trigger parent variant (hides cells)
         await controls.start("hidden");
         // Wait for the updated fade out duration + buffer
-        await new Promise(r => setTimeout(r, fadeOutDuration + 100)); 
-        if (!isMounted) break;
+        await new Promise(r => setTimeout(r, fadeOutDuration + 100));
+        if (!isMountedRef.current) break;
       }
     };
     sequence();
-    return () => { isMounted = false; controls.stop(); };
+    return () => { isMountedRef.current = false; controls.stop(); };
     // Dependencies don't need phase here, as effect drives the phase
-  }, [controls, initialPulseDuration, gridFillDuration, loopPause, fadeOutDuration]);
+  }, [controls, initialPulseDuration, gridFillDuration, loopPause, fadeOutDuration]); // Removed isMountedRef from deps
+
+  // --- Intersection Observer Effect ---
+  useEffect(() => {
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        isVisible.current = entries[0]?.isIntersecting ?? false;
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    return () => {
+      if (currentObserverRef) {
+        observer.unobserve(currentObserverRef);
+      }
+      observer.disconnect();
+      isVisible.current = false; // Ensure reset on unmount/disconnect
+    };
+  }, []); // Run only once
 
   // Effect 2: Triggers animations based on the current phase (Simplified Reset)
   useEffect(() => {
+    // --- Visibility Check --- (Also check here before starting animations)
+    if (!isVisible.current) {
+        // If becoming hidden, maybe force a 'hidden' animation state?
+        // controls.start("hidden"); // Optional: force hide animation on visibility loss
+        return; // Don't trigger phase changes if not visible
+    }
+    // --- End Visibility Check ---
+
     if (phase === "gridFillPhase") {
       // Start the grid fill (staggered via container variant)
       controls.start("gridFillPhase");
@@ -350,7 +424,7 @@ const ScaleTestingSkeleton_V2_Grid = () => {
   }, [phase, controls]);
 
   return (
-    <div className="flex h-full items-center justify-center p-4 min-h-[120px]">
+    <div ref={observerRef} className="relative h-full w-full overflow-hidden flex justify-center items-center"> {/* Added flex centering */}
       <motion.div
         key="persistent-grid-container" 
         className={`grid gap-1`}
@@ -680,6 +754,9 @@ const SkeletonFour = ({}: {}) => {
 // New Skeleton for Customizable Schemas Card (Rearranging Blocks)
 const CustomizableSchemaSkeleton_Blocks = () => {
   const [layoutIndex, setLayoutIndex] = useState(0);
+  const observerRef = useRef<HTMLDivElement>(null); // Observer target
+  const isVisible = useRef<boolean>(false); // Visibility tracker
+  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for interval ID
 
   const blocks = [
     { id: "user", label: "User", color: "bg-gradient-to-br from-[#2E2055] to-[#251E38]" },
@@ -698,14 +775,55 @@ const CustomizableSchemaSkeleton_Blocks = () => {
     ["user", "product", "order", "product"],
   ];
 
-  // Cycle through layouts every few seconds
+  // Cycle through layouts every few seconds - NOW CONTROLLED BY VISIBILITY
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLayoutIndex((prevIndex) => (prevIndex + 1) % layouts.length);
-    }, 2500); // Change layout every 2.5 seconds
+    const startInterval = () => {
+      if (intervalRef.current) clearInterval(intervalRef.current); // Clear existing interval if any
+      intervalRef.current = setInterval(() => {
+        setLayoutIndex((prevIndex) => (prevIndex + 1) % layouts.length);
+      }, 2500); // Change layout every 2.5 seconds
+    };
 
-    return () => clearInterval(interval);
-  }, [layouts.length]);
+    const stopInterval = () => {
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    };
+
+    // --- Intersection Observer Setup ---
+    const currentObserverRef = observerRef.current;
+    if (!currentObserverRef) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entryIsVisible = entries[0]?.isIntersecting ?? false;
+        isVisible.current = entryIsVisible;
+        if (entryIsVisible) {
+          startInterval(); // Start interval when visible
+        } else {
+          stopInterval(); // Stop interval when hidden
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(currentObserverRef);
+
+    // Initial check in case component is already visible on mount
+    if (isVisible.current) {
+        startInterval();
+    }
+
+    // Cleanup function
+    return () => {
+        stopInterval(); // Clear interval on unmount
+        if (currentObserverRef) {
+            observer.unobserve(currentObserverRef);
+        }
+        observer.disconnect();
+    };
+  }, [layouts.length]); // Depend on layouts.length
 
   const currentLayoutConfig = layouts[layoutIndex];
 
@@ -727,7 +845,8 @@ const CustomizableSchemaSkeleton_Blocks = () => {
 
   return (
     // Parent container using CSS Grid
-    <div 
+    <div
+      ref={observerRef} // Attach observer ref
       className={cn(
         "grid h-full w-full grid-cols-2 grid-rows-3 gap-2 p-4 transition-all duration-500 ease-in-out",
         // Conditionally add centering for the stacked layout (index 0)
@@ -795,7 +914,7 @@ export function FeaturesGrid() { // Renamed from ThreeColumnBentoGrid
               Generate large datasets for robust application testing.
             </CardDescription>
           </CardContent>
-          <CardSkeletonBody className="">
+          <CardSkeletonBody className="p-4">
             <ScaleTestingSkeleton_V2_Grid />
           </CardSkeletonBody>
         </Card>
