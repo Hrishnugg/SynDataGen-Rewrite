@@ -1,0 +1,227 @@
+.waitlistSection {
+  /* Basic layout and dark theme styles */
+  display: grid;
+  /* Adjust column ratio to make right column slightly wider */
+  grid-template-columns: 1fr 1fr; 
+  gap: 4rem; /* Increased gap slightly */
+  padding: 6rem 2rem; /* Increased padding */
+  background-color: #000000; /* Changed to black */
+  color: #ffffff;
+  position: relative; /* Needed for absolute positioning of Spotlight */
+  overflow: hidden; /* Contain spotlight effect */
+  margin-top: 10rem; /* Added margin to push section down */
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center; /* Or start, depending on design */
+  position: relative; /* Context for Spotlight */
+}
+
+.heading {
+  /* Applied to TextGenerateEffect wrapper */
+  font-size: 5rem; /* Further increased font size */
+  line-height: 1.1; /* Adjust line height */
+  font-weight: bold;
+  text-align: center;
+  z-index: 10; /* Ensure text is above spotlight */
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center; /* Center the form container */
+}
+
+/* New class for the BackgroundGradient container */
+.formContainer {
+  width: 100%;
+  max-width: 700px; 
+  position: relative; /* Needed for BackgroundGradient positioning */
+}
+
+/* Renamed from .waitlistForm - styles for inner content wrapper */
+.formContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* Reduce main gap, use margins below for section separation */
+  padding: 3rem; 
+  background-color: rgba(17, 24, 39, 0.8); 
+  border-radius: 1.5rem; 
+  position: relative; 
+  z-index: 10; 
+}
+
+/* Add margin-top to subsequent rows/sections for better separation */
+.formRow + .formRow,
+.formRow + .formFieldFull,
+.formFieldFull + .formFieldFull,
+.formFieldFull + .submitButtonWrapper,
+.submitButtonWrapper + .disclaimer {
+  margin-top: 2.5rem;
+}
+
+.disclaimer {
+  font-size: 0.875rem;
+  color: #9ca3af; /* Lighter text for disclaimer */
+  margin-top: 1rem;
+}
+
+/* Add styles for form elements (Input, Label, select, textarea, button) */
+/* Ensure they match the dark, modern aesthetic */
+
+/* Styles for form elements */
+.formContent label {
+  margin-bottom: 0.5rem; /* Keep this small */
+  display: block; 
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* Keep label-input gap */
+}
+
+.formFieldFull {
+  grid-column: 1 / -1; 
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* Keep label-input gap */
+}
+
+/* Layout helpers */
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem; /* Keep horizontal gap in rows */
+}
+
+/* Style for Select dropdown */
+.select,
+.textarea,
+.formInput /* New class for Input component */ {
+  /* Base styles similar to Input */
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem; 
+  border: 1px solid #374151; /* Adjusted border */
+  background-color: #111827; /* Dark solid background */
+  color: #ffffff; 
+  font-size: 0.875rem; 
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.select {
+  appearance: none; /* Keep specific select styles */
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+}
+
+.select:focus,
+.textarea:focus,
+.formInput input:focus /* Target focus state for Input */ {
+  outline: none;
+  border-color: #6b7280; 
+  box-shadow: 0 0 0 2px #374151; 
+}
+
+.select option {
+  background-color: #111827; /* Match background */
+  color: #ffffff;
+}
+
+/* Style for Textarea */
+.textarea {
+  min-height: 80px; 
+  resize: vertical;
+}
+
+/* Styles for Segmented Buttons */
+.segmentedButtons {
+  display: flex;
+  /* border: 1px solid #374151; */ /* Remove border from container */
+  /* border-radius: 0.375rem; */ /* Remove radius from container */
+  overflow: hidden; /* Still needed for rounding corners */
+  margin-top: 0.25rem; 
+}
+
+.segmentButton {
+  flex-grow: 1;
+  padding: 0.6rem 0.75rem; 
+  background-color: transparent; 
+  color: #9ca3af; 
+  border: 1px solid #374151; /* Add border to individual buttons */
+  margin-left: -1px; /* Overlap borders */
+  /* border-left: 1px solid #374151; */ /* Replaced by margin overlap */
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  text-align: center;
+  font-size: 0.875rem;
+  border-radius: 0; /* Reset individual radius initially */
+}
+
+.segmentButton:first-child {
+  /* border-left: none; */ /* Removed */
+  margin-left: 0; /* Don't overlap first button */
+  border-top-left-radius: 0.75rem; /* Round top-left */
+  border-bottom-left-radius: 0.75rem; /* Round bottom-left */
+}
+
+.segmentButton:last-child {
+  border-top-right-radius: 0.75rem; /* Round top-right */
+  border-bottom-right-radius: 0.75rem; /* Round bottom-right */
+}
+
+.segmentButton:hover {
+  background-color: #1f2937; 
+  color: #ffffff;
+  z-index: 1; /* Bring button to front on hover */
+  position: relative; /* Needed for z-index */
+}
+
+.segmentButton.active { 
+  background-color: #4f46e5; /* Changed active color (example: indigo) */
+  color: #ffffff;
+  border-color: #4f46e5; /* Match border color */
+  z-index: 2; /* Ensure active button is on top */
+  position: relative; /* Needed for z-index */
+}
+
+/* New wrapper for centering the submit button */
+.submitButtonWrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem; /* Increased top margin */
+}
+
+.submitButton {
+  /* Button itself, centered by wrapper */
+  max-width: 250px; 
+  /* align-self: center; */ /* Removed, handled by wrapper */
+  /* margin-top: 1.5rem; */ /* Removed, handled by wrapper */
+  font-weight: 600; 
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .waitlistSection {
+    grid-template-columns: 1fr; /* Stack columns on smaller screens */
+    margin-top: 6rem; /* Adjust margin for mobile */
+    gap: 3rem; /* Adjust gap for mobile */
+  }
+  .leftColumn {
+    align-items: center; /* Center heading when stacked */
+    margin-bottom: 2rem;
+  }
+  .heading {
+    font-size: 3.5rem; /* Adjust size for mobile */
+  }
+  .formContent {
+    max-width: 90%; /* Allow slightly wider form on mobile */
+    padding: 2rem; /* Adjust padding */
+  }
+} 

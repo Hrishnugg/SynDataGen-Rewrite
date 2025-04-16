@@ -18,6 +18,8 @@ import { Button as MagicButton } from "@/components/ui/bmagic-button";
 import Link from "next/link";
 import { FeaturesGrid } from '@/components/landing/features-grid';
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
+import WaitlistSection from "@/components/waitlist-section";
+import { Footer } from "@/components/landing/footer";
 
 export default function LandingPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -152,6 +154,8 @@ export default function LandingPage() {
       <div id="features">
         <FeaturesGrid />
       </div>
+      <WaitlistSection />
+      <Footer />
     </div>
   );
 }
