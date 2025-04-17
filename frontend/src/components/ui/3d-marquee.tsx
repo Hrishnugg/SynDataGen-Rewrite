@@ -9,9 +9,9 @@ export const ThreeDMarquee = ({
   images: string[];
   className?: string;
 }) => {
-  // Split the images array into 4 equal parts
-  const chunkSize = Math.ceil(images.length / 4);
-  const chunks = Array.from({ length: 4 }, (_, colIndex) => {
+  // Split the images array into 6 equal parts
+  const chunkSize = Math.ceil(images.length / 6);
+  const chunks = Array.from({ length: 6 }, (_, colIndex) => {
     const start = colIndex * chunkSize;
     return images.slice(start, start + chunkSize);
   });
@@ -23,12 +23,12 @@ export const ThreeDMarquee = ({
       )}
     >
       <div className="flex size-full items-center justify-center">
-        <div className="size-[1720px] shrink-0 scale-50 sm:scale-75 lg:scale-100">
+        <div className="size-[2600px] shrink-0 scale-50 sm:scale-75 lg:scale-100">
           <div
             style={{
               transform: "rotateX(55deg) rotateY(0deg) rotateZ(-45deg)",
             }}
-            className="relative top-96 right-[50%] grid size-full origin-top-left grid-cols-4 gap-8 transform-3d"
+            className="grid size-full origin-center grid-cols-6 gap-8 transform-3d"
           >
             {chunks.map((subarray, colIndex) => (
               <motion.div
@@ -39,7 +39,7 @@ export const ThreeDMarquee = ({
                   repeatType: "reverse",
                 }}
                 key={colIndex + "marquee"}
-                className="flex flex-col items-start gap-8"
+                className="flex flex-col items-start gap-8 [mask-image:linear-gradient(to_bottom,transparent_0%,black_10%,black_90%,transparent_100%)]"
               >
                 <GridLineVertical className="-left-4" offset="80px" />
                 {subarray.map((image, imageIndex) => (
