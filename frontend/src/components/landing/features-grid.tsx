@@ -158,7 +158,7 @@ const RealisticDataSkeleton = () => {
   return (
     <div ref={observerRef} className="flex h-full flex-col items-center justify-center p-4"> {/* Attach observer ref */}
       {/* Glassy container (non-motion) */}
-      <div className="w-full max-w-xs rounded-md border border-neutral-700 bg-gradient-to-br from-black to-[#060e25] p-3 shadow-inner">
+      <div className="w-full max-w-xs rounded-md border border-neutral-700 bg-gradient-to-br from-black to-[#060e25] p-3 shadow-inner shadow-[0_0_15px_2px_rgba(16,185,129,0.4)]">
         {/* Motion wrapper for content fade and stagger control */}
         <motion.div
           variants={wrapperVariants}

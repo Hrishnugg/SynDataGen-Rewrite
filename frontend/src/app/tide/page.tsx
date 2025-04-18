@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { useRef } from "react";
 import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { TextAnimate } from "@/components/magicui/text-animate";
+import { StickyScroll } from "@/components/ui/sticky-scroll-reveal";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -24,7 +26,37 @@ for (let i = 0; i < numRepetitions; i++) {
 }
 marqueeImages = marqueeImages.slice(0, targetImageCount); // Ensure exactly 48 images
 
+// Define content for the StickyScroll component based on the pipeline description
+const pipelineContent = [
+  {
+    title: "1. Pre-processing & Curation",
+    description:
+      "Input data is chunked for efficient batch processing. We then assess data quality and carefully curate a refined dataset optimized for few-shot learning by our downstream generation models.",
+    content: null, // Optional: Add React components or images here later
+  },
+  {
+    title: "2. PII Identification with Gemini",
+    description:
+      "Utilizing a fine-tuned Gemini Flash 2.5 model (ideally distilled) with its full 1M token context window, we rapidly identify and mark Personally Identifiable Information (PII) and Protected Health Information (PHI) across massive datasets. Gemini's superior needle-in-a-haystack capability ensures high accuracy, while techniques like LoRA minimize fine-tuning costs.",
+    content: null,
+  },
+  {
+    title: "3. Privacy via Anonymization",
+    description:
+      "Marked data undergoes rigorous anonymization using differential privacy techniques like DP-SGD. We introduce carefully calibrated noise via Laplace or Gaussian distributions to guarantee privacy while preserving the essential statistical characteristics and utility of the original data.",
+    content: null,
+  },
+  {
+    title: "4. Synthetic Data Generation with DeepSeek",
+    description:
+      "A fine-tuned DeepSeek R1 model processes the anonymized data to generate high-fidelity synthetic data. As a frontier reasoner model, DeepSeek R1 excels at understanding complex patterns and relationships within the data, leading to synthetic datasets achieving 90-95% accuracy. This leverages the model's reasoning capabilities for superior quality generation, optimized further through cost-effective LoRA fine-tuning.",
+    content: null,
+  },
+];
+
 export default function TidePage() {
+  const scrollContainerRef = useRef(null);
+
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-black">
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
@@ -57,11 +89,17 @@ export default function TidePage() {
         </div>
       </div>
 
-      {/* Placeholder for future sections */}
-      {/* <section className="py-20">
-        <h2 className="text-center text-3xl font-bold dark:text-white">Features</h2>
-        {/* Feature content goes here */}
-      {/* </section> */}
+      {/* Tall Container for Scroll Pinning Effect */}
+      <div ref={scrollContainerRef} className="relative h-[400vh] bg-black">
+        <StickyScroll content={pipelineContent} scrollContainerRef={scrollContainerRef} />
+      </div>
+
+      {/* Placeholder for future sections below the pinned section */}
+      <section className="h-screen bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center">
+        <h2 className="text-center text-3xl font-bold text-black dark:text-white">
+          Next Section After Pipeline
+        </h2>
+      </section>
 
       {/* <Footer /> You might want to add a shared footer later */}
     </div>
