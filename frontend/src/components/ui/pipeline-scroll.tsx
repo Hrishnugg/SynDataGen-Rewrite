@@ -63,40 +63,43 @@ export const PipelineScroll = ({
     // Tall outer container with black background, drives the scroll effect
     <div
       ref={outerContainerRef}
-      className={cn("relative bg-black", `h-[${heightMultiplier}vh]`)} // Dynamically set height
+      className="relative bg-black" // Removed dynamic height class
+      style={{ height: `${heightMultiplier}vh` }} // Added inline style for height
     >
       {/* Sticky container for the content */}
       <div ref={contentRef} className="sticky top-0 flex h-screen items-center justify-center space-x-10 overflow-hidden p-10">
-         {/* Left Text Column */}
-         <div className="relative flex items-start px-4">
-           <div className="max-w-2xl">
-             {content.map((item, index) => (
-               <div key={item.title + index} className="my-20"> {/* Adjust vertical spacing if needed */}
-                 <motion.h2
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: activeCard === index ? 1 : 0.3 }}
-                   className="text-2xl font-bold text-slate-100"
+         {/* Left Text Column - Modified for single item fade animation */}
+         <div className="relative flex items-center px-4" style={{ height: 'auto' }}> {/* Ensure this container doesn't impose height, let items-center work */}
+           <div className="w-2xl"> {/* Changed max-w-2xl to w-2xl for consistent spacing */}
+             {/* Render only the active card's content, wrapped in motion.div for animation */}
+             {content[activeCard] && (
+                <motion.div
+                    key={activeCard} // Trigger animation on change
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }} // Added ease for smoother animation
                  >
-                   {item.title}
-                 </motion.h2>
-                 <motion.p
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: activeCard === index ? 1 : 0.3 }}
-                   className="text-kg mt-10 max-w-sm text-slate-300" // Ensure text color contrasts with black bg
-                 >
-                   {item.description}
-                 </motion.p>
-               </div>
-             ))}
-             {/* Add padding at the bottom if needed, maybe less than before */}
-             <div className="h-20" />
+                    <h2
+                     // Removed motion props, handled by parent
+                     className="text-2xl font-bold text-slate-100"
+                   >
+                     {content[activeCard].title}
+                   </h2>
+                    <p
+                     // Removed motion props, handled by parent
+                     className="text-kg mt-10 max-w-sm text-slate-300"
+                   >
+                     {content[activeCard].description}
+                   </p>
+                  </motion.div>
+             )}
            </div>
          </div>
          {/* Right Content Area */}
          <div
            // Removed background style
            className={cn(
-             "hidden h-60 w-80 overflow-hidden rounded-md bg-neutral-800 lg:block", // Changed bg-white to bg-neutral-800
+             "hidden h-120 w-120 overflow-hidden rounded-md bg-neutral-800 lg:block", // Increased size
              contentClassName,
            )}
          >
