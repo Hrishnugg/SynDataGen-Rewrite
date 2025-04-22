@@ -34,7 +34,9 @@ export default function RootLayout({
       <body
         className={`${figtree.variable} antialiased`}
       >
-        <StoreProvider>{children}</StoreProvider>
+        <div className="flex flex-col min-h-screen">
+         <StoreProvider>{children}</StoreProvider>
+        </div>
       </body>
     </html>
   );
