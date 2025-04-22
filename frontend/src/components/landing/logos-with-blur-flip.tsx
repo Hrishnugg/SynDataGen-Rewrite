@@ -34,7 +34,7 @@ export function LogosWithBlurFlip() {
       },
       {
         name: "Amazon AWS",
-        src: "/Amazon_Web_Services_logo.svg",
+        src: "/Amazon_Web_Services-Logo.png",
       },
       {
         name: "NVIDIA",
