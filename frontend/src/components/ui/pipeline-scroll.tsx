@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useMotionValueEvent, useScroll } from "motion/react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import AnimeVisualizer from "./AnimeVisualizer"; // Import the new component
 
 // Define the props type - simplified as it manages its own scroll
 type PipelineScrollProps = {
@@ -95,16 +96,17 @@ export const PipelineScroll = ({
              )}
            </div>
          </div>
-         {/* Right Content Area */}
+         {/* Right Content Area - Replaced with AnimeVisualizer */}
          <div
-           // Removed background style
+           // Removed background style and direct content rendering
+           // Keep size and layout classes, pass contentClassName if needed for border/etc.
            className={cn(
-             "hidden h-120 w-120 overflow-hidden rounded-md bg-neutral-800 lg:block", // Increased size
+             "hidden h-120 w-120 overflow-hidden rounded-md bg-neutral-800 lg:block", // Keep container styles
              contentClassName,
            )}
          >
-           {/* Render content based on activeCard */}
-           {content[activeCard]?.content ?? null}
+           {/* Render the AnimeVisualizer, passing the active card index */}
+           <AnimeVisualizer activeSectionIndex={activeCard} />
          </div>
       </div>
     </div>
