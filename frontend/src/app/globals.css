@@ -5,8 +5,8 @@ html {
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme {
@@ -77,14 +77,6 @@ html {
     100% {
       transform: translateZ(0) rotate(360deg);
     }
-  }
-}
-
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
   }
 }
 
