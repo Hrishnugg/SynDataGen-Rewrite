@@ -169,13 +169,6 @@ export default function TidePage() {
         onSubmit={handleChatSubmit}
       />
 
-      {/* Re-add placeholder section for scroll-out verification */}
-      <section className="h-screen bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center">
-        <h2 className="text-center text-3xl font-bold text-black dark:text-white">
-          Next Section After Pipeline
-        </h2>
-      </section>
-
       {/* Added Request Demo Button Section */}
       {/* Added relative positioning for stars */}
       <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
