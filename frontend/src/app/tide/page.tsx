@@ -90,10 +90,13 @@ export default function TidePage() {
 
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
       <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
-        {/* Semi-transparent overlay for text readability */}
+        {/* Add opaque background layer specifically for Hero section to hide global stars */}
+        <div className="absolute inset-0 bg-black" />
+
+        {/* Semi-transparent overlay for text readability (keep this above opaque layer) */}
         <div className="absolute inset-0 z-10 h-full w-full bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
 
-        {/* Marquee Background */}
+        {/* Marquee Background (keep this above opaque layer) */}
         <ThreeDMarquee
           className="pointer-events-none absolute inset-0 h-full w-full"
           images={marqueeImages}
