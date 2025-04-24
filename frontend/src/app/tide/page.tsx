@@ -5,6 +5,9 @@ import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { TextAnimate } from "@/components/magicui/text-animate";
 import { PipelineScroll } from "@/components/ui/pipeline-scroll";
+import Image from "next/image";
+import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
+import { ChatSection } from "@/components/tide/chat-section";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -24,6 +27,26 @@ for (let i = 0; i < numRepetitions; i++) {
   marqueeImages = marqueeImages.concat(baseImages);
 }
 marqueeImages = marqueeImages.slice(0, targetImageCount); // Ensure exactly 48 images
+
+// Placeholder definitions for Chat Input
+const chatPlaceholders = [
+  "Ask Tide: What are the key trends in my dataset?",
+  "Generate a report comparing Q1 and Q2 sales.",
+  "Identify potential outliers in user activity.",
+  "Explain the PII anonymization process.",
+  "How accurate is the generated synthetic data?",
+];
+
+const handleChatChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  console.log("Chat input changed:", e.target.value);
+  // Placeholder function - implement actual logic later
+};
+
+const handleChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  console.log("Chat form submitted");
+  // Placeholder function - implement actual logic later
+};
 
 // Re-add pipelineContent definition
 const pipelineContent = [
@@ -93,6 +116,46 @@ export default function TidePage() {
 
       {/* Use the new PipelineScroll component */}
       <PipelineScroll content={pipelineContent} />
+
+      {/* New Data Visualizer Section */}
+      <section className="py-20 bg-black">
+        <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4">
+          {/* Left Column: Text */}
+          <div className="text-neutral-800 dark:text-neutral-200">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Explore Your Data Visually
+            </h2>
+            <p className="text-base md:text-lg mb-6">
+              Tide includes a powerful, interactive visualizer. Dive deep into
+              your generated datasets, compare distributions, identify correlations,
+              and validate data quality with intuitive charts and summaries.
+              Ensure your synthetic data perfectly aligns with real-world patterns
+              before deployment.
+            </p>
+            {/* Optional: Add a button or link here if needed */}
+            {/* <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Learn More</button> */}
+          </div>
+
+          {/* Right Column: Image Placeholder */}
+          <div className="flex justify-center md:justify-end">
+            <Image
+              src="/placeholder-visualizer-large.jpg" // Placeholder for large visualizer
+              alt="Data Visualizer Interface Placeholder"
+              width={700} // Larger width
+              height={438} // Corresponding height (16:10 ratio)
+              className="rounded-lg shadow-xl object-cover w-full h-auto max-w-2xl" // Ensure responsiveness
+            />
+          </div>
+        </div>
+      </section>
+      {/* End New Data Visualizer Section */}
+
+      {/* Integrate the new ChatSection component */}
+      <ChatSection
+        placeholders={chatPlaceholders}
+        onChange={handleChatChange}
+        onSubmit={handleChatSubmit}
+      />
 
       {/* Re-add placeholder section for scroll-out verification */}
       <section className="h-screen bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center">
