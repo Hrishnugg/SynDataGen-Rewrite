@@ -11,6 +11,8 @@ import { ChatSection } from "@/components/tide/chat-section";
 import { Footer } from "@/components/landing/footer";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
+import Link from "next/link";
+import { Button as MagicButton } from "@/components/ui/bmagic-button";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -170,6 +172,15 @@ export default function TidePage() {
           Next Section After Pipeline
         </h2>
       </section>
+
+      {/* Added Request Demo Button Section */}
+      <div className="flex justify-center py-16 bg-black relative z-10">
+        <Link href="/#waitlist">
+          <MagicButton>
+            Request A Demo
+          </MagicButton>
+        </Link>
+      </div>
 
       <Footer />
     </div>
