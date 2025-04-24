@@ -174,8 +174,13 @@ export default function TidePage() {
       </section>
 
       {/* Added Request Demo Button Section */}
-      <div className="flex justify-center py-16 bg-black relative z-10">
-        <Link href="/#waitlist">
+      {/* Added relative positioning for stars */}
+      <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
+        {/* Add stars inside this section */}
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure button is above stars */}
+        <Link href="/#waitlist" className="relative z-10"> 
           <MagicButton>
             Request A Demo
           </MagicButton>
