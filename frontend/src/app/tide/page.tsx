@@ -9,6 +9,8 @@ import Image from "next/image";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { ChatSection } from "@/components/tide/chat-section";
 import { Footer } from "@/components/landing/footer";
+import { ShootingStars } from "@/components/ui/shooting-stars";
+import { StarsBackground } from "@/components/ui/stars-background";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -79,9 +81,13 @@ const pipelineContent = [
 
 export default function TidePage() {
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black">
+    <div className="flex flex-col min-h-screen bg-black relative">
+      {/* Add both star components as background layers */}
+      <StarsBackground className="absolute inset-0 z-0" />
+      <ShootingStars className="absolute inset-0 z-0" />
+
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
-      <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden">
+      <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
         {/* Semi-transparent overlay for text readability */}
         <div className="absolute inset-0 z-10 h-full w-full bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
 
