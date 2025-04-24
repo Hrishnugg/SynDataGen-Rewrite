@@ -69,8 +69,13 @@ export default function TidePage() {
 
         {/* Overlay Content - Centered */}
         <div className="relative z-20 flex flex-col items-center px-4">
-          <h1 className="text-4xl md:text-7xl lg:text-8xl font-bold text-center text-white mb-6">
-            Meet <AuroraText colors={['#14b8a6', '#4ade80', '#14b8a6']}>Tide</AuroraText>
+          <h1 className="text-4xl md:text-7xl lg:text-8xl font-bold text-center text-white mb-6 flex items-center justify-center flex-wrap">
+            Meet <AuroraText colors={['#14b8a6', '#4ade80', '#14b8a6']} className="ml-4">Tide</AuroraText>
+            <img 
+              src="/tide 3d transparent.png" 
+              alt="Tide Logo" 
+              className="inline-block h-16 md:h-20 lg:h-24 w-auto ml-2 md:ml-4 align-middle"
+            />
           </h1>
 
           <TextAnimate

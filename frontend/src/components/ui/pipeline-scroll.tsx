@@ -82,13 +82,13 @@ export const PipelineScroll = ({
                  >
                     <h2
                      // Removed motion props, handled by parent
-                     className="text-2xl font-bold text-slate-100"
+                     className="text-4xl font-bold text-slate-100"
                    >
                      {content[activeCard].title}
                    </h2>
                     <p
                      // Removed motion props, handled by parent
-                     className="text-kg mt-10 max-w-sm text-slate-300"
+                     className="text-xl mt-10 max-w-sm text-slate-300"
                    >
                      {content[activeCard].description}
                    </p>
@@ -101,7 +101,8 @@ export const PipelineScroll = ({
            // Removed background style and direct content rendering
            // Keep size and layout classes, pass contentClassName if needed for border/etc.
            className={cn(
-             "hidden h-120 w-120 overflow-hidden rounded-md bg-neutral-800 lg:block", // Keep container styles
+             "hidden h-120 w-120 overflow-hidden rounded-md lg:block", // Keep base layout
+             "bg-black/50 backdrop-blur-md", // Add semi-transparent black and backdrop blur
              contentClassName,
            )}
          >

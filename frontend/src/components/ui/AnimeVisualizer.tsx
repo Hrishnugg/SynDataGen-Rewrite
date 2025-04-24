@@ -129,11 +129,17 @@ const AnimeVisualizer: React.FC<AnimeVisualizerProps> = ({ activeSectionIndex })
            delay: stagger(20, { grid: [gridCols, gridRows], from: 'first' }), // Slight stagger
            begin: (anim: AnimeInstance) => {
                // Filter targets at the beginning of this animation step
-               remainingCubes = anim.animatables
-                   .map(a => a.target as HTMLElement)
-                   .filter((el: Element, index: number) => !cubesToRemoveIndices.includes(index));
-               anim.animatables = anim.animatables.filter((el: Element, index: number) => !cubesToRemoveIndices.includes(index));
-               console.log(`Animating ${remainingCubes.length} remaining cubes`);
+               if (Array.isArray(anim.animatables)) {
+                   remainingCubes = anim.animatables
+                       .map(a => a.target as HTMLElement)
+                       .filter((el: Element, index: number) => !cubesToRemoveIndices.includes(index));
+                   // Also apply the filter to the instance's animatables
+                   anim.animatables = anim.animatables.filter((el: Element, index: number) => !cubesToRemoveIndices.includes(index));
+                   console.log(`Animating ${remainingCubes.length} remaining cubes`);
+               } else {
+                   console.warn("anim.animatables was not an array in 'begin' callback. Skipping filtering.");
+                   remainingCubes = []; // Set to empty array to avoid downstream errors
+               }
            },
            translateY: (el: Element, i: number) => {
                // Recalculate target Y based on remaining cubes
