@@ -25,10 +25,10 @@ const placeholderSlides = [
   },
 ];
 
-export default function SignInPage() {
+export default function RegistrationFormWithImages() {
   return (
     <div className="grid min-h-screen w-full grid-cols-1 md:grid-cols-2">
-      <LoginForm />
+      <Form />
       <div className="relative z-20 hidden w-full items-center justify-center overflow-hidden border-l border-neutral-100 bg-white md:flex dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex h-full w-full items-center justify-center p-4">
           <Carousel slides={placeholderSlides} />
@@ -38,9 +38,9 @@ export default function SignInPage() {
   );
 }
 
-function LoginForm() {
+function Form() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    console.log("submitted login form", e);
+    console.log("submitted form", e);
   }
 
   return (
@@ -52,13 +52,30 @@ function LoginForm() {
               <Logo />
             </div>
             <h2 className="mt-8 text-2xl font-bold leading-9 tracking-tight text-black dark:text-white">
-              Sign in to your account
+              Sign up for an account
             </h2>
           </div>
 
           <div className="mt-10">
             <div>
               <div className="space-y-6">
+                <div>
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium leading-6 text-neutral-700 dark:text-neutral-400"
+                  >
+                    Full name
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      id="name"
+                      type="name"
+                      placeholder="John Doe"
+                      className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label
                     htmlFor="email"
@@ -102,7 +119,7 @@ function LoginForm() {
                   >
                     <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)]" />
                     <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-3 py-1 text-sm font-medium text-white backdrop-blur-3xl">
-                      Sign In
+                      Sign Up
                     </span>
                   </button>
                   <p
@@ -110,9 +127,9 @@ function LoginForm() {
                       "mt-4 text-center text-sm text-neutral-600 dark:text-neutral-400",
                     )}
                   >
-                    Don't have an account?{" "}
-                    <Link href="/auth/signup" className="text-black dark:text-white">
-                      Sign up
+                    Already have an account?{" "}
+                    <Link href="/auth/login" className="text-black dark:text-white">
+                      Sign in
                     </Link>
                   </p>
                 </div>
@@ -145,6 +162,23 @@ function LoginForm() {
                   </span>
                 </button>
               </div>
+
+              <p className="mt-8 text-center text-sm text-neutral-600 dark:text-neutral-400">
+                By clicking on sign up, you agree to our{" "}
+                <Link
+                  href="#"
+                  className="text-neutral-500 dark:text-neutral-300"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="#"
+                  className="text-neutral-500 dark:text-neutral-300"
+                >
+                  Privacy Policy
+                </Link>
+              </p>
             </div>
           </div>
         </div>
