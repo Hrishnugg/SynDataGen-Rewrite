@@ -8,6 +8,7 @@ import { PipelineScroll } from "@/components/ui/pipeline-scroll";
 import Image from "next/image";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { ChatSection } from "@/components/tide/chat-section";
+import { Footer } from "@/components/landing/footer";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -164,7 +165,7 @@ export default function TidePage() {
         </h2>
       </section>
 
-      {/* <Footer /> You might want to add a shared footer later */}
+      <Footer />
     </div>
   );
 } 
