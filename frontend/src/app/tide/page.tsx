@@ -146,11 +146,11 @@ export default function TidePage() {
           {/* Right Column: Image Placeholder */}
           <div className="flex justify-center md:justify-end">
             <Image
-              src="/placeholder-visualizer-large.jpg" // Placeholder for large visualizer
-              alt="Data Visualizer Interface Placeholder"
-              width={700} // Larger width
-              height={438} // Corresponding height (16:10 ratio)
-              className="rounded-lg shadow-xl object-cover w-full h-auto max-w-2xl" // Ensure responsiveness
+              src="/flint and steel.jpeg"
+              alt="Flint and steel"
+              width={700}
+              height={438}
+              className="rounded-lg shadow-xl object-cover w-full h-auto max-w-2xl"
             />
           </div>
         </div>
