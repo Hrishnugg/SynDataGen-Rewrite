@@ -22,11 +22,13 @@
 
 .heading {
   /* Applied to TextGenerateEffect wrapper */
-  font-size: 5rem; /* Further increased font size */
+  font-size: 4rem; /* Decreased font size */
   line-height: 1.1; /* Adjust line height */
   font-weight: bold;
   text-align: center;
   z-index: 10; /* Ensure text is above spotlight */
+  margin-bottom: 25rem; /* Adjusted margin for spacing above form */
+  padding-left: 5rem; /* Added padding to shift text right (~1cm) */
 }
 
 .rightColumn {
