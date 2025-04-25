@@ -23,6 +23,7 @@ import { NavDocuments } from "@/components/nav-documents"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { NavSection } from "@/components/nav-section"
 import {
   Sidebar,
   SidebarContent,
@@ -54,6 +55,11 @@ const data = {
       title: "Projects",
       url: "/projects",
       icon: IconFolder,
+    },
+    {
+      title: "Jobs",
+      url: "/jobs",
+      icon: IconDatabase,
     },
   ],
   navClouds: [
@@ -121,7 +127,24 @@ const data = {
       icon: IconSearch,
     },
   ],
-  documents: [
+  recentProjects: [
+    {
+      name: "Data Library",
+      url: "#",
+      icon: IconDatabase,
+    },
+    {
+      name: "Reports",
+      url: "#",
+      icon: IconReport,
+    },
+    {
+      name: "Word Assistant",
+      url: "#",
+      icon: IconFileWord,
+    },
+  ],
+  recentJobs: [
     {
       name: "Data Library",
       url: "#",
@@ -151,8 +174,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
               <a href="#">
-                <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Acme Inc.</span>
+                <img 
+                  src="/synopticlogo3d.png" 
+                  alt="Synoptica Logo" 
+                  className="h-5 w-5"
+                />
+                <span className="text-base font-semibold">Synoptica</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -160,7 +187,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
+        <NavSection title="Recent Projects" items={data.recentProjects} />
+        <NavSection title="Recent Jobs" items={data.recentJobs} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
