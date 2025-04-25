@@ -5,6 +5,14 @@ import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { TextAnimate } from "@/components/magicui/text-animate";
 import { PipelineScroll } from "@/components/ui/pipeline-scroll";
+import Image from "next/image";
+import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
+import { ChatSection } from "@/components/tide/chat-section";
+import { Footer } from "@/components/landing/footer";
+import { ShootingStars } from "@/components/ui/shooting-stars";
+import { StarsBackground } from "@/components/ui/stars-background";
+import Link from "next/link";
+import { Button as MagicButton } from "@/components/ui/bmagic-button";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -24,6 +32,26 @@ for (let i = 0; i < numRepetitions; i++) {
   marqueeImages = marqueeImages.concat(baseImages);
 }
 marqueeImages = marqueeImages.slice(0, targetImageCount); // Ensure exactly 48 images
+
+// Placeholder definitions for Chat Input
+const chatPlaceholders = [
+  "Ask Tide: What are the key trends in my dataset?",
+  "Generate a report comparing Q1 and Q2 sales.",
+  "Identify potential outliers in user activity.",
+  "Explain the PII anonymization process.",
+  "How accurate is the generated synthetic data?",
+];
+
+const handleChatChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  console.log("Chat input changed:", e.target.value);
+  // Placeholder function - implement actual logic later
+};
+
+const handleChatSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  console.log("Chat form submitted");
+  // Placeholder function - implement actual logic later
+};
 
 // Re-add pipelineContent definition
 const pipelineContent = [
@@ -55,13 +83,20 @@ const pipelineContent = [
 
 export default function TidePage() {
   return (
-    <div className="flex flex-col min-h-screen bg-white dark:bg-black">
+    <div className="flex flex-col min-h-screen bg-black relative">
+      {/* Add both star components as background layers */}
+      <StarsBackground className="absolute inset-0 z-0" />
+      <ShootingStars className="absolute inset-0 z-0" />
+
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
-      <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden">
-        {/* Semi-transparent overlay for text readability */}
+      <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
+        {/* Add opaque background layer specifically for Hero section to hide global stars */}
+        <div className="absolute inset-0 bg-black" />
+
+        {/* Semi-transparent overlay for text readability (keep this above opaque layer) */}
         <div className="absolute inset-0 z-10 h-full w-full bg-gradient-to-b from-black/60 via-black/80 to-black/90" />
 
-        {/* Marquee Background */}
+        {/* Marquee Background (keep this above opaque layer) */}
         <ThreeDMarquee
           className="pointer-events-none absolute inset-0 h-full w-full"
           images={marqueeImages}
@@ -94,6 +129,46 @@ export default function TidePage() {
       {/* Use the new PipelineScroll component */}
       <PipelineScroll content={pipelineContent} />
 
+      {/* New Data Visualizer Section */}
+      <section className="py-20 bg-black">
+        <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4">
+          {/* Left Column: Text */}
+          <div className="text-neutral-800 dark:text-neutral-200">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              Explore Your Data Visually
+            </h2>
+            <p className="text-base md:text-lg mb-6">
+              Tide includes a powerful, interactive visualizer. Dive deep into
+              your generated datasets, compare distributions, identify correlations,
+              and validate data quality with intuitive charts and summaries.
+              Ensure your synthetic data perfectly aligns with real-world patterns
+              before deployment.
+            </p>
+            {/* Optional: Add a button or link here if needed */}
+            {/* <button className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">Learn More</button> */}
+          </div>
+
+          {/* Right Column: Image Placeholder */}
+          <div className="flex justify-center md:justify-end">
+            <Image
+              src="/flint and steel.jpeg"
+              alt="Flint and steel"
+              width={700}
+              height={438}
+              className="rounded-lg shadow-xl object-cover w-full h-auto max-w-2xl"
+            />
+          </div>
+        </div>
+      </section>
+      {/* End New Data Visualizer Section */}
+
+      {/* Integrate the new ChatSection component */}
+      <ChatSection
+        placeholders={chatPlaceholders}
+        onChange={handleChatChange}
+        onSubmit={handleChatSubmit}
+      />
+
       {/* Re-add placeholder section for scroll-out verification */}
       <section className="h-screen bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center">
         <h2 className="text-center text-3xl font-bold text-black dark:text-white">
@@ -101,7 +176,21 @@ export default function TidePage() {
         </h2>
       </section>
 
-      {/* <Footer /> You might want to add a shared footer later */}
+      {/* Added Request Demo Button Section */}
+      {/* Added relative positioning for stars */}
+      <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
+        {/* Add stars inside this section */}
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure button is above stars */}
+        <Link href="/#waitlist" className="relative z-10"> 
+          <MagicButton>
+            Request A Demo
+          </MagicButton>
+        </Link>
+      </div>
+
+      <Footer />
     </div>
   );
 } 

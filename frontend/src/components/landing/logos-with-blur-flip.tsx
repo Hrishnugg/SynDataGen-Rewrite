@@ -66,10 +66,10 @@ export function LogosWithBlurFlip() {
   return (
     <div className="relative z-20 px-4 py-10 md:px-8 md:py-40">
       <h2 className="bg-gradient-to-b from-neutral-900 to-neutral-600 bg-clip-text text-center font-sans text-2xl font-bold text-transparent md:text-5xl dark:from-white dark:to-neutral-600">
-        Trusted by the best companies
+        With help from the best companies
       </h2>
       <p className="mt-4 text-center font-sans text-base text-neutral-700 dark:text-neutral-300">
-        Companies that have been using our product from the very start.
+        Companies that have been supporting us from the very start.
       </p>
       <div className="relative mt-20 flex h-full w-full flex-wrap justify-center gap-10 md:gap-10">
         <AnimatePresence
