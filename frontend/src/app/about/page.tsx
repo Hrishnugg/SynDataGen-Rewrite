@@ -11,6 +11,7 @@ import { TealMagicButton } from "@/components/ui/bmagic-button-teal";
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
 // Import OrbitingCircles
 import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
+import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 
 // Define team members data
 const teamMembers = [
@@ -61,9 +62,10 @@ export default function AboutPage() {
     <>
       {/* Hero Section - Updated Layout */}
       {/* Use flex-row, items-center, justify-between */}
-      <div className="flex flex-col items-center text-center pt-32 mb-96">
-        {/* Left Content Block */}
-        <div className="w-full max-w-3xl flex flex-col items-center">
+      <div className="relative flex flex-col items-center text-center pt-32 mb-96 h-[40rem]"> {/* Add relative positioning and height */}
+        <BackgroundBeams className="absolute top-0 left-0 w-full h-full z-0" /> {/* Add BackgroundBeams */}
+        {/* Add z-10 to ensure content is above beams */}
+        <div className="relative z-10 w-full max-w-3xl flex flex-col items-center"> 
           <div className="flex items-center justify-center mb-6"> {/* Changed justify-center to justify-start */}
             <Image
               src="/synopticlogo3d.png" // Path to the logo in the public directory
