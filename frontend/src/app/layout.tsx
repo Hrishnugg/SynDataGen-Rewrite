@@ -32,7 +32,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning={true}>
       <body
-        className={`${figtree.variable} antialiased`}
+        className={`${figtree.variable} antialiased bg-black`}
       >
         <div className="flex flex-col min-h-screen">
          <StoreProvider>{children}</StoreProvider>
