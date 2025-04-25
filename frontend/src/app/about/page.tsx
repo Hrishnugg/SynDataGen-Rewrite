@@ -1,6 +1,6 @@
 "use client"; // Add the directive
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image'; // Import the Next.js Image component
 import Link from 'next/link'; // Import Link
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect"; // Import the effect component
@@ -11,6 +11,7 @@ import { TealMagicButton } from "@/components/ui/bmagic-button-teal";
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
 // Import OrbitingCircles
 import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
+import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 
 // Define team members data
 const teamMembers = [
@@ -45,15 +46,27 @@ const mapLocations = [
 
 export default function AboutPage() {
   const newSubheading = "The Synthetic Data Company- The Future of Data Generated Today";
+  const [animationKey, setAnimationKey] = useState(0); // State for remounting effect
+
+  useEffect(() => {
+    // Set up interval to change the key every 10 seconds
+    const intervalId = setInterval(() => {
+      setAnimationKey(prevKey => prevKey + 1);
+    }, 10000); // 10 seconds
+
+    // Clear interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []); // Run only once on mount
 
   return (
-    <div className="container mx-auto px-4 py-16"> {/* Basic container and padding */}
+    <>
       {/* Hero Section - Updated Layout */}
       {/* Use flex-row, items-center, justify-between */}
-      <div className="flex flex-col md:flex-row items-center justify-between mb-64">
-        {/* Left Content Block */}
-        <div className="w-full md:w-1/2 text-left">
-          <div className="flex items-center justify-start mb-6"> {/* Changed justify-center to justify-start */}
+      <div className="relative flex flex-col items-center text-center pt-32 mb-96 h-[40rem]"> {/* Add relative positioning and height */}
+        <BackgroundBeams className="absolute top-0 left-0 w-full h-full z-0" /> {/* Add BackgroundBeams */}
+        {/* Add z-10 to ensure content is above beams */}
+        <div className="relative z-10 w-full max-w-3xl flex flex-col items-center"> 
+          <div className="flex items-center justify-center mb-6"> {/* Changed justify-center to justify-start */}
             <Image
               src="/synopticlogo3d.png" // Path to the logo in the public directory
               alt="Synoptic Logo"
@@ -65,6 +78,7 @@ export default function AboutPage() {
           </div>
           {/* Render TextGenerateEffect directly */}
           <TextGenerateEffect
+            key={animationKey} // Add key to force remount
             words={newSubheading}
             className="text-xl font-semibold text-gray-300 mb-4 min-h-[60px]" // Keep min-height and styles
             // duration prop can be used if needed, defaults to 0.5
@@ -72,7 +86,7 @@ export default function AboutPage() {
           <p className="text-lg text-gray-400 max-w-3xl mb-6"> {/* Add bottom margin to paragraph */}
             We are a synthetic data generation company called Synoptic. Synoptic has developed a three-stage synthetic data generation pipeline combining cutting-edge LLMs with privacy-preserving techniques. PII/PHI is accurately identified by Gemini Flash 2.5, anonymized via differential privacy, and then used by a distilled DeepSeek model to generate cost-effective, feature-preserving synthetic data.
           </p>
-          <div className="mt-6 flex items-center gap-4"> {/* Use flex and gap for spacing */}
+          <div className="mt-6 flex items-center justify-center gap-4"> {/* Use flex and gap for spacing */}
             <TealMagicButton> {/* Existing button */}
               Meet Tide
             </TealMagicButton>
@@ -85,24 +99,7 @@ export default function AboutPage() {
           </div>
         </div>
 
-        {/* Right Content Block - Orbiting Circles */}
-        {/* Added relative positioning and size constraints */}
-        <div className="w-full md:w-1/2 flex justify-center items-center relative h-96 mt-16 md:mt-0">
-          <OrbitingCircles
-            className="size-[30px] border border-slate-100/20 bg-slate-800/80"
-            radius={180} // Increased radius
-            duration={30} // Slower duration
-          >
-            {/* Placeholder Children - Replace with actual icons/images */}
-            <div className="text-white text-xs">DB</div>
-            <div className="text-white text-xs">AI</div>
-            <div className="text-white text-xs">API</div>
-            <div className="text-white text-xs">UI</div>
-            <div className="text-white text-xs">?</div>
-          </OrbitingCircles>
-           {/* Optional: Central Element */}
-           {/* <div className="absolute size-12 bg-slate-700 rounded-full"></div> */}
-        </div>
+        {/* Right Content Block - Orbiting Circles REMOVED */}
       </div>
 
       {/* Mission Section - DELETE THIS BLOCK */}
@@ -118,18 +115,20 @@ export default function AboutPage() {
       {/* End of deleted Mission Section block */}
 
       {/* Meet the Team Section */}
-      <div className="mb-24"> {/* Margin bottom for spacing */}
+      <div className="mb-48"> {/* Margin bottom for spacing */}
         <h2 className="text-5xl font-bold mb-8 text-center text-white">Meet the Team</h2> {/* Title styling */}
         <AnimatedTestimonials testimonials={teamMembers} />
       </div>
 
       {/* Where we are Section */}
-      <div className="mb-24 text-center"> {/* Add margin bottom and center text */}
+      <div className="mb-48 text-center"> {/* Add margin bottom and center text */}
         <h2 className="text-5xl font-bold mb-8 text-white">Where We Are</h2>
-        <WorldMap dots={mapLocations} /> {/* Pass locations to the map component */}
+        <div className="w-full max-w-4xl mx-auto"> {/* Wrapper div for sizing - Increased size */} 
+         <WorldMap dots={mapLocations} /> {/* Pass locations to the map component */}
+        </div>
       </div>
 
       {/* Rest of the about page content can go here */}
-    </div>
+    </>
   );
 } 
