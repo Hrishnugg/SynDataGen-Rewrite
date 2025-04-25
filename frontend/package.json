@@ -37,6 +37,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cobe": "^0.6.3",
+    "dotted-map": "^2.2.3",
     "lucide-react": "^0.488.0",
     "motion": "^12.7.2",
     "next": "15.3.0",
