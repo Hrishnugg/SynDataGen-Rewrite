@@ -22,6 +22,8 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconCircleCheckFilled,
+  IconAlertTriangleFilled,
+  IconAlertCircleFilled,
   IconDotsVertical,
   IconGripVertical,
   IconLayoutColumns,
@@ -83,6 +85,8 @@ export const schema = z.object({
   date_created: z.string(),
   creator: z.string(),
 })
+
+export type { ColumnDef } from "@tanstack/react-table"
 
 // Create a separate component for the drag handle
 function DragHandle({ id }: { id: number }) {
@@ -155,18 +159,35 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
   {
     accessorKey: "status",
     header: () => <div className="w-full text-left">Status</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          {row.original.status === "Done" ? (
-            <IconCircleCheckFilled className="mr-1 fill-green-500 dark:fill-green-400" />
-          ) : (
-            <IconLoader className="mr-1 animate-spin" />
-          )}
-          {row.original.status}
+    cell: ({ row }) => {
+      const status = row.original.status as "Active" | "Archived" | "Error";
+      return (
+        <Badge
+          variant="outline"
+          className={`border-transparent px-2.5 py-0.5 text-xs 
+            ${
+              status === "Active"
+                ? "bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-100"
+                : status === "Archived"
+                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100"
+                  : "bg-red-100 text-red-800 dark:bg-red-900/80 dark:text-red-100"
+            }`}
+        >
+          <div className="flex items-center gap-1">
+            {status === "Active" && (
+              <IconCircleCheckFilled aria-hidden="true" className="h-3.5 w-3.5" />
+            )}
+            {status === "Archived" && (
+              <IconAlertTriangleFilled aria-hidden="true" className="h-3.5 w-3.5" />
+            )}
+            {status === "Error" && (
+              <IconAlertCircleFilled aria-hidden="true" className="h-3.5 w-3.5" />
+            )}
+            {status}
+          </div>
         </Badge>
-      </div>
-    ),
+      );
+    },
   },
   {
     accessorKey: "storage_total",
@@ -545,9 +566,9 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> & { name: stri
                     <SelectValue placeholder="Select a status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Done">Done</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Archived">Archived</SelectItem>
+                    <SelectItem value="Error">Error</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
