@@ -16,16 +16,15 @@ export const ChatSection: React.FC<ChatSectionProps> = ({
   onSubmit,
 }) => {
   return (
-    <section className="py-20 bg-black">
-      <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4">
-        {/* Left Column: Chat Input */}
-        <div className="flex flex-col items-start">
-          {" "}
-          {/* Consistent left alignment */}
-          <h3 className="text-2xl font-semibold mb-1 text-neutral-300">
+    <section>
+      <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-48 items-center px-4">
+        {/* Left Column: Chat Input - Center all items */}
+        <div className="flex flex-col items-center"> 
+          {/* Consistent center alignment */}
+          <h3 className="text-4xl font-semibold mb-1 text-neutral-300 text-center">
             Talk to Tide
           </h3>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 text-left mb-3">
+          <p className="text-lg text-neutral-500 dark:text-neutral-400 mb-3 text-center">
             Interact with your data using natural language.
           </p>
           <PlaceholdersAndVanishInput

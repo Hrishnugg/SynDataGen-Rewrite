@@ -9,10 +9,10 @@ import Image from "next/image";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { ChatSection } from "@/components/tide/chat-section";
 import { Footer } from "@/components/landing/footer";
-import { ShootingStars } from "@/components/ui/shooting-stars";
-import { StarsBackground } from "@/components/ui/stars-background";
 import Link from "next/link";
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
+import { ShootingStars } from "@/components/ui/shooting-stars";
+import { StarsBackground } from "@/components/ui/stars-background";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -84,9 +84,8 @@ const pipelineContent = [
 export default function TidePage() {
   return (
     <div className="flex flex-col min-h-screen bg-black relative">
-      {/* Add both star components as background layers */}
-      <StarsBackground className="absolute inset-0 z-0" />
-      <ShootingStars className="absolute inset-0 z-0" />
+      {/* Remove global star components */}
+      {/* <StarsBackground className="absolute inset-0 z-0" /> */}
 
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
       <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
@@ -105,7 +104,7 @@ export default function TidePage() {
         {/* Overlay Content - Centered */}
         <div className="relative z-20 flex flex-col items-center px-4">
           <h1 className="text-4xl md:text-7xl lg:text-8xl font-bold text-center text-white mb-6 flex items-center justify-center flex-wrap">
-            Meet <AuroraText colors={['#14b8a6', '#4ade80', '#14b8a6']} className="ml-4">Tide</AuroraText>
+            Meet <AuroraText colors={["#BBFAF5", "#69BECC", "#5CB9BF", "#2D98A0"]} className="ml-4">Tide</AuroraText>
             <img 
               src="/tide 3d transparent.png" 
               alt="Tide Logo" 
@@ -126,12 +125,17 @@ export default function TidePage() {
         </div>
       </div>
 
-      {/* Use the new PipelineScroll component */}
-      <PipelineScroll content={pipelineContent} />
+      {/* Use the new PipelineScroll component - Add bg-black */}
+      <div className="bg-black"> {/* Ensure solid background */}
+        <PipelineScroll content={pipelineContent} />
+      </div>
 
-      {/* New Data Visualizer Section */}
-      <section className="py-20 bg-black">
-        <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4">
+      {/* New Data Visualizer Section - Increase padding, remove margin */}
+      <section className="py-48 bg-black relative overflow-hidden"> 
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure content is above stars with relative z-10 */} 
+        <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4 relative z-10">
           {/* Left Column: Text */}
           <div className="text-neutral-800 dark:text-neutral-200">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -162,20 +166,26 @@ export default function TidePage() {
       </section>
       {/* End New Data Visualizer Section */}
 
-      {/* Integrate the new ChatSection component */}
-      <ChatSection
-        placeholders={chatPlaceholders}
-        onChange={handleChatChange}
-        onSubmit={handleChatSubmit}
-      />
-
-      {/* Added Request Demo Button Section */}
-      {/* Added relative positioning for stars */}
-      <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
-        {/* Add stars inside this section */}
+      {/* Integrate the new ChatSection component within a relative container - Increase padding */}
+      <div className="relative bg-black py-48 overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
-        {/* Ensure button is above stars */}
+        <div className="relative z-10"> {/* Ensure content is above stars */}
+          <ChatSection
+            placeholders={chatPlaceholders}
+            onChange={handleChatChange}
+            onSubmit={handleChatSubmit}
+          />
+        </div>
+      </div>
+
+      {/* Added Request Demo Button Section */}
+      {/* Added relative positioning for stars, ADDED stars background */}
+      <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
+        {/* Add stars to this section */}
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure button is above stars */} 
         <Link href="/#waitlist" className="relative z-10"> 
           <MagicButton>
             Request A Demo
