@@ -8,6 +8,7 @@ export function Footer() {
   const pages = [
     { title: "Features", href: "#features" },
     { title: "Pricing", href: "#pricing" },
+    { title: "About", href: "/about" },
     // { title: "Studio", href: "#" }, // Removed irrelevant links
     // { title: "Clients", href: "#" },
     // { title: "Blog", href: "#" },
