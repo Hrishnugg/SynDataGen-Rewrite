@@ -6,7 +6,6 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import AnimeVisualizer from "./AnimeVisualizer"; // Import the new component
 import { StarsBackground } from "./stars-background"; // Import stars
-import { ShootingStars } from "./shooting-stars"; // Import shooting stars
 
 // Define the props type - simplified as it manages its own scroll
 type PipelineScrollProps = {
@@ -70,9 +69,6 @@ export const PipelineScroll = ({
       style={{ height: `${heightMultiplier}vh` }} 
     >
       {/* Add star backgrounds here, behind the sticky content */}
-      <StarsBackground className="absolute inset-0 z-0" />
-      <ShootingStars className="absolute inset-0 z-0" />
-
       {/* Sticky container for the content */}
       {/* Added z-10 to ensure content is above stars */}
       <div ref={contentRef} className="sticky top-0 flex h-screen items-center justify-center space-x-10 overflow-hidden p-10 z-10">

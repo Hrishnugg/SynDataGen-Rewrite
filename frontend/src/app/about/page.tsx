@@ -19,19 +19,19 @@ const teamMembers = [
     name: "Joey Zeng",
     designation: "CEO & Co Founder",
     quote: "Astra inclinant, sed non obligant. The stars incline us, they do not blind us.",
-    src: "/placeholder-person.png", // Placeholder image path
+    src: "/joey.png", // Placeholder image path
   },
   {
     name: "Hrishikesh Hari",
     designation: "CTO & Co Founder",
     quote: "Sunbum Sunscreen actually tastes pretty good.",
-    src: "/shrek-placeholder.png", // Placeholder for Shrek image
+    src: "/hrishy.png", // Placeholder for Shrek image
   },
   {
     name: "Sarah Yang",
     designation: "Co Founder",
     quote: "If your favorite dinosaur is a T-rex, you're a red flag.",
-    src: "/placeholder-person-2.png", // Another placeholder image path
+    src: "/sarahh.png", // Another placeholder image path
   },
   // Add more team members here as needed
 ];
