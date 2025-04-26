@@ -9,11 +9,13 @@ import {
 } from "@/components/shadcn/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/shadcn/card";
 import { Badge } from "@/components/shadcn/badge";
-// Import the new table components (assuming they exist after copying)
+// Import the updated table components
 import { JobsTable } from "@/components/jobs-table";
 import { DatasetsTable } from "@/components/datasets-table";
 import { Separator } from "@/components/shadcn/separator";
 import { ProjectMetricCards } from "@/components/project-metric-cards";
+import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
+import { IconPlus, IconUpload } from "@tabler/icons-react";
 
 // Define mock data structures
 type Job = {
@@ -63,17 +65,48 @@ interface ProjectManagementPageProps {
 }
 
 export default function ProjectManagementPage({ params }: ProjectManagementPageProps) {
-  const projectId = parseInt(params.projectId, 10); // Convert param to number
+  const projectId = parseInt(params.projectId, 10);
   const project = mockProjectDetails[projectId as keyof typeof mockProjectDetails];
 
-  // Filter data for the current project
   const projectJobs = mockJobs.filter(job => job.projectId === projectId);
   const projectDatasets = mockDatasets.filter(dataset => dataset.projectId === projectId);
 
-  if (!project) {
-    // Handle case where project ID is invalid
-    return <div>Project not found</div>; // Or a proper 404 page
+  // Placeholder Handlers
+  const handleCreateJob = () => {
+    console.log("Create Job clicked for project:", projectId);
   }
+  const handleUploadDataset = () => {
+    console.log("Upload Dataset clicked for project:", projectId);
+  }
+
+  if (!project) {
+    return <div>Project not found</div>;
+  }
+
+  // --- Create Action Buttons --- //
+  const createJobButton = (
+    <HoverBorderGradient
+        containerClassName="rounded-md"
+        as="button"
+        onClick={handleCreateJob}
+        className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-8 px-3 text-xs"
+      >
+        <IconPlus className="h-3.5 w-3.5" />
+        <span>Create Job</span>
+    </HoverBorderGradient>
+  );
+
+  const uploadDatasetButton = (
+    <HoverBorderGradient
+        containerClassName="rounded-md"
+        as="button"
+        onClick={handleUploadDataset}
+        className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-8 px-3 text-xs"
+    >
+      <IconUpload className="h-3.5 w-3.5" />
+      <span>Upload Dataset</span>
+    </HoverBorderGradient>
+  );
 
   return (
     <SidebarProvider
@@ -87,11 +120,10 @@ export default function ProjectManagementPage({ params }: ProjectManagementPageP
       <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col p-4 md:p-6">
-          <h1 className="text-2xl font-semibold mb-4">{project.name}</h1>
+        <div className="flex flex-1 flex-col p-4 md:p-6 space-y-6">
+          <h1 className="text-2xl font-semibold">{project.name}</h1>
 
-          {/* Metric Cards - Use the new component */}
-          <ProjectMetricCards 
+          <ProjectMetricCards
             storageUsed={project.storageUsed}
             storageRemaining={project.storageRemaining}
             storageTotal={project.storageTotal}
@@ -102,18 +134,16 @@ export default function ProjectManagementPage({ params }: ProjectManagementPageP
             datasets={project.datasets}
           />
 
-          {/* Jobs Table */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-3">Data Generation Jobs</h2>
-            <JobsTable data={projectJobs} />
+          <div className="space-y-3">
+            <h2 className="text-xl font-semibold">Data Generation Jobs</h2>
+            <JobsTable data={projectJobs} actionButton={createJobButton} />
           </div>
 
-          <Separator className="my-4" />
+          <Separator />
 
-          {/* Datasets Table */}
-          <div>
-            <h2 className="text-xl font-semibold mb-3">Generated Datasets</h2>
-            <DatasetsTable data={projectDatasets} />
+          <div className="space-y-3">
+            <h2 className="text-xl font-semibold">Generated Datasets</h2>
+            <DatasetsTable data={projectDatasets} actionButton={uploadDatasetButton} />
           </div>
         </div>
       </SidebarInset>

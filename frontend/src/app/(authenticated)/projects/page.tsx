@@ -17,6 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/ta
 import { Badge } from "@/components/shadcn/badge"; // For status in Card view
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shadcn/card"; // For styling within 3d-card
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient"; // Import HoverBorderGradient
+import { ProjectCreationModal } from "@/components/ProjectCreationModal"; // Import the modal
+import { IconPlus } from "@tabler/icons-react"; // Icon for button
 
 // Define the Project data structure
 type Project = {
@@ -98,6 +100,30 @@ const mockData: Project[] = [
 // ];
 
 export default function ProjectsPage() {
+  // State for the creation modal
+  const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
+
+  // Handler for submitting the new project
+  const handleCreateProjectSubmit = async (details: {
+    name: string;
+    description: string;
+    settings: { dataRetentionDays: number; maxStorageGB: number };
+  }): Promise<boolean> => {
+    console.log("Submitting new project:", details);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Simulate success/failure (e.g., always succeed for now)
+    const success = true; 
+    if (success) {
+      console.log("Project creation successful (simulated).");
+      // TODO: Refetch project list or update state
+      return true;
+    } else {
+      console.error("Project creation failed (simulated).");
+      return false;
+    }
+  };
+
   return (
     <SidebarProvider
       style={
@@ -120,10 +146,13 @@ export default function ProjectsPage() {
                 <TabsTrigger value="table">Table View</TabsTrigger>
               </TabsList>
               <HoverBorderGradient
-                containerClassName="rounded-md shadow-2xl"
-                className="dark:bg-black bg-black text-white dark:text-white text-sm font-medium lg:text-base"
+                containerClassName="rounded-md"
+                as="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
               >
-                Create Project
+                 <IconPlus className="h-4 w-4 mr-1" />
+                 <span>Create Project</span>
               </HoverBorderGradient>
             </div>
             <TabsContent value="card">
@@ -185,6 +214,13 @@ export default function ProjectsPage() {
           </Tabs>
         </div>
       </SidebarInset>
+
+      {/* Render the Modal */}
+      <ProjectCreationModal
+        isOpen={isCreateModalOpen}
+        onOpenChange={setIsCreateModalOpen}
+        onCreateProject={handleCreateProjectSubmit}
+      />
     </SidebarProvider>
   );
 } 

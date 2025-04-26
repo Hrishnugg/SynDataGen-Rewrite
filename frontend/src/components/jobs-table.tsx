@@ -232,14 +232,17 @@ function DraggableRow({ row }: { row: Row<Job> }) { // Update type to Job
   )
 }
 
-// Rename Component and update props
+// Add actionButton prop
+interface JobsTableProps {
+  data: Job[];
+  actionButton?: React.ReactNode;
+}
+
 export function JobsTable({
   data: initialData,
-}: {
-  data: Job[] // Update prop type to Job[]
-}) {
+  actionButton // Destructure new prop
+}: JobsTableProps) {
   const [data, setData] = React.useState(() => initialData)
-  // Reset state when initialData changes (important if data comes from server)
   React.useEffect(() => {
     setData(initialData);
   }, [initialData]);
@@ -250,7 +253,7 @@ export function JobsTable({
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10, // Default page size
+    pageSize: 10,
   })
   const sortableId = React.useId()
   const sensors = useSensors(useSensor(MouseSensor, {}), useSensor(TouchSensor, {}), useSensor(KeyboardSensor, {}))
@@ -294,15 +297,24 @@ export function JobsTable({
     }
   }
 
-  // Remove the outer Tabs component unless specific filtering/view tabs are needed *within* the table
   return (
-    <div className="flex flex-col gap-4">
-       {/* Removed the TabsList/Select for internal views like "Outline" from original table */}
-      <div className="flex items-center justify-end gap-2 px-1">
-           {/* Column Visibility Dropdown (Keep) */}
-           <DropdownMenu>
+    <div className="space-y-4"> {/* Use space-y */}
+      {/* Top Control Bar */}
+      <div className="flex items-center justify-between gap-2 px-1">
+        {/* Left Side (Placeholder for Filters) */}
+        <div className="flex items-center gap-2">
+            {/* Add filter controls here later if needed */}
+        </div>
+
+        {/* Right Side (Action Button, Columns Button) */}
+        <div className="flex items-center gap-2">
+          {actionButton && actionButton} {/* Render the passed button */} 
+
+          {/* Column Visibility Dropdown */}
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto">
+              {/* Match styling from ProjectJobsTable */}
+              <Button variant="outline" size="sm" className="h-8">
                 <IconLayoutColumns className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -326,10 +338,11 @@ export function JobsTable({
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Add Filter button if needed */}
+        </div>
       </div>
-      {/* Removed TabsContent wrapper */}
-      <div className="overflow-hidden rounded-lg border">
+
+      {/* Table Container */}
+      <div className="overflow-hidden rounded-md border"> {/* Use rounded-md, overflow-hidden */}
         <DndContext
           collisionDetection={closestCenter}
           modifiers={[restrictToVerticalAxis]}
@@ -371,9 +384,10 @@ export function JobsTable({
           </Table>
         </DndContext>
       </div>
-      {/* Pagination Controls (Keep) */}
-      <div className="flex items-center justify-between px-2">
-         <div className="flex-1 text-sm text-muted-foreground">
+
+      {/* Pagination Controls */} 
+      <div className="flex items-center justify-end space-x-2 py-4"> {/* Use justify-end */} 
+        <div className="flex-1 text-sm text-muted-foreground">
             {table.getFilteredSelectedRowModel().rows.length} of{" "}
             {table.getFilteredRowModel().rows.length} row(s) selected.
           </div>

@@ -28,7 +28,6 @@ import {
   IconDotsVertical,
   IconGripVertical,
   IconLayoutColumns,
-  IconPlus,
   IconDownload,
   IconFileDescription,
   IconTrash,
@@ -217,12 +216,16 @@ function DraggableRow({ row }: { row: Row<Dataset> }) {
   )
 }
 
-// Rename Component and update props
+// Add actionButton prop
+interface DatasetsTableProps {
+  data: Dataset[];
+  actionButton?: React.ReactNode;
+}
+
 export function DatasetsTable({
   data: initialData,
-}: {
-  data: Dataset[]
-}) {
+  actionButton // Destructure new prop
+}: DatasetsTableProps) {
   const [data, setData] = React.useState(() => initialData)
   React.useEffect(() => {
     setData(initialData);
@@ -279,11 +282,15 @@ export function DatasetsTable({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-2 px-1">
-           <DropdownMenu>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2">
+        </div>
+        <div className="flex items-center gap-2">
+          {actionButton && actionButton}
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto">
+              <Button variant="outline" size="sm" className="h-8">
                 <IconLayoutColumns className="mr-2 h-4 w-4" />
                 Columns
               </Button>
@@ -306,8 +313,9 @@ export function DatasetsTable({
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
       </div>
-      <div className="overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-md border">
         <DndContext
           collisionDetection={closestCenter}
           modifiers={[restrictToVerticalAxis]}
@@ -349,11 +357,11 @@ export function DatasetsTable({
           </Table>
         </DndContext>
       </div>
-      <div className="flex items-center justify-between px-2">
-         <div className="flex-1 text-sm text-muted-foreground">
-            {table.getFilteredSelectedRowModel().rows.length} of{" "}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
-          </div>
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <div className="flex-1 text-sm text-muted-foreground">
+          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length} row(s) selected.
+        </div>
         <div className="flex items-center space-x-6 lg:space-x-8">
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">Rows per page</p>
