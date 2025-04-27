@@ -128,6 +128,8 @@ export default function TidePage() {
       {/* Use the new PipelineScroll component - Add bg-black */}
       <div className="bg-black"> {/* Ensure solid background */}
         <PipelineScroll content={pipelineContent} />
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
       </div>
 
       {/* New Data Visualizer Section - Increase padding, remove margin */}
