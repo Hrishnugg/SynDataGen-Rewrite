@@ -6,13 +6,13 @@ import { TextHoverEffect } from "../ui/text-hover-effect";
 // Renamed component for clarity
 export function Footer() {
   const pages = [
-    { title: "Pricing", href: "/pricing" },
     { title: "About", href: "/about" },
     { title: "Tide", href: "/tide" },
+    { title: "Pricing", href: "/pricing" },
+    { title: "Contact", href: "/#waitlist" },
     // { title: "Studio", href: "#" }, // Removed irrelevant links
     // { title: "Clients", href: "#" },
     // { title: "Blog", href: "#" },
-    { title: "Contact", href: "/#waitlist" },
   ];
 
   const socials = [
