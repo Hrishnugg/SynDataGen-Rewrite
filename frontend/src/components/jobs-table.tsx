@@ -102,6 +102,68 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
+// NEW: JobCellViewer component (adapted from TableCellViewer in data-table.tsx)
+function JobCellViewer({ item }: { item: Job }) {
+  const isMobile = useIsMobile()
+
+  return (
+    <Drawer direction={isMobile ? "bottom" : "right"}>
+      <DrawerTrigger asChild>
+        {/* Use font-medium like the original cell */}
+        <Button variant="link" className="text-foreground w-fit px-0 text-left font-medium">
+          {item.name}
+        </Button>
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader className="gap-1">
+          <DrawerTitle>{item.name}</DrawerTitle>
+          <DrawerDescription>Job Details and Status</DrawerDescription>
+        </DrawerHeader>
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
+          {/* Form adapted for Job schema */}
+          <form className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
+              <Label htmlFor="job-name">Job Name</Label>
+              <Input id="job-name" defaultValue={item.name} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-3">
+                <Label htmlFor="job-status">Status</Label>
+                <Select defaultValue={item.status}>
+                  <SelectTrigger id="job-status" className="w-full">
+                    <SelectValue placeholder="Select a status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Use statuses from schema */}
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Archived">Archived</SelectItem>
+                    <SelectItem value="Error">Error</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+               <div className="flex flex-col gap-3">
+                 <Label htmlFor="job-duration">Duration</Label>
+                 <Input id="job-duration" defaultValue={item.duration} readOnly />
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+                <Label htmlFor="job-created">Date Created</Label>
+                <Input id="job-created" defaultValue={item.createdDate} readOnly />
+            </div>
+             {/* Removed fields not present in Job schema (Type, Storage, Creator) */}
+          </form>
+        </div>
+        <DrawerFooter>
+          <Button>Update Job</Button> {/* Changed button text */}
+          <DrawerClose asChild>
+            <Button variant="outline">Done</Button>
+          </DrawerClose>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
+  )
+}
+
 // Define Job Columns
 const jobColumns: ColumnDef<Job>[] = [
   {
@@ -135,8 +197,8 @@ const jobColumns: ColumnDef<Job>[] = [
   {
     accessorKey: "name",
     header: () => <div className="w-full text-left">Job Name</div>,
-    // Potentially wrap name in a Button/Link to open details later
-    cell: ({ row }) => <div className="text-left font-medium">{row.original.name}</div>,
+    // Use JobCellViewer for rendering the name cell
+    cell: ({ row }) => <JobCellViewer item={row.original} />,
     enableHiding: false,
   },
   {
