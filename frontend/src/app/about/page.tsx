@@ -12,6 +12,7 @@ import { Button as MagicButton } from "@/components/ui/bmagic-button";
 // Import OrbitingCircles
 import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
 import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
+import { Footer } from "@/components/landing/footer"; // Import Footer
 
 // Define team members data
 const teamMembers = [
@@ -129,6 +130,7 @@ export default function AboutPage() {
       </div>
 
       {/* Rest of the about page content can go here */}
+      <Footer /> {/* Add Footer component */}
     </>
   );
 } 

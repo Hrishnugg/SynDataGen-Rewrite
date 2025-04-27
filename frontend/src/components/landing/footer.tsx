@@ -6,7 +6,7 @@ import { TextHoverEffect } from "../ui/text-hover-effect";
 // Renamed component for clarity
 export function Footer() {
   const pages = [
-    { title: "Pricing", href: "#pricing" },
+    { title: "Pricing", href: "/pricing" },
     { title: "About", href: "/about" },
     { title: "Tide", href: "/tide" },
     // { title: "Studio", href: "#" }, // Removed irrelevant links
