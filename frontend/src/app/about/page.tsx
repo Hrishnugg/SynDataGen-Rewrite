@@ -19,7 +19,7 @@ const teamMembers = [
   {
     name: "Joey Zeng",
     designation: "CEO & Co Founder",
-    quote: "Astra inclinant, sed non obligant. The stars incline us, they do not blind us.",
+    quote: "I think I might be allergic to grass.",
     src: "/joey.png", // Placeholder image path
   },
   {
