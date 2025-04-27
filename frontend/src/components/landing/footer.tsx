@@ -16,7 +16,7 @@ export function Footer() {
   ];
 
   const socials = [
-    { title: "LinkedIn", href: "#" }, // Example social links (replace #)
+    { title: "LinkedIn", href: "/socials" }, // Updated href to point to socials page
     { title: "Twitter", href: "#" },
     // { title: "Facebook", href: "#" },
     // { title: "Instagram", href: "#" },
