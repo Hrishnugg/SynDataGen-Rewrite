@@ -88,11 +88,14 @@ export default function AboutPage() {
             We are a synthetic data generation company called Synoptic. Synoptic has developed a three-stage synthetic data generation pipeline combining cutting-edge LLMs with privacy-preserving techniques. PII/PHI is accurately identified by Gemini Flash 2.5, anonymized via differential privacy, and then used by a distilled DeepSeek model to generate cost-effective, feature-preserving synthetic data.
           </p>
           <div className="mt-6 flex items-center justify-center gap-4"> {/* Use flex and gap for spacing */}
-            <TealMagicButton> {/* Existing button */}
-              Meet Tide
-            </TealMagicButton>
+            {/* Wrap TealMagicButton with Link */}
+            <Link href="/tide">
+              <TealMagicButton> {/* Existing button */}
+                Meet Tide
+              </TealMagicButton>
+            </Link>
             {/* Add Request a Demo button with Link */}
-            <Link href="#waitlist"> {/* Link to waitlist section (adjust if needed) */}
+            <Link href="/#waitlist"> {/* Updated Link to point to waitlist section on landing page */}
               <MagicButton> {/* Use original button component */}
                 Request A Demo
               </MagicButton>
