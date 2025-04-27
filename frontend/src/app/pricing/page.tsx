@@ -1,6 +1,7 @@
 "use client"; // Add the directive
 
 import React from 'react';
+import Link from 'next/link'; // Import Link
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect"; // Import the effect component
 import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 import { Footer } from "@/components/landing/footer"; // Import Footer
@@ -76,9 +77,12 @@ export default function PricingPage() {
               <li>Volume Discounts</li>
               <li>Advanced Security Options</li>
             </ul>
-            <button className="bg-teal-500 text-white px-6 py-2 rounded hover:bg-teal-600 transition-colors">
+            <Link
+              href="/#waitlist"
+              className="bg-teal-500 text-white px-6 py-2 rounded hover:bg-teal-600 transition-colors"
+            >
               Contact Sales
-            </button>
+            </Link>
           </div>
         </div>
       </div>
