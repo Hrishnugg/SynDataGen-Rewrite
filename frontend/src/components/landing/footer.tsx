@@ -12,7 +12,7 @@ export function Footer() {
     // { title: "Studio", href: "#" }, // Removed irrelevant links
     // { title: "Clients", href: "#" },
     // { title: "Blog", href: "#" },
-    { title: "Contact", href: "/contact" },
+    { title: "Contact", href: "/#waitlist" },
   ];
 
   const socials = [
