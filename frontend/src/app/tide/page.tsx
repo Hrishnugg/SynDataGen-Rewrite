@@ -126,11 +126,21 @@ export default function TidePage() {
         </div>
       </div>
       {/* Use the new PipelineScroll component - Add bg-black */}
-      <div className="bg-black"> {/* Ensure solid background */}
+      <div className="bg-black relative"> {/* Ensure solid background, Added relative */}
         <PipelineScroll content={pipelineContent} />
+        {/* Added Stars specifically for this section */} 
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
       </div>
+      {/* Added Features Coming Soon Section */}
+      <section className="py-16 bg-black text-center relative z-10 overflow-hidden"> {/* Added overflow-hidden */}
+        {/* Add Stars Background */}
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure heading is above stars */}
+        <h2 className="text-3xl font-bold text-neutral-300 relative z-10">Features Coming Soon</h2> {/* Added font-bold and relative z-10 */}
+        {/* Optionally add more detail or placeholder visuals later */}
+      </section>
       {/* New Data Visualizer Section - Increase padding, remove margin */}
       <section className="py-48 bg-black relative overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
