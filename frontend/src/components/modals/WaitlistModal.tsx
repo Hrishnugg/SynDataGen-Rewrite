@@ -22,6 +22,11 @@ interface WaitlistModalProps {
 export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
   if (!isOpen) return null;
 
+  // Handler to be called when the form is submitted successfully
+  const handleFormSubmitted = () => {
+    onClose(); // Call the original onClose passed from the parent page
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       {/* Removed padding/max-width from DialogContent as BackgroundGradient in form handles it */}
@@ -29,7 +34,7 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
         {/* Removed DialogHeader as title/description are now in WaitlistForm */}
         
         {/* Render the waitlist form directly */}
-        <WaitlistForm />
+        <WaitlistForm onSubmitted={handleFormSubmitted} />
 
         {/* Removed DialogFooter and DialogClose */}
       </DialogContent>

@@ -10,7 +10,12 @@ import { BackgroundGradient } from "@/components/ui/background-gradient";
 // For now, let's assume styles are accessible or we'll adjust.
 import styles from '../waitlist-section.module.css'; // Import styles from original component
 
-export function WaitlistForm() {
+// Define props for the form, including the submission callback
+interface WaitlistFormProps {
+  onSubmitted: () => void;
+}
+
+export function WaitlistForm({ onSubmitted }: WaitlistFormProps) {
   const [selectedVolume, setSelectedVolume] = useState<string>('');
 
   const handleVolumeClick = (volume: string) => {
@@ -25,6 +30,9 @@ export function WaitlistForm() {
       selectedVolume 
     }); 
     alert('Thank you for joining the waitlist!'); // Simple confirmation
+    
+    // Call the callback function passed from the modal to close it
+    onSubmitted(); 
   };
 
   return (
