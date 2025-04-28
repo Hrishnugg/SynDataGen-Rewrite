@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"SynDataGen/backend/internal/core" // Import core package
+	// Import core package
 
 	"github.com/gin-gonic/gin"
 )
@@ -92,31 +92,8 @@ func (h *AuthHandlers) Login(c *gin.Context) {
 
 // GetCurrentUser handles requests to fetch the current user's session info.
 func (h *AuthHandlers) GetCurrentUser(c *gin.Context) {
-	userID, exists := GetUserIDFromContext(c)
-	if !exists {
-		// This technically shouldn't happen if middleware is applied correctly
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID missing from context"})
-		return
-	}
-
-	// --- TEMPORARY BYPASS FOR TESTING ---
-	if userID == "dummy-test-user-id" {
-		// Return a hardcoded dummy user object
-		dummyUser := &core.User{
-			ID:        "dummy-test-user-id",
-			Name:      "Test User",
-			Email:     "test@example.com",
-			Company:   "Test Inc.",
-			CreatedAt: time.Now().UTC(),
-			UpdatedAt: time.Now().UTC(),
-		}
-		c.JSON(http.StatusOK, dummyUser)
-		return
-	}
-	// --- END TEMPORARY BYPASS ---
-
-	// Original logic: Pass the Gin context to the service.
-	user, err := h.Svc.GetCurrentUser(c)
+	// Pass the Gin context directly to the service.
+	user, err := h.Svc.GetCurrentUser(c) // Pass c directly
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "USER_NOT_FOUND", "message": err.Error()})

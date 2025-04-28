@@ -1,6 +1,6 @@
 # Environment variables
 backend/.env
-
+ 
 # Optional: Add other common ignores for Go/Node if needed
 # e.g.:
 # backend/bin/

@@ -94,20 +94,38 @@ func (r *jobRepository) ListJobsByProjectID(ctx context.Context, projectID strin
 	}
 
 	collRef := r.client.Collection(jobCollection)
-	baseQuery := collRef.Where("projectId", "==", projectID).OrderBy("createdAt", firestore.Desc)
+	baseQuery := collRef.Where("projectId", "==", projectID)
 
-	// Get Total Count first (before applying limit/offset for pagination)
-	countQuery := baseQuery
-	countSnap, err := countQuery.Documents(ctx).GetAll()
+	// --- Get Total Count using Aggregation ---
+	var totalCount int
+	countAggQuery := baseQuery.NewAggregationQuery().WithCount("all")
+	results, err := countAggQuery.Get(ctx)
 	if err != nil {
-		r.logger.Error("Error counting jobs for project", zap.String("projectID", projectID), zap.Error(err))
+		// Log the specific error (e.g., index missing) but attempt to continue if possible?
+		// For now, return error as counting is essential for pagination UI.
+		r.logger.Error("Error executing job count aggregation for project", zap.String("projectID", projectID), zap.Error(err))
 		return nil, 0, fmt.Errorf("failed to count jobs for project %s: %w", projectID, err)
 	}
-	totalCount := len(countSnap)
-	r.logger.Info("Total jobs found for project", zap.String("projectID", projectID), zap.Int("totalCount", totalCount))
 
-	// Apply pagination to the main query
-	pagedQuery := baseQuery.Offset(offset).Limit(limit)
+	countResult, ok := results["all"]
+	if !ok {
+		r.logger.Warn("Count result key 'all' not found in job count aggregation, assuming 0", zap.String("projectID", projectID))
+		totalCount = 0
+	} else {
+		countValue, castOK := countResult.(int64)
+		if !castOK {
+			r.logger.Warn("Failed to cast job count aggregation result to int64, assuming 0",
+				zap.String("projectID", projectID),
+				zap.Any("resultType", fmt.Sprintf("%T", countResult)))
+			totalCount = 0
+		} else {
+			totalCount = int(countValue)
+		}
+	}
+	r.logger.Info("Total jobs counted for project via aggregation", zap.String("projectID", projectID), zap.Int("totalCount", totalCount))
+
+	// --- Get actual job documents with pagination ---
+	pagedQuery := baseQuery.OrderBy("createdAt", firestore.Desc).Offset(offset).Limit(limit)
 	iter := pagedQuery.Documents(ctx)
 	defer iter.Stop()
 
@@ -119,6 +137,7 @@ func (r *jobRepository) ListJobsByProjectID(ctx context.Context, projectID strin
 		}
 		if err != nil {
 			r.logger.Error("Error iterating job documents for project", zap.String("projectID", projectID), zap.Error(err))
+			// Return partial results? Or error out? Erroring out for now.
 			return nil, 0, fmt.Errorf("failed to iterate job documents for project %s: %w", projectID, err)
 		}
 
@@ -230,16 +249,21 @@ func (r *jobRepository) ListJobsAcrossProjects(ctx context.Context, projectIDs [
 			r.logger.Error("Failed to get job count for project chunk", zap.Strings("projectIds", chunk), zap.Error(err))
 			return nil, 0, fmt.Errorf("failed to count jobs for project chunk: %w", err)
 		}
-		count, ok := results["all"]
+
+		countResult, ok := results["all"]
 		if !ok {
-			r.logger.Error("Count field missing from aggregation result", zap.Strings("projectIds", chunk))
-			return nil, 0, fmt.Errorf("count field missing for project chunk")
+			// If the 'all' key isn't present, assume count is 0 for this chunk
+			r.logger.Warn("Count field missing from aggregation result, assuming 0 for chunk", zap.Strings("projectIds", chunk))
+			// Continue to next chunk without adding to totalCount or erroring
+			continue
 		}
-		// Directly access the count value from the map result after type assertion
-		countValue, ok := count.(int64)
+
+		// Attempt to cast the result to int64. If it fails, assume count is 0 for this chunk.
+		countValue, ok := countResult.(int64)
 		if !ok {
-			r.logger.Error("Failed to assert count result type", zap.Strings("projectIds", chunk), zap.Any("countResultType", fmt.Sprintf("%T", count)))
-			return nil, 0, fmt.Errorf("failed to assert count result type for project chunk")
+			r.logger.Warn("Failed to assert count result type, assuming 0 for chunk", zap.Strings("projectIds", chunk), zap.Any("countResultType", fmt.Sprintf("%T", countResult)))
+			// Continue to next chunk without adding to totalCount or erroring
+			continue
 		}
 		totalCount += int(countValue) // Add chunk count to total
 

@@ -136,15 +136,18 @@ const Logo = () => {
     <Link
       href="/"
       className="font-normal flex space-x-2 items-center text-sm mr-4 text-black px-2 py-1 relative z-20"
-      legacyBehavior>
-      {/* Placeholder for Synoptic logo - replace src */}
-      { <Image
-        src="/synopticlogo3d.png" 
-        alt="Synoptic Logo"
-        width={30}
-        height={30}
-      /> }
-      <span className="font-medium text-white">Synoptic</span> {/* Updated name */}
+    >
+      {/* Wrap children and remove legacyBehavior */}
+      <>
+        {/* Placeholder for Synoptic logo - replace src */}
+        { <Image
+          src="/synopticlogo3d.png" 
+          alt="Synoptic Logo"
+          width={30}
+          height={30}
+        /> }
+        <span className="font-medium text-white">Synoptic</span> {/* Updated name */}
+      </>
     </Link>
   );
 }; 

@@ -125,7 +125,9 @@ function LoginForm() {
 
                 {isError && (
                   <div className="text-sm text-red-500 dark:text-red-400">
-                    {error?.data?.message || 'Login failed. Please check your credentials.'}
+                    {(error && 'status' in error && 'data' in error && typeof error.data === 'object' && error.data && 'message' in error.data) 
+                      ? (error.data as any).message 
+                      : 'Login failed. Please check your credentials.'}
                   </div>
                 )}
 
@@ -193,14 +195,16 @@ const Logo = () => {
     <Link
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
-      legacyBehavior>
-      <Image
-        src="/synopticlogo3d.png"
-        alt="logo"
-        width={30}
-        height={30}
-      />
-      <span className="font-medium text-black dark:text-white">Synoptic</span>
+    >
+      <>
+        <Image
+          src="/synopticlogo3d.png"
+          alt="logo"
+          width={30}
+          height={30}
+        />
+        <span className="font-medium text-black dark:text-white">Synoptic</span>
+      </>
     </Link>
   );
 };

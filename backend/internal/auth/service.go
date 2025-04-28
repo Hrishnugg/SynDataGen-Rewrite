@@ -3,6 +3,8 @@ package auth
 import (
 	"SynDataGen/backend/internal/core"
 	"context"
+
+	"github.com/gin-gonic/gin"
 )
 
 // RegisterRequest mirrors the request body for user registration.
@@ -35,10 +37,10 @@ type AuthService interface {
 	Login(ctx context.Context, req LoginRequest) (*LoginResponse, error)
 
 	// GetCurrentUser retrieves the user associated with the current session/token.
-	// The specific mechanism (e.g., extracting from context) depends on middleware.
-	GetCurrentUser(ctx context.Context) (*core.User, error)
+	// Pass the Gin context to allow extracting user ID reliably.
+	GetCurrentUser(c *gin.Context) (*core.User, error)
 
 	// Logout invalidates the current user session/token.
 	// Implementation depends heavily on session mechanism (e.g., token blocklist).
 	Logout(ctx context.Context) error
-} 
+}

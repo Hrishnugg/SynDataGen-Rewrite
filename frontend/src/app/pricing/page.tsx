@@ -90,7 +90,7 @@ export default function PricingPage() {
                  <li>Volume Discounts</li>
                  <li>Advanced Security Options</li>
                </ul>
-               <Link href="/#waitlist" className="mt-auto" legacyBehavior>
+               <Link href="/#waitlist">
                  <MagicButton>
                    Contact Sales
                  </MagicButton>

@@ -36,10 +36,13 @@ export const projectApiSlice = apiSlice.injectEndpoints({
         params: params || {}, // Pass query params if provided
       }),
       // Cache based on the list itself and individual project IDs
-      providesTags: (result) => [
-        { type: 'Project', id: 'LIST' },
-        ...(result?.projects.map(({ id }) => ({ type: 'Project' as const, id })) || []),
-      ],
+      providesTags: (result) => {
+        const projectTags = 
+          result && Array.isArray(result.projects) 
+            ? result.projects.map(({ id }) => ({ type: 'Project' as const, id })) 
+            : [];
+        return [{ type: 'Project', id: 'LIST' }, ...projectTags];
+      },
     }),
 
     getProject: builder.query<Project, string>({
@@ -112,7 +115,7 @@ export const projectApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: (result, error, { projectId }) => [{ type: 'Project', id: projectId }],
     }),
   }),
-  overrideExisting: false,
+  overrideExisting: true,
 });
 
 // Export hooks for usage in components

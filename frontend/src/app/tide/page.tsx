@@ -183,7 +183,7 @@ export default function TidePage() {
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure button is above stars */} 
-        <Link href="/#waitlist" className="relative z-10" legacyBehavior> 
+        <Link href="/#waitlist" className="relative z-10"> 
           <MagicButton>
             Request A Demo
           </MagicButton>

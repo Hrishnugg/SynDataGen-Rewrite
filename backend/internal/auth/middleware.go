@@ -1,10 +1,16 @@
 package auth
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
+	"SynDataGen/backend/internal/platform/logger"
+
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"go.uber.org/zap"
 )
 
 // UserIDKey is the key used to store the user ID in the Gin context.
@@ -18,78 +24,79 @@ const SessionCookieName = "session_token"
 func AuthMiddleware(svc AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		// --- TEMPORARY BYPASS FOR TESTING ---
-		// fmt.Println("WARNING: AuthMiddleware bypassed for testing!") // Optional log
-		// Setting a dummy user ID. Replace "dummy-test-user-id" if a specific format is needed.
-		c.Set(UserIDKey, "dummy-test-user-id")
-		c.Next()
-		return
-		// --- END TEMPORARY BYPASS ---
+		// --- ORIGINAL AUTH LOGIC ---
+		logger.Logger.Debug("AuthMiddleware triggered")
 
-		/* --- ORIGINAL AUTH LOGIC ---
 		// Get token from the session cookie
 		tokenString, err := c.Cookie(SessionCookieName)
 
 		if err != nil {
-			// Handle missing cookie error specifically
+			logger.Logger.Warn("AuthMiddleware: Cookie read error", zap.Error(err))
 			if errors.Is(err, http.ErrNoCookie) {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication required: session cookie missing"})
 				return
 			}
-			// Handle other potential errors getting the cookie
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Failed to read session cookie"})
 			return
 		}
 
 		if tokenString == "" {
+			logger.Logger.Warn("AuthMiddleware: Cookie empty")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authentication required: session cookie empty"})
 			return
 		}
+		logger.Logger.Debug("AuthMiddleware: Cookie found", zap.String("cookieValue(preview)", tokenString[:10]+"..."))
+
+		// Get JWT secret from service/config
+		jwtSecret := getJwtSecret()
 
 		// Parse and validate the token
 		claims := &jwtCustomClaims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			// Check the signing method
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			// Return the secret key
 			return jwtSecret, nil
 		})
 
 		if err != nil {
 			msg := "Invalid or expired token"
+			logger.Logger.Warn("AuthMiddleware: JWT parse error", zap.Error(err))
 			if errors.Is(err, jwt.ErrTokenExpired) {
 				msg = "Token has expired"
-				// Clear the expired cookie
 				clearSessionCookie(c)
 			} else {
 				// Log unexpected parsing errors
-				fmt.Printf("Error parsing JWT token: %v\n", err) // Replace with proper logging
+				// logger.Logger.Error("Error parsing JWT token", zap.Error(err)) // Use logger instead of fmt
 			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg})
 			return
 		}
 
 		if !token.Valid {
-			clearSessionCookie(c) // Clear invalid cookie
+			logger.Logger.Warn("AuthMiddleware: Token marked as invalid", zap.Any("claims", claims))
+			clearSessionCookie(c)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			return
 		}
+		logger.Logger.Debug("AuthMiddleware: Token is valid")
 
-		// Double check expiration (though ParseWithClaims should handle it)
+		// Double check expiration
 		if claims.ExpiresAt != nil && claims.ExpiresAt.Time.Before(time.Now()) {
-			clearSessionCookie(c) // Clear expired cookie
+			logger.Logger.Warn("AuthMiddleware: Token expired (manual check)", zap.Time("expiry", claims.ExpiresAt.Time))
+			clearSessionCookie(c)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
 			return
 		}
+		logger.Logger.Debug("AuthMiddleware: Expiry check passed")
 
-		// Token is valid, store user ID in context for downstream handlers
+		// Token is valid, store user ID in context
 		c.Set(UserIDKey, claims.Subject)
+		logger.Logger.Info("AuthMiddleware: User authenticated", zap.String(UserIDKey, claims.Subject))
 
 		// Continue to the next handler
 		c.Next()
-		--- END ORIGINAL AUTH LOGIC --- */
+		// --- END ORIGINAL AUTH LOGIC ---
 	}
 }
 

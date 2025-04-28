@@ -13,8 +13,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
+
 	// Placeholder for JWT library (e.g., github.com/golang-jwt/jwt/v5)
 	// "github.com/golang-jwt/jwt/v5"
+	"github.com/gin-gonic/gin"
 )
 
 // Configuration - read from environment variables
@@ -45,6 +47,12 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+// getJwtSecret returns the JWT secret key byte slice.
+// This allows middleware to access the package-level secret.
+func getJwtSecret() []byte {
+	return jwtSecret
 }
 
 // Define specific errors for auth service
@@ -177,15 +185,18 @@ func (s *authService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 }
 
 // GetCurrentUser retrieves the user associated with the current session/token.
-func (s *authService) GetCurrentUser(ctx context.Context) (*core.User, error) {
-	// Assume userID is extracted from context by middleware
-	userID, ok := ctx.Value(UserIDKey).(string) // Use the same key as middleware
+func (s *authService) GetCurrentUser(c *gin.Context) (*core.User, error) {
+	// Use the helper function to reliably get user ID from Gin context
+	userID, ok := GetUserIDFromContext(c)
 	if !ok || userID == "" {
 		logger.Logger.Warn("User ID not found in context for GetCurrentUser")
+		// Returning ErrInvalidCredentials might be more appropriate than a generic error
+		// if this implies the user isn't properly authenticated at this stage.
 		return nil, errors.New("user ID not found in context")
 	}
 
-	user, err := s.userRepo.GetUserByID(ctx, userID)
+	// Use the request context for DB operations
+	user, err := s.userRepo.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
 		logger.Logger.Error("Error getting user by ID", zap.Error(err), zap.String("userID", userID))
 		return nil, fmt.Errorf("failed to get user: %w", err)

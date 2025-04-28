@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -153,10 +154,11 @@ func (s *projectService) CreateProject(ctx context.Context, creatorID string, re
 	newProject.ID = projectID // Assign the generated ID
 	logger.Logger.Info("Initial project document created", zap.String("projectID", projectID))
 
-	// 3. Create the storage bucket using the generated project ID
+	// 3. Create the storage bucket using the generated project ID (converted to lowercase)
 	// Pass creatorID as the identifier for bucket labeling/ownership if needed by storage service
-	requestedRegion := "" // Let storage service use default
-	bucketName, region, err := s.storageSvc.CreateProjectBucket(ctx, newProject.ID, creatorID, requestedRegion)
+	requestedRegion := ""                              // Let storage service use default
+	bucketNameIDPart := strings.ToLower(newProject.ID) // <-- Convert ID to lowercase for bucket name
+	bucketName, region, err := s.storageSvc.CreateProjectBucket(ctx, bucketNameIDPart, creatorID, requestedRegion)
 	if err != nil {
 		logger.Logger.Error("Failed to create project bucket after initial save", zap.Error(err), zap.String("projectID", newProject.ID))
 		// Attempt compensation: Delete the project document
@@ -166,7 +168,7 @@ func (s *projectService) CreateProject(ctx context.Context, creatorID string, re
 	}
 	logger.Logger.Info("GCS bucket created", zap.String("bucketName", bucketName), zap.String("projectID", projectID))
 
-	// 4. Update project struct with storage details
+	// 4. Update project struct with storage details (using the CORRECT bucketName)
 	newProject.Storage = core.ProjectStorage{
 		BucketName: bucketName,
 		Region:     region,

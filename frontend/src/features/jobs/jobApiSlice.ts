@@ -30,10 +30,13 @@ export const jobApiSlice = apiSlice.injectEndpoints({
         params: params || {},
       }),
       // Provides a general 'Job' list tag and specific IDs
-      providesTags: (result) => [
-        { type: 'Job', id: 'LIST-ALL' }, // General tag for all jobs list
-        ...(result?.jobs.map(({ id }) => ({ type: 'Job' as const, id })) || []),
-      ],
+      providesTags: (result) => {
+        const jobTags =
+          result && Array.isArray(result.jobs)
+            ? result.jobs.map(({ id }) => ({ type: 'Job' as const, id }))
+            : [];
+        return [{ type: 'Job', id: 'LIST-ALL' }, ...jobTags];
+      },
     }),
 
     listJobs: builder.query<ListJobsResponse, { projectId: string; params?: ListJobsParams }>({
@@ -41,12 +44,13 @@ export const jobApiSlice = apiSlice.injectEndpoints({
         url: `/projects/${projectId}/jobs`,
         params: params || {},
       }),
-      providesTags: (result, error, { projectId }) => [
-        // Tag for the list associated with this specific project
-        { type: 'Job', id: `LIST-${projectId}` }, 
-        // Individual job tags
-        ...(result?.jobs.map(({ id }) => ({ type: 'Job' as const, id })) || []),
-      ],
+      providesTags: (result, error, { projectId }) => {
+        const jobTags =
+          result && Array.isArray(result.jobs)
+            ? result.jobs.map(({ id }) => ({ type: 'Job' as const, id }))
+            : [];
+        return [{ type: 'Job', id: `LIST-${projectId}` }, ...jobTags];
+      },
     }),
 
     getJob: builder.query<Job, string>({
@@ -120,7 +124,7 @@ export const jobApiSlice = apiSlice.injectEndpoints({
     syncJobStatus: builder.mutation<Job, string>({...}), 
     */
   }),
-  overrideExisting: false,
+  overrideExisting: true,
 });
 
 // Export hooks

@@ -13,9 +13,10 @@ export const apiSlice = createApi({
   baseQuery: fetchBaseQuery({ 
     // Prepend /api/v1 to the base URL for all requests
     baseUrl: `${baseUrl}/api/v1`, 
+    // Explicitly include credentials (cookies) in requests
+    credentials: 'include',
     prepareHeaders: (headers, { getState }) => {
-      // Cookies are handled automatically by the browser
-      // No specific headers needed for cookie auth unless dealing with CSRF
+      // Cookies are handled automatically now with credentials: 'include'
       return headers;
     },
    }),

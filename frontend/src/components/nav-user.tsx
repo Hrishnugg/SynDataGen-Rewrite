@@ -1,5 +1,8 @@
 "use client"
 
+import { useRouter } from 'next/navigation';
+import { useLogoutMutation } from '@/features/auth/authApiSlice';
+import { toast } from "sonner";
 import {
   IconCreditCard,
   IconDotsVertical,
@@ -39,6 +42,19 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const [logout, { isLoading }] = useLogoutMutation()
+
+  const handleLogout = async () => {
+    try {
+      await logout().unwrap()
+      toast.success("Logout successful")
+      router.push('/auth/login')
+    } catch (err) {
+      console.error('Logout failed:', err)
+      toast.error("Logout failed. Please try again.")
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -98,9 +114,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <IconLogout />
-              Log out
+            <DropdownMenuItem onClick={handleLogout} disabled={isLoading}>
+              <IconLogout className="mr-2 h-4 w-4" />
+              {isLoading ? "Logging out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -3,7 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
-	"log" // Using log for simplicity, consider structured logging
+	"log"     // Using log for simplicity, consider structured logging
+	"strings" // <-- Import strings
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -89,8 +90,9 @@ func (s *gcpStorageService) CreateProjectBucket(ctx context.Context, projectID, 
 		},
 		// Add labels for organization/billing
 		Labels: map[string]string{
-			"project-id":  projectID,
-			"customer-id": customerID, // Be mindful of PII if customerID is sensitive
+			"project-id": projectID, // projectID is already lowercase ID part
+			// Ensure label values also conform to GCS requirements (lowercase, etc.)
+			"customer-id": strings.ToLower(customerID), // Convert customerID value to lowercase
 			"created-by":  "syndatagen-backend",
 		},
 		// TODO: Consider setting lifecycle rules (e.g., for FR-PROJ-07, FR-JOB-10)

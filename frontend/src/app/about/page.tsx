@@ -89,13 +89,13 @@ export default function AboutPage() {
           </p>
           <div className="mt-6 flex items-center justify-center gap-4"> {/* Use flex and gap for spacing */}
             {/* Wrap TealMagicButton with Link */}
-            <Link href="/tide" legacyBehavior>
+            <Link href="/tide">
               <TealMagicButton> {/* Existing button */}
                 Meet Tide
               </TealMagicButton>
             </Link>
             {/* Add Request a Demo button with Link */}
-            <Link href="/#waitlist" legacyBehavior> {/* Updated Link to point to waitlist section on landing page */}
+            <Link href="/#waitlist"> {/* Updated Link to point to waitlist section on landing page */}
               <MagicButton> {/* Use original button component */}
                 Request A Demo
               </MagicButton>

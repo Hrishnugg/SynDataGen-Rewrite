@@ -80,7 +80,7 @@ const DesktopNav = ({ navItems }: any) => {
         </Menu>
       </div>
       {/* TODO: Link Login/Signup buttons */}
-      <Link href="/auth/login" legacyBehavior>
+      <Link href="/auth/login">
          <button className="hidden rounded-full bg-black px-8 py-2 text-sm font-bold text-white shadow-[0px_-2px_0px_0px_rgba(255,255,255,0.4)_inset] md:block dark:bg-white dark:text-black">
            Login
          </button>
@@ -142,7 +142,7 @@ const MobileNav = ({ navItems }: any) => {
                 legacyBehavior>
                  <motion.span className="block">Docs</motion.span>
               </Link>
-              <Link href="/auth/login" className="w-full" legacyBehavior>
+              <Link href="/auth/login" className="w-full">
                  <button className="w-full rounded-lg bg-black px-8 py-2 font-medium text-white shadow-[0px_-2px_0px_0px_rgba(255,255,255,0.4)_inset] dark:bg-white dark:text-black">
                    Login
                  </button>
@@ -162,14 +162,16 @@ const Logo = () => {
     <Link
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
-      legacyBehavior>
-      <Image
-        src="/synopticlogo3d.png" // TODO: Confirm logo path
-        alt="Synoptic Logo"
-        width={30}
-        height={30}
-      />
-      <span className="font-medium text-black dark:text-white">Synoptic</span>
+    >
+      <>
+        <Image
+          src="/synopticlogo3d.png" // TODO: Confirm logo path
+          alt="Synoptic Logo"
+          width={30}
+          height={30}
+        />
+        <span className="font-medium text-black dark:text-white">Synoptic</span>
+      </>
     </Link>
   );
 };
@@ -261,22 +263,24 @@ const ProductItem = ({ // Changed export to const
   src: string;
 }) => {
   return (
-    <Link href={href} className="flex gap-4" legacyBehavior>
-      <Image
-        src={src}
-        width={140}
-        height={70}
-        alt={title}
-        className="flex-shrink-0 rounded-md shadow-2xl"
-      />
-      <div>
-        <h4 className="mb-1 text-base font-normal text-black dark:text-white">
-          {title}
-        </h4>
-        <p className="max-w-[10rem] text-sm text-neutral-700 dark:text-neutral-300">
-          {description}
-        </p>
-      </div>
+    <Link href={href} className="flex gap-4">
+      <>
+        <Image
+          src={src}
+          width={140}
+          height={70}
+          alt={title}
+          className="flex-shrink-0 rounded-md shadow-2xl"
+        />
+        <div>
+          <h4 className="mb-1 text-base font-normal text-black dark:text-white">
+            {title}
+          </h4>
+          <p className="max-w-[10rem] text-sm text-neutral-700 dark:text-neutral-300">
+            {description}
+          </p>
+        </div>
+      </>
     </Link>
   );
 };

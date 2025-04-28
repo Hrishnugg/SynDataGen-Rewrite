@@ -322,8 +322,9 @@ const jobColumns: ColumnDef<Job>[] = [
     accessorKey: "jobType", 
     header: () => <div className="w-full text-left">Job Type / Name</div>,
     cell: ({ row }) => {
-      // Example: derive a display name
-      const displayName = `${row.original.jobType} Job (${row.original.id.substring(0, 6)})`;
+      // Example: derive a display name, safely handling potential missing/non-string ID
+      const shortId = typeof row.original.id === 'string' ? row.original.id.substring(0, 6) : 'N/A';
+      const displayName = `${row.original.jobType} Job (${shortId})`; 
       // TODO: Link to Job Detail Page or use JobCellViewer if implemented
       return <div className="font-medium">{displayName}</div>;
     },
