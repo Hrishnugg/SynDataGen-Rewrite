@@ -5,6 +5,9 @@ import { IconBrandGithub } from "@tabler/icons-react";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { Carousel } from "@/components/ui/carousel";
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useLoginMutation } from '@/features/auth/authApiSlice';
 
 // Placeholder data for the carousel
 const placeholderSlides = [
@@ -39,12 +42,29 @@ export default function SignInPage() {
 }
 
 function LoginForm() {
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    console.log("submitted login form", e);
-  }
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const router = useRouter();
+
+  const [login, { isLoading, isError, error }] = useLoginMutation();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      console.log('Attempting login with:', { email }); // Basic log
+      const result = await login({ email, password }).unwrap();
+      console.log('Login successful:', result); // Log success
+      // TODO: Dispatch action to set user state in authSlice if needed
+      router.push('/dashboard'); // Redirect to dashboard on success
+    } catch (err) {
+      console.error('Login failed:', err);
+      // Error details are in the `error` object from the hook
+      // Displaying the error message below the form
+    }
+  };
 
   return (
-    <form className="bg-gray-50 dark:bg-neutral-950" onSubmit={onSubmit}>
+    <form className="bg-gray-50 dark:bg-neutral-950" onSubmit={handleSubmit}>
       <div className="flex w-full items-center justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <div>
@@ -71,7 +91,11 @@ function LoginForm() {
                     <input
                       id="email"
                       type="email"
-                      placeholder="hello@johndoe.com"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="hello@example.com"
                       className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
                     />
                   </div>
@@ -89,20 +113,31 @@ function LoginForm() {
                     <input
                       id="password"
                       type="password"
+                      autoComplete="current-password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
                     />
                   </div>
                 </div>
 
+                {isError && (
+                  <div className="text-sm text-red-500 dark:text-red-400">
+                    {error?.data?.message || 'Login failed. Please check your credentials.'}
+                  </div>
+                )}
+
                 <div>
                   <button
                     type="submit"
-                    className="relative inline-flex h-12 w-full overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50"
+                    disabled={isLoading}
+                    className="relative inline-flex h-12 w-full overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 disabled:opacity-70"
                   >
                     <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)]" />
                     <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-3 py-1 text-sm font-medium text-white backdrop-blur-3xl">
-                      Sign In
+                      {isLoading ? 'Signing In...' : 'Sign In'}
                     </span>
                   </button>
                   <p

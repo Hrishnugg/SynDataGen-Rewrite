@@ -34,6 +34,9 @@ type JobService interface {
 	// SyncJobStatus checks pipeline status, requiring Viewer role.
 	SyncJobStatus(ctx context.Context, jobID, userID string) (*core.Job, error)
 
+	// ListAllAccessibleJobs retrieves jobs across all projects accessible to the user.
+	ListAllAccessibleJobs(ctx context.Context, userID string, statusFilter string, limit, offset int) ([]*core.Job, int, error)
+
 	// TODO: Add methods for deleting jobs or accessing results if needed in the service layer.
 }
 
@@ -441,4 +444,42 @@ func (s *jobService) SyncJobStatus(ctx context.Context, jobID, userID string) (*
 	// if newStatus == core.JobStatusCompleted { ... fetch and update result URI ... }
 
 	return job, nil
+}
+
+// ListAllAccessibleJobs retrieves jobs across all projects the user can view.
+func (s *jobService) ListAllAccessibleJobs(ctx context.Context, userID string, statusFilter string, limit, offset int) ([]*core.Job, int, error) {
+	logger.Logger.Info("Listing all accessible jobs for user", zap.String("userID", userID))
+
+	// 1. Get all projects accessible to the user (Viewer level is sufficient to list jobs)
+	// We don't need pagination here, just the list of projects.
+	// Assuming ListProjects handles the permission check internally.
+	// We might need a dedicated projectService method like GetAllAccessibleProjectIDs if ListProjects requires pagination.
+	// For now, fetch all projects with a high limit (or iterate through pages if necessary).
+	accessibleProjectsResp, err := s.projectSvc.ListProjects(ctx, userID, "", 1000, 0) // High limit to get all projects
+	if err != nil {
+		logger.Logger.Error("Failed to list projects to determine accessible jobs", zap.String("userID", userID), zap.Error(err))
+		// Don't expose internal error details directly
+		return nil, 0, fmt.Errorf("failed to determine accessible projects")
+	}
+
+	if accessibleProjectsResp == nil || len(accessibleProjectsResp.Projects) == 0 {
+		logger.Logger.Info("User has no accessible projects", zap.String("userID", userID))
+		return []*core.Job{}, 0, nil // No projects, so no jobs
+	}
+
+	// 2. Extract project IDs
+	projectIDs := make([]string, 0, len(accessibleProjectsResp.Projects))
+	for _, proj := range accessibleProjectsResp.Projects {
+		projectIDs = append(projectIDs, proj.ID)
+	}
+
+	// 3. Call the repository method to get jobs across these projects
+	jobs, totalCount, err := s.jobRepo.ListJobsAcrossProjects(ctx, projectIDs, statusFilter, limit, offset)
+	if err != nil {
+		// Logged by repository
+		return nil, 0, fmt.Errorf("failed to list jobs across projects: %w", err)
+	}
+
+	logger.Logger.Info("Successfully listed all accessible jobs", zap.String("userID", userID), zap.Int("count", len(jobs)), zap.Int("total", totalCount))
+	return jobs, totalCount, nil
 }

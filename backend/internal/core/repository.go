@@ -68,6 +68,10 @@ type JobRepository interface {
 	// UpdateJobResult updates the result URI of a completed job.
 	UpdateJobResult(ctx context.Context, jobID string, resultURI string) error
 
+	// ListJobsAcrossProjects retrieves jobs from a list of specified project IDs.
+	// Supports filtering and pagination across the combined set of projects.
+	ListJobsAcrossProjects(ctx context.Context, projectIDs []string, statusFilter string, limit, offset int) ([]*Job, int, error) // Returns jobs, total count, error
+
 	// TODO: Consider adding methods for advanced filtering or deletion if required.
 }
 

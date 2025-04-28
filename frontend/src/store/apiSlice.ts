@@ -2,7 +2,8 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 // Define the base URL for the API. Replace with your actual backend URL.
 // Consider using an environment variable for this.
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/v1'; // Placeholder
+// The base URL should point to the server root, the /api/v1 prefix is added by the endpoint definitions.
+const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080'; // Corrected: Removed /v1
 
 /**
  * Base RTK Query API slice. Endpoints will be injected into this slice.
@@ -10,16 +11,11 @@ const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/v
 export const apiSlice = createApi({
   reducerPath: 'api', // The key where the reducer will be added to the store
   baseQuery: fetchBaseQuery({ 
-    baseUrl,
-    // Prepare headers - useful for adding auth tokens, etc.
+    // Prepend /api/v1 to the base URL for all requests
+    baseUrl: `${baseUrl}/api/v1`, 
     prepareHeaders: (headers, { getState }) => {
-      // Example: If we were using token authentication stored in Redux state
-      // const token = (getState() as RootState).auth.token;
-      // if (token) {
-      //   headers.set('authorization', `Bearer ${token}`)
-      // }
-      // For session cookies managed by the backend, we might not need to do anything here
-      // unless we need to set specific headers like CSRF tokens.
+      // Cookies are handled automatically by the browser
+      // No specific headers needed for cookie auth unless dealing with CSRF
       return headers;
     },
    }),

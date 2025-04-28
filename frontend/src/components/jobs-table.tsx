@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from "react"
+import { useState } from 'react'; // Import useState
 // ... (Keep existing imports, add/remove as needed for Job columns)
 import {
   DndContext,
@@ -25,10 +26,16 @@ import {
   IconCircleCheckFilled,
   IconAlertTriangleFilled,
   IconAlertCircleFilled,
+  IconClockHour4Filled, // Icon for pending/queued
+  IconPlayerPlayFilled, // Icon for running
+  IconX, // Icon for cancelled?
   IconDotsVertical,
   IconGripVertical,
   IconLayoutColumns,
   IconPlus,
+  IconSend,
+  IconRefresh,
+  IconLoader,
 } from "@tabler/icons-react"
 import {
   type ColumnDef,
@@ -74,26 +81,35 @@ import { Label } from "@/components/shadcn/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shadcn/table"
 import { Tabs, TabsContent } from "@/components/shadcn/tabs" // Removed TabsList, TabsTrigger unless needed internally
+import { useCancelJobMutation, useSubmitJobMutation, useSyncJobStatusMutation } from '@/features/jobs/jobApiSlice'; // Import cancel, submit, and sync hooks
+import { toast } from "sonner"; // Import toast
+import { JobDetailsModal } from "./JobDetailsModal"; // Import the modal
 
-// Define Job Schema
-export const jobSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  status: z.enum(["Active", "Archived", "Error"]), // Use enum for defined statuses
-  createdDate: z.string(),
-  duration: z.string(),
-  // Removed projectId as it's not displayed in the table
-})
+// Define Job Type based on API Structure (from jobApiSlice.ts)
+type JobStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+interface Job {
+  id: string; // Now a string (UUID)
+  projectId: string;
+  userId: string; 
+  status: JobStatus;
+  jobType: string;
+  jobConfig: string; // Keep as string for now, details maybe in viewer
+  pipelineJobID?: string;
+  resultURI?: string;
+  error?: string;
+  createdAt: string; // ISO Date string
+  updatedAt: string; // ISO Date string
+  startedAt?: string; // ISO Date string
+  completedAt?: string; // ISO Date string
+}
 
-type Job = z.infer<typeof jobSchema>;
+// Remove zod schema if not strictly needed for validation within table, use TS type
+// export const jobSchema = z.object({ ... });
+// type Job = z.infer<typeof jobSchema>;
 
-export type { ColumnDef } from "@tanstack/react-table";
-
-// Drag Handle (Keep as is)
-function DragHandle({ id }: { id: number }) {
-  const { attributes, listeners } = useSortable({
-    id,
-  })
+// Drag Handle (update id type)
+function DragHandle({ id }: { id: string }) { // Changed id to string
+  const { attributes, listeners } = useSortable({ id })
   return (
     <Button {...attributes} {...listeners} variant="ghost" size="icon" className="text-muted-foreground size-7 cursor-grab active:cursor-grabbing hover:bg-transparent">
       <IconGripVertical className="text-muted-foreground size-3" />
@@ -111,12 +127,12 @@ function JobCellViewer({ item }: { item: Job }) {
       <DrawerTrigger asChild>
         {/* Use font-medium like the original cell */}
         <Button variant="link" className="text-foreground w-fit px-0 text-left font-medium">
-          {item.name}
+          {item.jobType}
         </Button>
       </DrawerTrigger>
       <DrawerContent>
         <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.name}</DrawerTitle>
+          <DrawerTitle>{item.jobType}</DrawerTitle>
           <DrawerDescription>Job Details and Status</DrawerDescription>
         </DrawerHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
@@ -124,7 +140,7 @@ function JobCellViewer({ item }: { item: Job }) {
           <form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
               <Label htmlFor="job-name">Job Name</Label>
-              <Input id="job-name" defaultValue={item.name} />
+              <Input id="job-name" defaultValue={item.jobType} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
@@ -135,9 +151,12 @@ function JobCellViewer({ item }: { item: Job }) {
                   </SelectTrigger>
                   <SelectContent>
                     {/* Use statuses from schema */}
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Archived">Archived</SelectItem>
-                    <SelectItem value="Error">Error</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="running">Running</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="queued">Queued</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -148,7 +167,7 @@ function JobCellViewer({ item }: { item: Job }) {
             </div>
             <div className="flex flex-col gap-3">
                 <Label htmlFor="job-created">Date Created</Label>
-                <Input id="job-created" defaultValue={item.createdDate} readOnly />
+                <Input id="job-created" defaultValue={item.createdAt} readOnly />
             </div>
              {/* Removed fields not present in Job schema (Type, Storage, Creator) */}
           </form>
@@ -164,7 +183,111 @@ function JobCellViewer({ item }: { item: Job }) {
   )
 }
 
-// Define Job Columns
+// Component to handle row actions, including cancellation
+function JobActions({ job }: { job: Job }) {
+  const [cancelJob, { isLoading: isCancelling }] = useCancelJobMutation();
+  const [submitJob, { isLoading: isSubmitting }] = useSubmitJobMutation();
+  const [syncJobStatus, { isLoading: isSyncing }] = useSyncJobStatusMutation();
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const handleCancel = async () => {
+    // TODO: Add confirmation dialog
+    if (!confirm(`Are you sure you want to cancel job ${job.id}?`)) {
+      return;
+    }
+    try {
+      await cancelJob(job.id).unwrap();
+      toast.success(`Job ${job.id} cancellation requested.`);
+      // Invalidation should update the status in the list automatically
+    } catch (err: any) {
+      console.error("Failed to cancel job:", err);
+      toast.error(err?.data?.message || "Failed to cancel job.");
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      await submitJob(job.id).unwrap();
+      toast.success(`Job ${job.id} submitted successfully.`);
+    } catch (err: any) {
+      console.error("Failed to submit job:", err);
+      toast.error(err?.data?.message || "Failed to submit job.");
+    }
+  };
+
+  const handleSyncStatus = async () => {
+    try {
+      await syncJobStatus(job.id).unwrap();
+      toast.success(`Job ${job.id} status sync requested.`);
+    } catch (err: any) {
+      console.error("Failed to sync job status:", err);
+      toast.error(err?.data?.message || "Failed to sync job status.");
+    }
+  };
+
+  const isActionLoading = isCancelling || isSubmitting || isSyncing;
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8" size="icon" disabled={isActionLoading}>
+             {isActionLoading ? <IconLoader className="h-4 w-4 animate-spin" /> : <IconDotsVertical />}
+            <span className="sr-only">Open menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40"> {/* Increased width */}
+          <DropdownMenuItem onClick={() => setIsDetailModalOpen(true)} disabled={isActionLoading}>
+             View Details
+          </DropdownMenuItem>
+           {/* Submit Action (only for pending) */}
+           {job.status === "pending" && (
+            <DropdownMenuItem onClick={handleSubmit} disabled={isSubmitting || isActionLoading}>
+               {isSubmitting ? (
+                 <><IconLoader className="mr-2 h-4 w-4 animate-spin" />Submitting...</>
+               ) : (
+                 <><IconSend className="mr-2 h-4 w-4" />Submit Job</>
+               )}
+             </DropdownMenuItem>
+           )}
+           {/* Cancel Action (only for pending/running/queued) */}
+           {(job.status === "running" || job.status === "pending" || job.status === "queued") && 
+             <DropdownMenuItem onClick={handleCancel} disabled={isCancelling || isActionLoading}>
+               {isCancelling ? (
+                 <><IconLoader className="mr-2 h-4 w-4 animate-spin" />Cancelling...</>
+               ) : (
+                 'Cancel Job' // Simple text for now
+               )}
+             </DropdownMenuItem>
+           }
+           {/* Sync Status Action */}
+           <DropdownMenuItem onClick={handleSyncStatus} disabled={isSyncing || isActionLoading}>
+              {isSyncing ? (
+                 <><IconLoader className="mr-2 h-4 w-4 animate-spin" />Syncing...</>
+               ) : (
+                 <><IconRefresh className="mr-2 h-4 w-4" />Sync Status</>
+               )}
+           </DropdownMenuItem>
+           {/* Retry Action (Placeholder) */}
+           {job.status === "failed" && 
+             <DropdownMenuItem onClick={() => alert(`Retry ${job.id}`)} disabled={isActionLoading}>Retry Job</DropdownMenuItem> 
+           }
+          <DropdownMenuItem onClick={() => alert(`View Logs for ${job.id}`)} disabled={isActionLoading}>View Logs</DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => alert(`Delete ${job.id}`)} disabled={isActionLoading}>Delete Job</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {/* Render the modal */}
+      <JobDetailsModal 
+        jobId={job.id} 
+        isOpen={isDetailModalOpen} 
+        onOpenChange={setIsDetailModalOpen} 
+      />
+    </>
+  );
+}
+
+// Define Job Columns (updated for API data)
 const jobColumns: ColumnDef<Job>[] = [
   {
     id: "drag",
@@ -195,39 +318,57 @@ const jobColumns: ColumnDef<Job>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "name",
-    header: () => <div className="w-full text-left">Job Name</div>,
-    // Use JobCellViewer for rendering the name cell
-    cell: ({ row }) => <JobCellViewer item={row.original} />,
+    // Use jobType or a derived name
+    accessorKey: "jobType", 
+    header: () => <div className="w-full text-left">Job Type / Name</div>,
+    cell: ({ row }) => {
+      // Example: derive a display name
+      const displayName = `${row.original.jobType} Job (${row.original.id.substring(0, 6)})`;
+      // TODO: Link to Job Detail Page or use JobCellViewer if implemented
+      return <div className="font-medium">{displayName}</div>;
+    },
     enableHiding: false,
   },
   {
     accessorKey: "status",
     header: () => <div className="w-full text-left">Status</div>,
-    cell: ({ row }) => { // Keep the existing status badge logic
+    cell: ({ row }) => { 
       const status = row.original.status;
+      let IconComponent: React.ElementType | null = null;
+      let badgeClass = "";
+
+      switch (status) {
+        case "completed":
+          IconComponent = IconCircleCheckFilled;
+          badgeClass = "bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-100";
+          break;
+        case "running":
+           IconComponent = IconPlayerPlayFilled; // Running icon
+           badgeClass = "bg-blue-100 text-blue-800 dark:bg-blue-900/80 dark:text-blue-100 animate-pulse"; // Pulsing blue
+           break;
+        case "failed":
+          IconComponent = IconAlertCircleFilled;
+          badgeClass = "bg-red-100 text-red-800 dark:bg-red-900/80 dark:text-red-100";
+          break;
+        case "cancelled":
+          IconComponent = IconX; // Cancelled icon
+          badgeClass = "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300";
+          break;
+        case "pending":
+        case "queued": // Group pending and queued
+        default:
+          IconComponent = IconClockHour4Filled; // Pending/Queued icon
+          badgeClass = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100";
+          break;
+      }
+
       return (
         <Badge
           variant="outline"
-          className={`border-transparent px-2.5 py-0.5 text-xs 
-            ${
-              status === "Active"
-                ? "bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-100"
-                : status === "Archived"
-                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100"
-                  : "bg-red-100 text-red-800 dark:bg-red-900/80 dark:text-red-100"
-            }`}
+          className={`border-transparent px-2.5 py-0.5 text-xs capitalize ${badgeClass}`}
         >
           <div className="flex items-center gap-1">
-            {status === "Active" && (
-              <IconCircleCheckFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-            {status === "Archived" && (
-              <IconAlertTriangleFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-            {status === "Error" && (
-              <IconAlertCircleFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
+            {IconComponent && <IconComponent aria-hidden="true" className="h-3.5 w-3.5" />}
             {status}
           </div>
         </Badge>
@@ -235,45 +376,35 @@ const jobColumns: ColumnDef<Job>[] = [
     },
   },
   {
-    accessorKey: "createdDate",
-    header: () => <div className="text-right">Created Date</div>,
-    cell: ({ row }) => <div className="text-right">{row.original.createdDate}</div>,
+    accessorKey: "createdAt",
+    header: () => <div className="text-right">Created</div>,
+    cell: ({ row }) => <div className="text-right">{new Date(row.original.createdAt).toLocaleDateString()}</div>,
   },
   {
-    accessorKey: "duration",
+    // TODO: Calculate duration if needed, or remove column
+    id: "duration",
     header: () => <div className="text-right pr-8">Duration</div>,
-    cell: ({ row }) => <div className="text-right pr-8">{row.original.duration}</div>,
+    cell: ({ row }) => {
+       const duration = row.original.startedAt && row.original.completedAt 
+         ? `${Math.round((new Date(row.original.completedAt).getTime() - new Date(row.original.startedAt).getTime()) / 1000)}s` 
+         : (row.original.status === 'running' && row.original.startedAt) 
+           ? `${Math.round((Date.now() - new Date(row.original.startedAt).getTime()) / 1000)}s+`
+           : '-';
+       return <div className="text-right pr-8">{duration}</div>;
+    },
   },
   {
     id: "actions",
-    cell: ({ row }) => { // Add Job-specific actions
-        const job = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8" size="icon">
-                <IconDotsVertical />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
-              <DropdownMenuItem onClick={() => alert(`View details for ${job.name}`)}>View Details</DropdownMenuItem>
-              {job.status === "Active" && <DropdownMenuItem onClick={() => alert(`Cancel ${job.name}`)}>Cancel Job</DropdownMenuItem>}
-              {job.status === "Error" && <DropdownMenuItem onClick={() => alert(`Retry ${job.name}`)}>Retry Job</DropdownMenuItem>}
-              <DropdownMenuItem onClick={() => alert(`View Logs for ${job.name}`)}>View Logs</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => alert(`Delete ${job.name}`)}>Delete Job</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
+    cell: ({ row }) => { 
+        return <JobActions job={row.original} />; // Use the JobActions component
     },
   },
 ]
 
-// Draggable Row (Keep as is, but update type)
-function DraggableRow({ row }: { row: Row<Job> }) { // Update type to Job
+// Draggable Row (update id type)
+function DraggableRow({ row }: { row: Row<Job> }) { 
   const { transform, transition, setNodeRef, isDragging } = useSortable({
-    id: row.original.id,
+    id: row.original.id, // Use string ID
   })
 
   return (
@@ -294,16 +425,13 @@ function DraggableRow({ row }: { row: Row<Job> }) { // Update type to Job
   )
 }
 
-// Add actionButton prop
+// Update props to accept API Job type
 interface JobsTableProps {
   data: Job[];
-  actionButton?: React.ReactNode;
+  // actionButton?: React.ReactNode; // Keep if needed, remove if actions handled in row
 }
 
-export function JobsTable({
-  data: initialData,
-  actionButton // Destructure new prop
-}: JobsTableProps) {
+export function JobsTable({ data: initialData }: JobsTableProps) {
   const [data, setData] = React.useState(() => initialData)
   React.useEffect(() => {
     setData(initialData);
@@ -320,11 +448,12 @@ export function JobsTable({
   const sortableId = React.useId()
   const sensors = useSensors(useSensor(MouseSensor, {}), useSensor(TouchSensor, {}), useSensor(KeyboardSensor, {}))
 
+  // Update dataIds to use string IDs
   const dataIds = React.useMemo<UniqueIdentifier[]>(() => data?.map(({ id }) => id) || [], [data])
 
   const table = useReactTable({
     data,
-    columns: jobColumns, // Use jobColumns
+    columns: jobColumns, // Use updated jobColumns
     state: {
       sorting,
       columnVisibility,
@@ -332,7 +461,7 @@ export function JobsTable({
       columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId: (row) => row.id, // Use string ID for row ID
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -351,16 +480,17 @@ export function JobsTable({
     const { active, over } = event
     if (active && over && active.id !== over.id) {
       setData((currentData) => {
+        // Find index using string comparison
         const oldIndex = currentData.findIndex(item => item.id === active.id);
         const newIndex = currentData.findIndex(item => item.id === over.id);
-        if (oldIndex === -1 || newIndex === -1) return currentData; // Should not happen if IDs are correct
+        if (oldIndex === -1 || newIndex === -1) return currentData; 
         return arrayMove(currentData, oldIndex, newIndex);
       })
     }
   }
 
   return (
-    <div className="space-y-4"> {/* Use space-y */}
+    <div className="space-y-4">
       {/* Top Control Bar */}
       <div className="flex items-center justify-between gap-2 px-1">
         {/* Left Side (Placeholder for Filters) */}
@@ -370,7 +500,7 @@ export function JobsTable({
 
         {/* Right Side (Action Button, Columns Button) */}
         <div className="flex items-center gap-2">
-          {actionButton && actionButton} {/* Render the passed button */} 
+          {/* Removed actionButton prop for now, actions are per-row */}
 
           {/* Column Visibility Dropdown */}
           <DropdownMenu>
@@ -404,7 +534,7 @@ export function JobsTable({
       </div>
 
       {/* Table Container */}
-      <div className="overflow-hidden rounded-md border"> {/* Use rounded-md, overflow-hidden */}
+      <div className="overflow-hidden rounded-md border">
         <DndContext
           collisionDetection={closestCenter}
           modifiers={[restrictToVerticalAxis]}

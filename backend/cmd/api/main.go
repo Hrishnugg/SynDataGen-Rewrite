@@ -13,9 +13,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	fs "cloud.google.com/go/firestore"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -55,6 +58,18 @@ func initFirestore(ctx context.Context) (*fs.Client, error) {
 func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService) *gin.Engine {
 	router := gin.Default() // Includes logger and recovery middleware
 
+	// Add CORS middleware configuration
+	router.Use(cors.New(cors.Config{
+		// Allow origins - Use environment variable or be specific for dev
+		// AllowOrigins:     []string{"http://localhost:3000", "https://your-prod-domain.com"},
+		AllowOrigins:     []string{"http://localhost:3000"}, // For local testing
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"}, // Add Authorization if needed later
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
 	// Health Check
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP"})
@@ -91,6 +106,11 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 }
 
 func main() {
+	// Load .env file.
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+	}
+
 	// Ensure logger syncs before exit
 	defer logger.Sync()
 

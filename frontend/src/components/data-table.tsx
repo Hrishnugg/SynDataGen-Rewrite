@@ -76,6 +76,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shadcn/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/tabs"
 
+type Role = 'owner' | 'admin' | 'member' | 'viewer';
+interface ProjectSettings { dataRetentionDays: number; maxStorageGB: number; }
+interface ProjectStorage { bucketName: string; region: string; usedStorageBytes?: number; bucketURI?: string; }
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: 'active' | 'archived';
+  settings: ProjectSettings;
+  storage: ProjectStorage;
+  teamMembers: { [userId: string]: Role };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const schema = z.object({
   id: z.number(),
   name: z.string(),
@@ -88,8 +103,7 @@ export const schema = z.object({
 
 export type { ColumnDef } from "@tanstack/react-table"
 
-// Create a separate component for the drag handle
-function DragHandle({ id }: { id: number }) {
+function DragHandle({ id }: { id: string }) {
   const { attributes, listeners } = useSortable({
     id,
   })
@@ -108,7 +122,7 @@ function DragHandle({ id }: { id: number }) {
   )
 }
 
-const columns: ColumnDef<z.infer<typeof schema>>[] = [
+const projectColumns: ColumnDef<Project>[] = [
   {
     id: "drag",
     header: () => null,
@@ -141,95 +155,78 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     accessorKey: "name",
     header: () => <div className="w-full text-left">Project Name</div>,
     cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />
+      return <div className="font-medium">{row.original.name}</div>;
     },
     enableHiding: false,
   },
   {
-    accessorKey: "data_type",
-    header: () => <div className="w-full text-left">Data Type</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        <Badge variant="outline" className="text-muted-foreground px-1.5">
-          {row.original.type}
-        </Badge>
-      </div>
-    ),
+    id: "description",
+    header: () => <div className="w-full text-left">Description</div>,
+    cell: ({ row }) => <div className="truncate max-w-xs">{row.original.description}</div>,
   },
   {
     accessorKey: "status",
     header: () => <div className="w-full text-left">Status</div>,
     cell: ({ row }) => {
-      const status = row.original.status as "Active" | "Archived" | "Error";
+      const status = row.original.status;
       return (
         <Badge
           variant="outline"
-          className={`border-transparent px-2.5 py-0.5 text-xs 
+          className={`border-transparent px-2.5 py-0.5 text-xs capitalize 
             ${
-              status === "Active"
+              status === "active"
                 ? "bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-100"
-                : status === "Archived"
-                  ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100"
-                  : "bg-red-100 text-red-800 dark:bg-red-900/80 dark:text-red-100"
+                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100"
             }`}
         >
-          <div className="flex items-center gap-1">
-            {status === "Active" && (
-              <IconCircleCheckFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-            {status === "Archived" && (
-              <IconAlertTriangleFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-            {status === "Error" && (
-              <IconAlertCircleFilled aria-hidden="true" className="h-3.5 w-3.5" />
-            )}
-            {status}
-          </div>
+           {status}
         </Badge>
       );
     },
   },
   {
-    accessorKey: "storage_total",
-    header: () => <div className="text-right">Storage Total</div>,
-    cell: ({ row }) => <div className="text-right">{row.original.storage_total}</div>,
+    id: "storage",
+    header: () => <div className="text-right">Bucket</div>,
+    cell: ({ row }) => <div className="text-right truncate">{row.original.storage?.bucketName ?? 'N/A'}</div>,
   },
   {
-    accessorKey: "date_created",
-    header: () => <div className="text-right pr-8">Date Created</div>,
-    cell: ({ row }) => <div className="text-right pr-8">{row.original.date_created}</div>,
+    accessorKey: "createdAt",
+    header: () => <div className="text-right">Created</div>,
+    cell: ({ row }) => <div className="text-right">{new Date(row.original.createdAt).toLocaleDateString()}</div>,
   },
   {
-    accessorKey: "creator",
-    header: () => <div className="w-full text-left">Creator</div>,
+    id: "owner",
+    header: () => <div className="text-right pr-8">Owner/Team</div>,
     cell: ({ row }) => {
-      return <div className="w-32 text-left">{row.original.creator}</div>
+        const ownerId = Object.entries(row.original.teamMembers || {}).find(([,role]) => role === 'owner')?.[0];
+        return <div className="text-right pr-8 truncate">{ownerId ? `Owner: ${ownerId.substring(0, 6)}...` : 'N/A'}</div>;
     },
   },
   {
     id: "actions",
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8" size="icon">
-            <IconDotsVertical />
-            <span className="sr-only">Open menu</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuItem>Pin</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+    cell: ({ row }) => {
+        const project = row.original;
+        return (
+          <DropdownMenu>
+             <DropdownMenuTrigger asChild>
+               <Button variant="ghost" className="data-[state=open]:bg-muted text-muted-foreground flex size-8" size="icon">
+                 <IconDotsVertical />
+                 <span className="sr-only">Open menu</span>
+               </Button>
+             </DropdownMenuTrigger>
+             <DropdownMenuContent align="end" className="w-32">
+               <DropdownMenuItem onClick={() => alert(`View ${project.name}`)}>View Project</DropdownMenuItem>
+               <DropdownMenuItem onClick={() => alert(`Settings for ${project.name}`)}>Settings</DropdownMenuItem>
+               <DropdownMenuSeparator />
+               <DropdownMenuItem variant="destructive" onClick={() => alert(`Delete ${project.name}`)}>Delete</DropdownMenuItem>
+             </DropdownMenuContent>
+          </DropdownMenu>
+        );
+    },
   },
 ]
 
-function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
+function DraggableRow({ row }: { row: Row<Project> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   })
@@ -252,11 +249,11 @@ function DraggableRow({ row }: { row: Row<z.infer<typeof schema>> }) {
   )
 }
 
-export function DataTable({
-  data: initialData,
-}: {
-  data: z.infer<typeof schema>[]
-}) {
+interface DataTableProps<TData, TValue> {
+  data: TData[]
+}
+
+export function DataTable<TData extends { id: string }, TValue>({ data: initialData }: DataTableProps<TData, TValue>) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -273,7 +270,7 @@ export function DataTable({
 
   const table = useReactTable({
     data,
-    columns,
+    columns: projectColumns as ColumnDef<TData, unknown>[],
     state: {
       sorting,
       columnVisibility,
@@ -281,7 +278,7 @@ export function DataTable({
       columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId: (row) => (row as Project).id,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -299,10 +296,11 @@ export function DataTable({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (active && over && active.id !== over.id) {
-      setData((data) => {
-        const oldIndex = dataIds.indexOf(active.id)
-        const newIndex = dataIds.indexOf(over.id)
-        return arrayMove(data, oldIndex, newIndex)
+      setData((currentData) => {
+        const oldIndex = currentData.findIndex(item => item.id === active.id);
+        const newIndex = currentData.findIndex(item => item.id === over.id);
+        if (oldIndex === -1 || newIndex === -1) return currentData; 
+        return arrayMove(currentData, oldIndex, newIndex);
       })
     }
   }
@@ -397,13 +395,13 @@ export function DataTable({
                 {table.getRowModel().rows?.length ? (
                   <SortableContext items={dataIds} strategy={verticalListSortingStrategy}>
                     {table.getRowModel().rows.map((row) => (
-                      <DraggableRow key={row.id} row={row} />
+                      <DraggableRow key={row.id} row={row as Row<Project>} />
                     ))}
                   </SortableContext>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No results.
+                    <TableCell colSpan={projectColumns.length} className="h-24 text-center">
+                      No data available.
                     </TableCell>
                   </TableRow>
                 )}
@@ -518,84 +516,3 @@ const chartConfig = {
     color: "var(--primary)",
   },
 } satisfies ChartConfig
-
-function TableCellViewer({ item }: { item: z.infer<typeof schema> & { name: string } }) {
-  const isMobile = useIsMobile()
-
-  return (
-    <Drawer direction={isMobile ? "bottom" : "right"}>
-      <DrawerTrigger asChild>
-        <Button variant="link" className="text-foreground w-fit px-0 text-left">
-          {item.name}
-        </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.name}</DrawerTitle>
-          <DrawerDescription>Project Details and Metrics</DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          <form className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="name">Project Name</Label>
-              <Input id="name" defaultValue={item.name} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
-                <Select defaultValue={item.type}>
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Table of Contents">Table of Contents</SelectItem>
-                    <SelectItem value="Executive Summary">Executive Summary</SelectItem>
-                    <SelectItem value="Technical Approach">Technical Approach</SelectItem>
-                    <SelectItem value="Design">Design</SelectItem>
-                    <SelectItem value="Capabilities">Capabilities</SelectItem>
-                    <SelectItem value="Focus Documents">Focus Documents</SelectItem>
-                    <SelectItem value="Narrative">Narrative</SelectItem>
-                    <SelectItem value="Cover Page">Cover Page</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select defaultValue={item.status}>
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Archived">Archived</SelectItem>
-                    <SelectItem value="Error">Error</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="storage_total">Storage Total</Label>
-                <Input id="storage_total" defaultValue={item.storage_total} readOnly />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="date_created">Date Created</Label>
-                <Input id="date_created" defaultValue={item.date_created} readOnly />
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="creator">Creator</Label>
-              <Input id="creator" defaultValue={item.creator} readOnly />
-            </div>
-          </form>
-        </div>
-        <DrawerFooter>
-          <Button>Submit</Button>
-          <DrawerClose asChild>
-            <Button variant="outline">Done</Button>
-          </DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
-  )
-}

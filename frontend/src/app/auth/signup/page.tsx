@@ -5,6 +5,9 @@ import { IconBrandGithub } from "@tabler/icons-react";
 import Image from "next/image";
 import { motion } from "motion/react";
 import { Carousel } from "@/components/ui/carousel";
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRegisterMutation } from '@/features/auth/authApiSlice';
 
 // Placeholder data for the carousel
 const placeholderSlides = [
@@ -39,12 +42,28 @@ export default function RegistrationFormWithImages() {
 }
 
 function Form() {
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    console.log("submitted form", e);
-  }
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [company, setCompany] = useState('');
+  const router = useRouter();
+
+  const [register, { isLoading, isError, error }] = useRegisterMutation();
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      console.log('Attempting registration with:', { name, email, company });
+      const result = await register({ name, email, password, company }).unwrap();
+      console.log('Registration successful:', result);
+      router.push('/auth/login?registered=true');
+    } catch (err) {
+      console.error('Registration failed:', err);
+    }
+  };
 
   return (
-    <form className="bg-gray-50 dark:bg-neutral-950" onSubmit={onSubmit}>
+    <form className="bg-gray-50 dark:bg-neutral-950" onSubmit={handleSubmit}>
       <div className="flex w-full items-center justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <div>
@@ -69,7 +88,11 @@ function Form() {
                   <div className="mt-2">
                     <input
                       id="name"
-                      type="name"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
                       placeholder="John Doe"
                       className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
                     />
@@ -88,7 +111,32 @@ function Form() {
                     <input
                       id="email"
                       type="email"
-                      placeholder="hello@johndoe.com"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="hello@example.com"
+                      className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="company"
+                    className="block text-sm font-medium leading-6 text-neutral-700 dark:text-neutral-400"
+                  >
+                    Company
+                  </label>
+                  <div className="mt-2">
+                    <input
+                      id="company"
+                      type="text"
+                      autoComplete="organization"
+                      required
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Acme Inc."
                       className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
                     />
                   </div>
@@ -106,20 +154,32 @@ function Form() {
                     <input
                       id="password"
                       type="password"
-                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      required
+                      minLength={8}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="•••••••• (min 8 chars)"
                       className="shadow-input block w-full rounded-md border-0 bg-white px-4 py-1.5 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:text-sm sm:leading-6 dark:bg-neutral-900 dark:text-white"
                     />
                   </div>
                 </div>
 
+                {isError && (
+                  <div className="text-sm text-red-500 dark:text-red-400">
+                    Error: {error?.data?.message || 'Registration failed. Please try again.'}
+                  </div>
+                )}
+
                 <div>
                   <button
                     type="submit"
-                    className="relative inline-flex h-12 w-full overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50"
+                    disabled={isLoading}
+                    className="relative inline-flex h-12 w-full overflow-hidden rounded-full p-[1px] focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 focus:ring-offset-slate-50 disabled:opacity-70"
                   >
                     <span className="absolute inset-[-1000%] animate-[spin_2s_linear_infinite] bg-[conic-gradient(from_90deg_at_50%_50%,#E2CBFF_0%,#393BB2_50%,#E2CBFF_100%)]" />
                     <span className="inline-flex h-full w-full cursor-pointer items-center justify-center rounded-full bg-slate-950 px-3 py-1 text-sm font-medium text-white backdrop-blur-3xl">
-                      Sign Up
+                      {isLoading ? 'Signing Up...' : 'Sign Up'}
                     </span>
                   </button>
                   <p
