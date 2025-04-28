@@ -49,9 +49,16 @@ export default function PricingPage() {
                <ul className="text-gray-400 space-y-2 mb-8 text-center flex-grow">
                  <li>250,000 Records Monthly</li>
                </ul>
-               <MagicButton className="mt-auto">
-                 Get Started
-               </MagicButton>
+               <Link 
+                 href="https://buy.stripe.com/14keYRd5Wafn43maEE" 
+                 className="mt-auto" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+               >
+                 <MagicButton>
+                   Get Started
+                 </MagicButton>
+               </Link>
              </div>
              {/* Pro Plan */}
              <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8">
@@ -62,9 +69,16 @@ export default function PricingPage() {
                <ul className="text-gray-400 space-y-2 mb-8 text-center flex-grow">
                  <li>1,000,000 Records Monthly</li>
                </ul>
-               <MagicButton className="mt-auto">
-                 Choose Pro
-               </MagicButton>
+               <Link 
+                 href="https://buy.stripe.com/9AQ5oh9TKcnvfM428a" 
+                 className="mt-auto" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+               >
+                 <MagicButton>
+                   Choose Pro
+                 </MagicButton>
+               </Link>
              </div>
              {/* Ultra Plan */}
              <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8">
@@ -75,9 +89,16 @@ export default function PricingPage() {
                <ul className="text-gray-400 space-y-2 mb-8 text-center flex-grow">
                  <li>5,000,000 Records Monthly</li>
                </ul>
-               <MagicButton className="mt-auto">
-                 Go Ultra
-               </MagicButton>
+               <Link 
+                 href="https://buy.stripe.com/8wM7wp7LC73b7fy289" 
+                 className="mt-auto" 
+                 target="_blank" 
+                 rel="noopener noreferrer"
+               >
+                 <MagicButton>
+                   Go Ultra
+                 </MagicButton>
+               </Link>
              </div>
              {/* Enterprise Plan */}
              <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8 md:col-span-3">
