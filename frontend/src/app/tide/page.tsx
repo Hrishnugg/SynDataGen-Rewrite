@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import React, { useState } from "react";
 import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { TextAnimate } from "@/components/magicui/text-animate";
@@ -9,10 +9,10 @@ import Image from "next/image";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { ChatSection } from "@/components/tide/chat-section";
 import { Footer } from "@/components/landing/footer";
-import Link from "next/link";
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
+import { WaitlistModal } from "@/components/modals/WaitlistModal";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -82,6 +82,8 @@ const pipelineContent = [
 ];
 
 export default function TidePage() {
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+
   return (
     <div className="flex flex-col min-h-screen bg-black relative">
       {/* Remove global star components */}
@@ -183,13 +185,15 @@ export default function TidePage() {
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure button is above stars */} 
-        <Link href="/#waitlist" className="relative z-10"> 
-          <MagicButton>
-            Request A Demo
-          </MagicButton>
-        </Link>
+        <MagicButton onClick={() => setIsWaitlistModalOpen(true)} className="relative z-10">
+          Request A Demo
+        </MagicButton>
       </div>
       <Footer />
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen} 
+        onClose={() => setIsWaitlistModalOpen(false)} 
+      />
     </div>
   );
 } 
