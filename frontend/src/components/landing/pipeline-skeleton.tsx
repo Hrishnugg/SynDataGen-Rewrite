@@ -290,7 +290,6 @@ export const PipelineSkeleton = () => {
           </motion.div>
         ))}
       </div>
-
       {/* Line and Dots Row - Outer container remains relative */}
       <div className="relative flex w-4/5 mx-auto items-center h-3"> {/* Added mx-auto for consistency */} 
         {/* Base Line (Grey) */}
@@ -319,9 +318,8 @@ export const PipelineSkeleton = () => {
           ))}
         </div>
       </div>
-
       {/* Labels Row - Use relative positioning for children */}
-       {/* Match width (w-4/5) and center (mx-auto) like the line/dots row */}
+      {/* Match width (w-4/5) and center (mx-auto) like the line/dots row */}
       <div className="relative w-4/5 mx-auto text-center h-4"> 
         {stages.map((stage, index) => (
           <motion.div

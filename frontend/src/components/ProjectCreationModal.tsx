@@ -271,13 +271,13 @@ export function ProjectCreationModal({
           )}
           {creationStatus === 'idle' && (
             // Use combined disabled state
-            <Button type="button" onClick={handleSubmit} disabled={!canSubmit || isDisabled}>
+            (<Button type="button" onClick={handleSubmit} disabled={!canSubmit || isDisabled}>
               {isCreating ? (
                  <span className="animate-pulse">Creating...</span>
               ) : (
                  'Create Project'
               )}
-            </Button>
+            </Button>)
           )}
           {/* Keep existing logic for showing Creating... based on internal status for terminal view */}
           {creationStatus === 'creating' && !isCreating && (
@@ -293,5 +293,5 @@ export function ProjectCreationModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 } 

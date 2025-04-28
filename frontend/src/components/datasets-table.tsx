@@ -309,7 +309,7 @@ export function DatasetsTable({
                     >
                       {column.id.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
                     </DropdownMenuCheckboxItem>
-                  )
+                  );
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -428,5 +428,5 @@ export function DatasetsTable({
         </div>
       </div>
     </div>
-  )
+  );
 }

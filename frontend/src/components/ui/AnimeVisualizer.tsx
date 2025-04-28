@@ -282,26 +282,26 @@ const AnimeVisualizer: React.FC<AnimeVisualizerProps> = ({ activeSectionIndex })
       {/* Render based on activeSectionIndex */}
       {activeSectionIndex === 0 && (
         // Container for the 8x8 grid
-        <div className="grid grid-cols-8 gap-2 p-4">
-           {/* Render 64 simple squares */}
-           {Array.from({ length: 64 }).map((_, i) => (
-             // Simple square div - will be targeted by anime
-             <div 
-                key={i} 
-                // Class name for targeting, plus styling
-                className={`cube cube-${i} w-4 h-4 rounded-sm shadow-md`}
-                data-row={Math.floor(i / 8)} // Keep data attributes for logic
-                data-col={i % 8}
-                style={{ backgroundColor: '#0070F3'}} // Base color 
-             >
-                {/* No nested faces needed */}
-             </div>
-           ))}
-        </div>
+        (<div className="grid grid-cols-8 gap-2 p-4">
+          {/* Render 64 simple squares */}
+          {Array.from({ length: 64 }).map((_, i) => (
+            // Simple square div - will be targeted by anime
+            (<div 
+               key={i} 
+               // Class name for targeting, plus styling
+               className={`cube cube-${i} w-4 h-4 rounded-sm shadow-md`}
+               data-row={Math.floor(i / 8)} // Keep data attributes for logic
+               data-col={i % 8}
+               style={{ backgroundColor: '#0070F3'}} // Base color 
+            >
+              {/* No nested faces needed */}
+            </div>)
+          ))}
+        </div>)
       )}
-       {activeSectionIndex === 1 && <div>Structure for Section 1 (PII)</div>}
-       {activeSectionIndex === 2 && <div>Structure for Section 2 (Anonymization)</div>}
-       {activeSectionIndex === 3 && <div>Structure for Section 3 (Synthetic)</div>}
+      {activeSectionIndex === 1 && <div>Structure for Section 1 (PII)</div>}
+      {activeSectionIndex === 2 && <div>Structure for Section 2 (Anonymization)</div>}
+      {activeSectionIndex === 3 && <div>Structure for Section 3 (Synthetic)</div>}
     </div>
   );
 };

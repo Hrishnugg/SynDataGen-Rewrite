@@ -256,7 +256,7 @@ function JobActions({ job }: { job: Job }) {
                {isCancelling ? (
                  <><IconLoader className="mr-2 h-4 w-4 animate-spin" />Cancelling...</>
                ) : (
-                 'Cancel Job' // Simple text for now
+                 ("Cancel Job") // Simple text for now
                )}
              </DropdownMenuItem>
            }
@@ -523,16 +523,15 @@ export function JobsTable({ data: initialData }: JobsTableProps) {
                       checked={column.getIsVisible()}
                       onCheckedChange={(value) => column.toggleVisibility(!!value)}
                     >
-                       {/* Attempt to make column names more readable */}
+                      {/* Attempt to make column names more readable */}
                       {column.id.replace(/_/g, ' ')}
                     </DropdownMenuCheckboxItem>
-                  )
+                  );
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
-
       {/* Table Container */}
       <div className="overflow-hidden rounded-md border">
         <DndContext
@@ -576,8 +575,7 @@ export function JobsTable({ data: initialData }: JobsTableProps) {
           </Table>
         </DndContext>
       </div>
-
-      {/* Pagination Controls */} 
+      {/* Pagination Controls */}
       <div className="flex items-center justify-end space-x-2 py-4"> {/* Use justify-end */} 
         <div className="flex-1 text-sm text-muted-foreground">
             {table.getFilteredSelectedRowModel().rows.length} of{" "}
@@ -649,7 +647,7 @@ export function JobsTable({ data: initialData }: JobsTableProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // Remove TableCellViewer component (or adapt if needed for Job details)

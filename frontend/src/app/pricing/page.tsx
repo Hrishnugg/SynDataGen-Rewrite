@@ -21,7 +21,6 @@ export default function PricingPage() {
       <StarsBackground className="absolute inset-0 z-0" />
       <ShootingStars className="absolute inset-0 z-0" />
       {/* <BackgroundBeams className="absolute inset-0 z-0" /> Removed BackgroundBeams */}
-
       {/* Wrapper for content, layered above beams */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Hero Section - Removed relative and h-[20rem] */}
@@ -91,7 +90,7 @@ export default function PricingPage() {
                  <li>Volume Discounts</li>
                  <li>Advanced Security Options</li>
                </ul>
-               <Link href="/#waitlist" className="mt-auto">
+               <Link href="/#waitlist" className="mt-auto" legacyBehavior>
                  <MagicButton>
                    Contact Sales
                  </MagicButton>

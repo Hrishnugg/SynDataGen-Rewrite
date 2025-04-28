@@ -86,7 +86,6 @@ export default function TidePage() {
     <div className="flex flex-col min-h-screen bg-black relative">
       {/* Remove global star components */}
       {/* <StarsBackground className="absolute inset-0 z-0" /> */}
-
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
       <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
         {/* Add opaque background layer specifically for Hero section to hide global stars */}
@@ -124,14 +123,12 @@ export default function TidePage() {
           </TextAnimate>
         </div>
       </div>
-
       {/* Use the new PipelineScroll component - Add bg-black */}
       <div className="bg-black"> {/* Ensure solid background */}
         <PipelineScroll content={pipelineContent} />
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
       </div>
-
       {/* New Data Visualizer Section - Increase padding, remove margin */}
       <section className="py-48 bg-black relative overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
@@ -167,7 +164,6 @@ export default function TidePage() {
         </div>
       </section>
       {/* End New Data Visualizer Section */}
-
       {/* Integrate the new ChatSection component within a relative container - Increase padding */}
       <div className="relative bg-black py-48 overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
@@ -180,7 +176,6 @@ export default function TidePage() {
           />
         </div>
       </div>
-
       {/* Added Request Demo Button Section */}
       {/* Added relative positioning for stars, ADDED stars background */}
       <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
@@ -188,13 +183,12 @@ export default function TidePage() {
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure button is above stars */} 
-        <Link href="/#waitlist" className="relative z-10"> 
+        <Link href="/#waitlist" className="relative z-10" legacyBehavior> 
           <MagicButton>
             Request A Demo
           </MagicButton>
         </Link>
       </div>
-
       <Footer />
     </div>
   );

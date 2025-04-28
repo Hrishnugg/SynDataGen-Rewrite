@@ -89,13 +89,13 @@ export default function AboutPage() {
           </p>
           <div className="mt-6 flex items-center justify-center gap-4"> {/* Use flex and gap for spacing */}
             {/* Wrap TealMagicButton with Link */}
-            <Link href="/tide">
+            <Link href="/tide" legacyBehavior>
               <TealMagicButton> {/* Existing button */}
                 Meet Tide
               </TealMagicButton>
             </Link>
             {/* Add Request a Demo button with Link */}
-            <Link href="/#waitlist"> {/* Updated Link to point to waitlist section on landing page */}
+            <Link href="/#waitlist" legacyBehavior> {/* Updated Link to point to waitlist section on landing page */}
               <MagicButton> {/* Use original button component */}
                 Request A Demo
               </MagicButton>
@@ -105,7 +105,6 @@ export default function AboutPage() {
 
         {/* Right Content Block - Orbiting Circles REMOVED */}
       </div>
-
       {/* Mission Section - DELETE THIS BLOCK */}
       {/* 
       <div className="text-center mb-96">
@@ -117,13 +116,11 @@ export default function AboutPage() {
       </div>
       */}
       {/* End of deleted Mission Section block */}
-
       {/* Meet the Team Section */}
       <div className="mb-48"> {/* Margin bottom for spacing */}
         <h2 className="text-5xl font-bold mb-8 text-center text-white">Meet the Team</h2> {/* Title styling */}
         <AnimatedTestimonials testimonials={teamMembers} />
       </div>
-
       {/* Where we are Section */}
       <div className="mb-48 text-center"> {/* Add margin bottom and center text */}
         <h2 className="text-5xl font-bold mb-8 text-white">Where We Are</h2>
@@ -131,7 +128,6 @@ export default function AboutPage() {
          <WorldMap dots={mapLocations} /> {/* Pass locations to the map component */}
         </div>
       </div>
-
       {/* Rest of the about page content can go here */}
       <Footer /> {/* Add Footer component */}
     </>

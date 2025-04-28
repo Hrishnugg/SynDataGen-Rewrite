@@ -80,7 +80,7 @@ const DesktopNav = ({ navItems }: any) => {
         </Menu>
       </div>
       {/* TODO: Link Login/Signup buttons */}
-      <Link href="/auth/login">
+      <Link href="/auth/login" legacyBehavior>
          <button className="hidden rounded-full bg-black px-8 py-2 text-sm font-bold text-white shadow-[0px_-2px_0px_0px_rgba(255,255,255,0.4)_inset] md:block dark:bg-white dark:text-black">
            Login
          </button>
@@ -124,16 +124,25 @@ const MobileNav = ({ navItems }: any) => {
               className="absolute inset-x-0 top-16 z-20 flex w-full flex-col items-start justify-start gap-4 rounded-lg bg-white px-4 py-8 dark:bg-neutral-950"
             >
               {/* Simplified Mobile Nav Items */}
-              <Link href="#features" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="#features"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Features</motion.span>
               </Link>
-              <Link href="#pricing" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="#pricing"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Pricing</motion.span>
               </Link>
-              <Link href="/docs" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="/docs"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Docs</motion.span>
               </Link>
-              <Link href="/auth/login" className="w-full">
+              <Link href="/auth/login" className="w-full" legacyBehavior>
                  <button className="w-full rounded-lg bg-black px-8 py-2 font-medium text-white shadow-[0px_-2px_0px_0px_rgba(255,255,255,0.4)_inset] dark:bg-white dark:text-black">
                    Login
                  </button>
@@ -153,7 +162,7 @@ const Logo = () => {
     <Link
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
-    >
+      legacyBehavior>
       <Image
         src="/synopticlogo3d.png" // TODO: Confirm logo path
         alt="Synoptic Logo"
@@ -252,7 +261,7 @@ const ProductItem = ({ // Changed export to const
   src: string;
 }) => {
   return (
-    <Link href={href} className="flex gap-4">
+    <Link href={href} className="flex gap-4" legacyBehavior>
       <Image
         src={src}
         width={140}
@@ -277,7 +286,7 @@ const HoveredLink = ({ children, ...rest }: any) => { // Changed export to const
     <Link
       {...rest}
       className="text-neutral-700 hover:text-black dark:text-neutral-200"
-    >
+      legacyBehavior>
       {children}
     </Link>
   );

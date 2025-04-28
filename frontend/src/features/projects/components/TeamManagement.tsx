@@ -148,7 +148,6 @@ export function TeamManagement({ project }: TeamManagementProps) {
           </div>
         </div>
       )}
-
       {/* --- Team Members Table --- */}
       <div>
         <h4 className="mb-2 font-medium">Current Team</h4>
@@ -168,7 +167,7 @@ export function TeamManagement({ project }: TeamManagementProps) {
                   <TableCell>
                     {canManage && role !== 'owner' && userId !== currentUserId ? (
                       // Editable role for non-owners/non-self if user is admin/owner
-                       <Select 
+                       (<Select 
                          defaultValue={role} 
                          onValueChange={(newRole: Role) => handleRoleChange(userId, newRole)}
                          disabled={isUpdatingRole}
@@ -181,10 +180,10 @@ export function TeamManagement({ project }: TeamManagementProps) {
                             <SelectItem value="member">Member</SelectItem>
                             <SelectItem value="admin">Admin</SelectItem>
                           </SelectContent>
-                        </Select>
+                       </Select>)
                     ) : (
                       // Non-editable display
-                      <span className="capitalize">{role}</span>
+                      (<span className="capitalize">{role}</span>)
                     )}
                   </TableCell>
                   <TableCell className="text-right">
