@@ -18,12 +18,13 @@ import { Separator } from "@/components/shadcn/separator";
 import { ProjectMetricCards } from "@/components/project-metric-cards";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { IconPlus, IconUpload, IconLoader } from "@tabler/icons-react";
-import { useGetProjectQuery } from '@/features/projects/projectApiSlice';
+import { useGetProjectQuery, useListDatasetsQuery } from '@/features/projects/projectApiSlice';
 import { useListJobsQuery } from '@/features/jobs/jobApiSlice';
 import { ProjectUpdateForm } from '@/features/projects/components/ProjectUpdateForm';
 import { TeamManagement } from '@/features/projects/components/TeamManagement';
 import { Button } from "@/components/shadcn/button";
 import { JobCreationModal } from "@/components/JobCreationModal";
+import { DatasetUploadModal } from "@/components/DatasetUploadModal";
 
 // Placeholder for loading state
 const LoadingOverlay = () => (
@@ -37,6 +38,7 @@ export default function ProjectDetailPage() {
   const projectId = params?.projectId as string;
   const [jobsPagination, setJobsPagination] = useState({ limit: 10, offset: 0 });
   const [isJobCreateModalOpen, setIsJobCreateModalOpen] = useState(false);
+  const [isDatasetUploadModalOpen, setIsDatasetUploadModalOpen] = useState(false);
 
   // Fetch project data
   const { data: project, isLoading: isLoadingProject, isError: isErrorProject, error: projectError } = useGetProjectQuery(projectId, {
@@ -51,12 +53,22 @@ export default function ProjectDetailPage() {
     skip: !projectId,
   });
 
+  // Fetch datasets data for this project
+  const { 
+    data: datasetsData, 
+    isLoading: isLoadingDatasets, 
+    isError: isErrorDatasets, 
+    error: datasetsError 
+  } = useListDatasetsQuery(projectId, {
+    skip: !projectId, // Skip if projectId is not yet available
+  });
+
   // Early return for invalid projectId
   if (!projectId) {
     return <div>Invalid Project ID</div>;
   }
 
-  const isLoading = isLoadingProject || isLoadingJobs;
+  const isLoading = isLoadingProject || isLoadingJobs || isLoadingDatasets;
 
   // --- Pagination Handlers for Jobs ---
   const handleJobsNextPage = () => {
@@ -80,7 +92,7 @@ export default function ProjectDetailPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader />
+        <SiteHeader title={projectId ? `Project: ${projectId}` : "Project Detail"} />
         <div className="flex flex-1 flex-col p-4 md:p-6 space-y-6 relative">
           {isLoading && <LoadingOverlay />}
           
@@ -112,17 +124,25 @@ export default function ProjectDetailPage() {
     
               {/* Jobs Section */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader>
                    <CardTitle>Data Generation Jobs</CardTitle>
-                   <Button size="sm" onClick={() => setIsJobCreateModalOpen(true)}>
-                       <IconPlus className="mr-2 h-4 w-4" /> Create Job
-                    </Button>
                  </CardHeader>
                  <CardContent>
                    {isErrorJobs && <div className="text-red-500">Error loading jobs.</div>}
                    <JobsTable 
                      data={jobsData?.jobs || []}
-          />
+                     headerActions={
+                       <HoverBorderGradient
+                         containerClassName="rounded-md"
+                         as="button"
+                         onClick={() => setIsJobCreateModalOpen(true)}
+                         className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
+                       >
+                         <IconPlus className="h-4 w-4 mr-1" />
+                         <span>Create Job</span>
+                       </HoverBorderGradient>
+                     }
+                   />
                    {!isErrorJobs && jobsData && jobsData.total > 0 && (
                      <div className="flex items-center justify-end space-x-2 pt-4">
                         <div className="flex-1 text-sm text-muted-foreground">
@@ -152,14 +172,25 @@ export default function ProjectDetailPage() {
     
               {/* Datasets Section */}
               <Card>
-                 <CardHeader className="flex flex-row items-center justify-between">
+                 <CardHeader>
                    <CardTitle>Generated Datasets</CardTitle>
-                   <Button size="sm" disabled> 
-                       <IconUpload className="mr-2 h-4 w-4" /> Upload Dataset
-                    </Button>
                  </CardHeader>
                  <CardContent>
-                    <DatasetsTable data={[]} />
+                    {isErrorDatasets && <div className="text-red-500 mb-4">Error loading datasets.</div>} 
+                    <DatasetsTable 
+                       data={datasetsData || []}
+                       headerActions={
+                         <HoverBorderGradient
+                           containerClassName="rounded-md"
+                           as="button"
+                           onClick={() => setIsDatasetUploadModalOpen(true)}
+                           className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
+                         >
+                           <IconUpload className="h-4 w-4 mr-1" />
+                           <span>Upload Dataset</span>
+                         </HoverBorderGradient>
+                       }
+                    />
                  </CardContent>
               </Card>
               
@@ -194,6 +225,13 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           isOpen={isJobCreateModalOpen}
           onOpenChange={setIsJobCreateModalOpen}
+        />
+      )}
+      {projectId && (
+        <DatasetUploadModal 
+          projectId={projectId}
+          isOpen={isDatasetUploadModalOpen}
+          onOpenChange={setIsDatasetUploadModalOpen}
         />
       )}
     </SidebarProvider>

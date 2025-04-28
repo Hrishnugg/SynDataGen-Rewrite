@@ -2,6 +2,7 @@ package main
 
 import (
 	"SynDataGen/backend/internal/auth"
+	"SynDataGen/backend/internal/core"
 	"SynDataGen/backend/internal/job"
 	"SynDataGen/backend/internal/platform/firestore"
 	"SynDataGen/backend/internal/platform/logger"
@@ -55,7 +56,8 @@ func initFirestore(ctx context.Context) (*fs.Client, error) {
 }
 
 // setupRouter configures the Gin router with routes and handlers.
-func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService) *gin.Engine {
+// Pass core.StorageService for type safety
+func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService, storageSvc core.StorageService) *gin.Engine {
 	router := gin.Default() // Includes logger and recovery middleware
 
 	// Add CORS middleware configuration
@@ -78,10 +80,10 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 	// API v1 Group
 	apiV1 := router.Group("/api/v1")
 	{
-		// --- Auth Routes ---
+		// --- Auth Routes (Manual Registration) ---
+		authHandlers := auth.NewAuthHandlers(authSvc)
 		authRoutes := apiV1.Group("/auth")
 		{
-			authHandlers := auth.NewAuthHandlers(authSvc)
 			authRoutes.POST("/register", authHandlers.Register)
 			authRoutes.POST("/login", authHandlers.Login)
 
@@ -95,7 +97,7 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 		}
 
 		// --- Project Routes ---
-		project.RegisterProjectRoutes(apiV1, authSvc, projectSvc)
+		project.RegisterProjectRoutes(apiV1, authSvc, projectSvc, storageSvc)
 
 		// --- Job Routes ---
 		jobHandlers := job.NewJobHandler(jobSvc)
@@ -130,31 +132,34 @@ func main() {
 		}
 	}()
 
-	// Initialize Repositories
+	// Create Repositories
 	userRepo := firestore.NewUserRepository(firestoreClient)
 	projectRepo := firestore.NewProjectRepository(firestoreClient)
-	jobRepo := firestore.NewJobRepository(firestoreClient, nil)
+	jobRepo := firestore.NewJobRepository(firestoreClient, logger.Logger)
 
-	// Initialize Services
+	// Storage Service Initialization
 	storageCfg := storage.Config{
 		GCPProjectID: getEnv("GCP_PROJECT_ID", ""),
-		Logger:       nil, // Allow service to use default logger for now
+		Logger:       log.Default(),
 	}
-	storageSvc, err := storage.NewGCPStorageService(ctx, storageCfg)
+	storageSvcInstance, err := storage.NewGCPStorageService(ctx, storageCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize Storage Service: %v", err)
+		logger.Logger.Fatal("Failed to initialize GCP Storage service", zap.Error(err))
 	}
+	defer storageSvcInstance.Close()
+	logger.Logger.Info("GCP Storage service initialized successfully")
+
+	// Pipeline Client (Stub for now, pass logger)
+	pipelineClient := pipeline.NewStubPipelineClient(log.Default())
+	logger.Logger.Info("Stub Pipeline client initialized")
+
+	// --- Service Initializations ---
 	authSvc := auth.NewAuthService(userRepo)
-	projectSvc := project.NewProjectService(projectRepo, userRepo, storageSvc)
-
-	// Initialize the stub pipeline client
-	pipelineClient := pipeline.NewStubPipelineClient(nil)
-
-	// Initialize Job Service - Pass the project *Service* for auth checks
+	projectSvc := project.NewProjectService(projectRepo, userRepo, storageSvcInstance)
 	jobSvc := job.NewJobService(jobRepo, projectSvc, pipelineClient)
 
 	// Setup Router
-	router := setupRouter(authSvc, projectSvc, jobSvc)
+	router := setupRouter(authSvc, projectSvc, jobSvc, storageSvcInstance)
 
 	// Start Server
 	port := getEnv("PORT", "8080")

@@ -25,9 +25,26 @@ import {
 // interface InviteMemberRequest {...}
 // interface UpdateMemberRoleRequest {...}
 
+// Define the Dataset type based on backend ObjectSummary
+interface DatasetSummary {
+  name: string;
+  size: number; // Assuming bytes
+  lastUpdated: string; // ISO Date string
+  uri: string;
+}
+
+// Define the type for the dataset content (matches page component)
+interface DatasetContent {
+  data: Record<string, any>[];
+  // Add other relevant metadata if the API provides it
+}
+
+// Enhance apiSlice tagTypes
+const enhancedApiSlice = apiSlice.enhanceEndpoints({ addTagTypes: ['Dataset', 'DatasetContent'] });
+
 // --- Inject Endpoints ---
 
-export const projectApiSlice = apiSlice.injectEndpoints({
+export const projectApiSlice = enhancedApiSlice.injectEndpoints({
   endpoints: (builder) => ({
     // --- Project CRUD ---
     listProjects: builder.query<ListProjectsResponse, ListProjectsParams | void>({
@@ -51,13 +68,12 @@ export const projectApiSlice = apiSlice.injectEndpoints({
     }),
 
     createProject: builder.mutation<Project, CreateProjectRequest>({
-      query: (newProject) => ({
+      query: (projectDetails) => ({
         url: '/projects',
         method: 'POST',
-        body: newProject,
+        body: projectDetails,
       }),
-      // Invalidate the list cache on creation
-      invalidatesTags: [{ type: 'Project', id: 'LIST' }],
+      invalidatesTags: (result, error, arg) => [{ type: 'Project', id: 'LIST' }],
     }),
 
     updateProject: builder.mutation<Project, { projectId: string; updates: UpdateProjectRequest }>({
@@ -66,11 +82,7 @@ export const projectApiSlice = apiSlice.injectEndpoints({
         method: 'PATCH',
         body: updates,
       }),
-      // Invalidate the specific project and potentially the list cache
-      invalidatesTags: (result, error, { projectId }) => [
-        { type: 'Project', id: projectId },
-        { type: 'Project', id: 'LIST' }, // Consider invalidating list too
-      ],
+      invalidatesTags: (result, error, arg) => [{ type: 'Project', id: arg.projectId }, { type: 'Project', id: 'LIST' }],
     }),
 
     deleteProject: builder.mutation<void, string>({
@@ -78,11 +90,7 @@ export const projectApiSlice = apiSlice.injectEndpoints({
         url: `/projects/${projectId}`,
         method: 'DELETE',
       }),
-      // Invalidate the specific project and the list cache
-      invalidatesTags: (result, error, projectId) => [
-        { type: 'Project', id: projectId },
-        { type: 'Project', id: 'LIST' },
-      ],
+      invalidatesTags: (result, error, arg) => [{ type: 'Project', id: arg }, { type: 'Project', id: 'LIST' }],
     }),
 
     // --- Team Management ---
@@ -114,8 +122,40 @@ export const projectApiSlice = apiSlice.injectEndpoints({
       // Invalidate the specific project cache
       invalidatesTags: (result, error, { projectId }) => [{ type: 'Project', id: projectId }],
     }),
+
+    // New List Datasets Query
+    listDatasets: builder.query<DatasetSummary[], string>({ // Returns array of summaries, takes projectId
+        query: (projectId) => `/projects/${projectId}/datasets`,
+        providesTags: (result, error, projectId) => 
+          result
+            ? [
+                // Provides a tag for the whole list associated with the project
+                { type: 'Dataset', id: `LIST-${projectId}` }, 
+                // Optionally provide tags for individual datasets if IDs were available
+                // ...result.map(({ id }) => ({ type: 'Dataset', id })), 
+              ]
+            : [{ type: 'Dataset', id: `LIST-${projectId}` }], 
+    }),
+
+    uploadDataset: builder.mutation<{ message: string; datasetName: string; uri: string; }, { projectId: string; formData: FormData }>({
+        query: ({ projectId, formData }) => ({
+          url: `/projects/${projectId}/datasets`,
+          method: 'POST',
+          body: formData,
+          formData: true, 
+        }),
+        // Invalidate the dataset list tag for the specific project on successful upload
+        invalidatesTags: (result, error, arg) => [{ type: 'Dataset', id: `LIST-${arg.projectId}` }], 
+      }),
+
+    // New endpoint for fetching dataset content
+    getDatasetContent: builder.query<DatasetContent, { projectId: string; datasetId: string }>({ 
+      query: ({ projectId, datasetId }) => `/projects/${projectId}/datasets/${encodeURIComponent(datasetId)}/content`, // Assuming name is used as ID for now, encode it
+      providesTags: (result, error, { projectId, datasetId }) => [{ type: 'DatasetContent', id: `${projectId}-${datasetId}` }],
+    }),
+
   }),
-  overrideExisting: true,
+  overrideExisting: false, // Keep existing endpoints
 });
 
 // Export hooks for usage in components
@@ -128,6 +168,9 @@ export const {
   useInviteMemberMutation,
   useUpdateMemberRoleMutation,
   useRemoveMemberMutation,
+  useUploadDatasetMutation,
+  useListDatasetsQuery, // Export the new query hook
+  useGetDatasetContentQuery, // Export the new content query hook
   // Add lazy query hooks if needed
   useLazyListProjectsQuery,
   useLazyGetProjectQuery,

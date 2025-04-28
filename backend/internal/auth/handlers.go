@@ -2,11 +2,14 @@ package auth
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	// Import core package
+
+	"SynDataGen/backend/internal/platform/logger"
+
+	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
 )
@@ -110,14 +113,13 @@ func (h *AuthHandlers) GetCurrentUser(c *gin.Context) {
 // Logout handles user logout requests.
 func (h *AuthHandlers) Logout(c *gin.Context) {
 	// Middleware ensures this handler is only called for authenticated users.
-	// Extract user ID for logging or potential blocklist operations.
-	userID, _ := GetUserIDFromContext(c)
+	// Extract user ID for logging or potential blocklist operations (optional here as service does it now)
+	// userID, _ := GetUserIDFromContext(c)
 
-	err := h.Svc.Logout(c.Request.Context())
+	err := h.Svc.Logout(c) // Pass Gin context directly
 	if err != nil {
 		// Log the error, although typically logout itself shouldn't fail severely
-		// unless there's a context issue or blocklist interaction error.
-		fmt.Printf("Error during logout for user %s: %v\n", userID, err) // Replace with proper logging
+		logger.Logger.Error("Error during logout service call", zap.Error(err)) // Use logger
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "LOGOUT_FAILED", "message": err.Error()})
 		return
 	}

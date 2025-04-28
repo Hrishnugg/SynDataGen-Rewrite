@@ -41,6 +41,6 @@ type AuthService interface {
 	GetCurrentUser(c *gin.Context) (*core.User, error)
 
 	// Logout invalidates the current user session/token.
-	// Implementation depends heavily on session mechanism (e.g., token blocklist).
-	Logout(ctx context.Context) error
+	// Pass Gin context for consistency in retrieving user ID.
+	Logout(c *gin.Context) error
 }

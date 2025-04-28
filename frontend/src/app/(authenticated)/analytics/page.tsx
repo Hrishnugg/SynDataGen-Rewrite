@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from 'next/navigation'; // Import usePathname
 import { AppSidebar } from "@/components/app-sidebar"
 import { SiteHeader } from "@/components/site-header"
 import {
@@ -33,6 +34,7 @@ import {
   PieChart as RechartsPieChart,
   Area, Bar, Line, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Label
 } from "recharts"
+import { navMain } from "@/lib/navigation"; // Import navMain
 
 // --- Mock Data ---
 
@@ -174,6 +176,11 @@ const usageSplitChartConfig = {
 
 // --- Analytics Page Component ---
 export default function AnalyticsPage() {
+  const pathname = usePathname(); // Get current path
+  // Find the title from navMain
+  const currentPage = navMain.find(item => item.url === pathname);
+  const pageTitle = currentPage?.title || "Analytics"; // Fallback title
+
   return (
     <SidebarProvider
       style={
@@ -185,7 +192,7 @@ export default function AnalyticsPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader title="Analytics" />
+        <SiteHeader title={pageTitle} />
         <div className="flex flex-1 flex-col overflow-y-auto">
           <div className="@container/main flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
             

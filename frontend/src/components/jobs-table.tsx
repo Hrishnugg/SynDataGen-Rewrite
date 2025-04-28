@@ -426,13 +426,13 @@ function DraggableRow({ row }: { row: Row<Job> }) {
   )
 }
 
-// Update props to accept API Job type
+// Update props to accept API Job type and headerActions
 interface JobsTableProps {
   data: Job[];
-  // actionButton?: React.ReactNode; // Keep if needed, remove if actions handled in row
+  headerActions?: React.ReactNode; // Add optional headerActions prop
 }
 
-export function JobsTable({ data: initialData }: JobsTableProps) {
+export function JobsTable({ data: initialData, headerActions }: JobsTableProps) {
   const [data, setData] = React.useState(() => initialData)
   React.useEffect(() => {
     setData(initialData);
@@ -501,12 +501,12 @@ export function JobsTable({ data: initialData }: JobsTableProps) {
 
         {/* Right Side (Action Button, Columns Button) */}
         <div className="flex items-center gap-2">
-          {/* Removed actionButton prop for now, actions are per-row */}
+          {/* Render headerActions if provided */}
+          {headerActions}
 
           {/* Column Visibility Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              {/* Match styling from ProjectJobsTable */}
               <Button variant="outline" size="sm" className="h-8">
                 <IconLayoutColumns className="mr-2 h-4 w-4" />
                 Columns
