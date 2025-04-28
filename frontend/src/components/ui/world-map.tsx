@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import { motion } from "motion/react";
+import { useRef, useEffect } from "react";
+import { motion, useAnimation } from "motion/react";
 import DottedMap from "dotted-map";
 
 interface MapProps {
@@ -74,7 +74,6 @@ export function WorldMap({
                 }}
                 transition={{
                   duration: 6,
-                  delay: 0.5 * i,
                   ease: "easeOut",
                   repeat: Infinity,
                   repeatType: "loop",
@@ -118,14 +117,6 @@ export function WorldMap({
                   begin="0s"
                   repeatCount="indefinite"
                 />
-                <animate
-                  attributeName="opacity"
-                  from="0.5"
-                  to="0"
-                  dur="1.5s"
-                  begin="0s"
-                  repeatCount="indefinite"
-                />
               </circle>
             </g>
             <g key={`end-${i}`}>
@@ -146,14 +137,6 @@ export function WorldMap({
                   attributeName="r"
                   from="2"
                   to="8"
-                  dur="1.5s"
-                  begin="0s"
-                  repeatCount="indefinite"
-                />
-                <animate
-                  attributeName="opacity"
-                  from="0.5"
-                  to="0"
                   dur="1.5s"
                   begin="0s"
                   repeatCount="indefinite"

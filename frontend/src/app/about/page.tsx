@@ -1,6 +1,6 @@
 "use client"; // Add the directive
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image'; // Import the Next.js Image component
 import Link from 'next/link'; // Import Link
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect"; // Import the effect component
@@ -9,10 +9,10 @@ import { WorldMap } from "@/components/ui/world-map"; // Import the world map co
 import { TealMagicButton } from "@/components/ui/bmagic-button-teal";
 // Import the original button component
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
-// Import OrbitingCircles
-import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
+// Import BackgroundBeams
 import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 import { Footer } from "@/components/landing/footer"; // Import Footer
+import './about-animations.css'; // Import the CSS file
 
 // Define team members data
 const teamMembers = [
@@ -47,25 +47,44 @@ const mapLocations = [
 
 export default function AboutPage() {
   const newSubheading = "The Synthetic Data Company- The Future of Data Generated Today";
-  const [animationKey, setAnimationKey] = useState(0); // State for remounting effect
+  const heroRef = useRef<HTMLDivElement>(null); // Ref for the hero section
+  const testimonialsRef = useRef<HTMLDivElement>(null); // Ref for the testimonials section
+  const mapRef = useRef<HTMLDivElement>(null); // Ref for the map section
 
   useEffect(() => {
-    // Set up interval to change the key every 10 seconds
-    const intervalId = setInterval(() => {
-      setAnimationKey(prevKey => prevKey + 1);
-    }, 10000); // 10 seconds
+    const options = { threshold: 0 }; // Trigger as soon as 1px is visible
 
-    // Clear interval on component unmount
-    return () => clearInterval(intervalId);
+    const observerCallback = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('section-visible');
+        } else {
+          entry.target.classList.remove('section-visible');
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(observerCallback, options);
+
+    const elements = [heroRef.current, testimonialsRef.current, mapRef.current];
+    
+    elements.forEach(el => {
+      if (el) observer.observe(el);
+    });
+
+    return () => {
+      elements.forEach(el => {
+        if (el) observer.unobserve(el);
+      });
+    };
   }, []); // Run only once on mount
 
   return (
     <>
-      {/* Hero Section - Updated Layout */}
-      {/* Use flex-row, items-center, justify-between */}
-      <div className="relative flex flex-col items-center text-center pt-32 mb-96 h-[40rem]"> {/* Add relative positioning and height */}
-        <BackgroundBeams className="absolute top-0 left-0 w-full h-full z-0" /> {/* Add BackgroundBeams */}
-        {/* Add z-10 to ensure content is above beams */}
+      {/* Hero Section - Add initial visibility class? Or handle via CSS */}
+      <div ref={heroRef} className="about-section relative flex flex-col items-center text-center pt-32 mb-96 h-[40rem]"> 
+        {/* Remove motion wrapper */}
+        <BackgroundBeams className="absolute top-0 left-0 w-full h-full z-0" /> 
         <div className="relative z-10 w-full max-w-3xl flex flex-col items-center"> 
           <div className="flex items-center justify-center mb-6"> {/* Changed justify-center to justify-start */}
             <Image
@@ -77,12 +96,10 @@ export default function AboutPage() {
             />
             <h1 className="text-7xl font-bold text-white">Synoptic</h1> {/* Large white text */}
           </div>
-          {/* Render TextGenerateEffect directly */}
+          {/* Remove motion wrapper */}
           <TextGenerateEffect
-            key={animationKey} // Add key to force remount
-            words={newSubheading}
-            className="text-xl font-semibold text-gray-300 mb-4 min-h-[60px]" // Keep min-height and styles
-            // duration prop can be used if needed, defaults to 0.5
+             words={newSubheading}
+             className="text-xl font-semibold text-gray-300 mb-4 min-h-[60px]" 
           />
           <p className="text-lg text-gray-400 max-w-3xl mb-6"> {/* Add bottom margin to paragraph */}
             We are a synthetic data generation company called Synoptic. Synoptic has developed a three-stage synthetic data generation pipeline combining cutting-edge LLMs with privacy-preserving techniques. PII/PHI is accurately identified by Gemini Flash 2.5, anonymized via differential privacy, and then used by a distilled DeepSeek model to generate cost-effective, feature-preserving synthetic data.
@@ -117,15 +134,17 @@ export default function AboutPage() {
       */}
       {/* End of deleted Mission Section block */}
       {/* Meet the Team Section */}
-      <div className="mb-48"> {/* Margin bottom for spacing */}
-        <h2 className="text-5xl font-bold mb-8 text-center text-white">Meet the Team</h2> {/* Title styling */}
-        <AnimatedTestimonials testimonials={teamMembers} />
+      <div ref={testimonialsRef} className="about-section mb-48"> 
+        <h2 className="text-5xl font-bold mb-8 text-center text-white">Meet the Team</h2> 
+        {/* Remove motion wrapper */}
+        <AnimatedTestimonials testimonials={teamMembers} /> 
       </div>
       {/* Where we are Section */}
-      <div className="mb-48 text-center"> {/* Add margin bottom and center text */}
+      <div ref={mapRef} className="about-section mb-48 text-center"> 
         <h2 className="text-5xl font-bold mb-8 text-white">Where We Are</h2>
-        <div className="w-full max-w-4xl mx-auto"> {/* Wrapper div for sizing - Increased size */} 
-         <WorldMap dots={mapLocations} /> {/* Pass locations to the map component */}
+        <div className="w-full max-w-4xl mx-auto"> 
+         {/* Remove motion wrapper */} 
+         <WorldMap dots={mapLocations} /> 
         </div>
       </div>
       {/* Rest of the about page content can go here */}

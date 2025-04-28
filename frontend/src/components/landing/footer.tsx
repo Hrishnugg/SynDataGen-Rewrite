@@ -54,9 +54,8 @@ export function Footer() {
                 <li key={"pages" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    // Use actual href
                     href={page.href}
-                    legacyBehavior>
+                    >
                     {page.title}
                   </Link>
                 </li>
@@ -72,12 +71,10 @@ export function Footer() {
                 <li key={"social" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    // Use actual href
                     href={social.href}
-                    // Open socials in new tab
                     target="_blank"
                     rel="noopener noreferrer"
-                    legacyBehavior>
+                    >
                     {social.title}
                   </Link>
                 </li>
@@ -93,9 +90,8 @@ export function Footer() {
                 <li key={"legal" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    // Use actual href
                     href={legal.href}
-                    legacyBehavior>
+                    >
                     {legal.title}
                   </Link>
                 </li>
@@ -111,9 +107,8 @@ export function Footer() {
                 <li key={"auth" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    // Use actual href
                     href={auth.href}
-                    legacyBehavior>
+                    >
                     {auth.title}
                   </Link>
                 </li>
@@ -137,17 +132,14 @@ const Logo = () => {
       href="/"
       className="font-normal flex space-x-2 items-center text-sm mr-4 text-black px-2 py-1 relative z-20"
     >
-      {/* Wrap children and remove legacyBehavior */}
-      <>
-        {/* Placeholder for Synoptic logo - replace src */}
-        { <Image
-          src="/synopticlogo3d.png" 
-          alt="Synoptic Logo"
-          width={30}
-          height={30}
-        /> }
-        <span className="font-medium text-white">Synoptic</span> {/* Updated name */}
-      </>
+      {/* Placeholder for Synoptic logo - replace src */}
+      { <Image
+        src="/synopticlogo3d.png" 
+        alt="Synoptic Logo"
+        width={30}
+        height={30}
+      /> }
+      <span className="font-medium text-white">Synoptic</span> {/* Updated name */}
     </Link>
   );
 }; 
