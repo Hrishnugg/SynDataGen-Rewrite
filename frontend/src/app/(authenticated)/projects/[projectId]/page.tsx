@@ -25,6 +25,7 @@ import { TeamManagement } from '@/features/projects/components/TeamManagement';
 import { Button } from "@/components/shadcn/button";
 import { JobCreationModal } from "@/components/JobCreationModal";
 import { DatasetUploadModal } from "@/components/DatasetUploadModal";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
 
 // Placeholder for loading state
 const LoadingOverlay = () => (
@@ -110,111 +111,130 @@ export default function ProjectDetailPage() {
 
           {!isErrorProject && project && (
             <>
-          <h1 className="text-2xl font-semibold">{project.name}</h1>
-          <ProjectMetricCards
-                storageUsed={project.storage?.usedStorageBytes ? (project.storage.usedStorageBytes / (1024**3)).toFixed(2) + ' GB' : 'N/A'}
-                storageRemaining={'N/A'}
-                storageTotal={project.settings?.maxStorageGB ? `${project.settings.maxStorageGB} GB` : 'N/A'}
-                creditsUsed={0}
-                creditsRemaining={0}
-                creditsTotal={0}
-                activeJobs={0}
-                datasets={0}
-              />
-    
-              {/* Jobs Section */}
-              <Card>
-                <CardHeader>
-                   <CardTitle>Data Generation Jobs</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                   {isErrorJobs && <div className="text-red-500">Error loading jobs.</div>}
-                   <JobsTable 
-                     data={jobsData?.jobs || []}
-                     headerActions={
-                       <HoverBorderGradient
-                         containerClassName="rounded-md"
-                         as="button"
-                         onClick={() => setIsJobCreateModalOpen(true)}
-                         className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
-                       >
-                         <IconPlus className="h-4 w-4 mr-1" />
-                         <span>Create Job</span>
-                       </HoverBorderGradient>
-                     }
-                   />
-                   {!isErrorJobs && jobsData && jobsData.total > 0 && (
-                     <div className="flex items-center justify-end space-x-2 pt-4">
-                        <div className="flex-1 text-sm text-muted-foreground">
-                          Showing {jobsPagination.offset + 1}-
-                          {Math.min(jobsPagination.offset + jobsPagination.limit, jobsData.total)} of {jobsData.total} jobs
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleJobsPrevPage}
-                          disabled={jobsPagination.offset === 0}
-                        >
-                          Previous
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleJobsNextPage}
-                          disabled={jobsPagination.offset + jobsPagination.limit >= jobsData.total}
-                        >
-                          Next
-                        </Button>
-          </div>
-                   )}
-                 </CardContent>
-              </Card>
-    
-              {/* Datasets Section */}
-              <Card>
-                 <CardHeader>
-                   <CardTitle>Generated Datasets</CardTitle>
-                 </CardHeader>
-                 <CardContent>
-                    {isErrorDatasets && <div className="text-red-500 mb-4">Error loading datasets.</div>} 
-                    <DatasetsTable 
-                       data={datasetsData || []}
-                       headerActions={
-                         <HoverBorderGradient
-                           containerClassName="rounded-md"
-                           as="button"
-                           onClick={() => setIsDatasetUploadModalOpen(true)}
-                           className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
-                         >
-                           <IconUpload className="h-4 w-4 mr-1" />
-                           <span>Upload Dataset</span>
-                         </HoverBorderGradient>
-                       }
-                    />
-                 </CardContent>
-              </Card>
-              
-               {/* Team Management Section */}
-               <Card>
-                 <CardHeader>
-                   <CardTitle>Team Members</CardTitle>
-                   <CardDescription>Manage who has access to this project.</CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                   <TeamManagement project={project} />
-                 </CardContent>
-               </Card>
+              <h1 className="text-2xl font-semibold mb-4">{project.name}</h1>
 
-               {/* Update Project Section */}
-               <Card>
-                 <CardHeader>
-                   <CardTitle>Project Settings</CardTitle>
-                   <CardDescription>Modify project name, description, settings, or status.</CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                   <ProjectUpdateForm project={project} />
-                 </CardContent>
-               </Card>
+              {/* Outer Tabs for View Switching */}
+              <Tabs defaultValue="overview" className="w-full">
+                {/* Modified TabsList for left alignment and smaller size */}
+                <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground mb-4">
+                  <TabsTrigger value="overview" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Overview</TabsTrigger>
+                  <TabsTrigger value="settings" className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">Settings</TabsTrigger>
+                </TabsList>
+
+                {/* Overview Tab Content */}
+                <TabsContent value="overview" className="space-y-6">
+                  <ProjectMetricCards
+                    storageUsed={project.storage?.usedStorageBytes ? (project.storage.usedStorageBytes / (1024**3)).toFixed(2) + ' GB' : 'N/A'}
+                    storageRemaining={'N/A'}
+                    storageTotal={project.settings?.maxStorageGB ? `${project.settings.maxStorageGB} GB` : 'N/A'}
+                    creditsUsed={0}
+                    creditsRemaining={0}
+                    creditsTotal={0}
+                    activeJobs={0}
+                    datasets={0}
+                  />
+        
+                  {/* Jobs Section */}
+                  <Card>
+                    <CardHeader>
+                       <CardTitle>Data Generation Jobs</CardTitle>
+                     </CardHeader>
+                     <CardContent>
+                       {isErrorJobs && <div className="text-red-500">Error loading jobs.</div>}
+                       <JobsTable 
+                         data={jobsData?.jobs || []}
+                         headerActions={
+                           <HoverBorderGradient
+                             containerClassName="rounded-md"
+                             as="button"
+                             onClick={() => setIsJobCreateModalOpen(true)}
+                             className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
+                           >
+                             <IconPlus className="h-4 w-4 mr-1" />
+                             <span>Create Job</span>
+                           </HoverBorderGradient>
+                         }
+                       />
+                       {!isErrorJobs && jobsData && jobsData.total > 0 && (
+                         <div className="flex items-center justify-end space-x-2 pt-4">
+                            <div className="flex-1 text-sm text-muted-foreground">
+                              Showing {jobsPagination.offset + 1}-
+                              {Math.min(jobsPagination.offset + jobsPagination.limit, jobsData.total)} of {jobsData.total} jobs
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleJobsPrevPage}
+                              disabled={jobsPagination.offset === 0}
+                            >
+                              Previous
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleJobsNextPage}
+                              disabled={jobsPagination.offset + jobsPagination.limit >= jobsData.total}
+                            >
+                              Next
+                            </Button>
+                       </div>
+                       )}
+                     </CardContent>
+                  </Card>
+        
+                  {/* Datasets Section */}
+                  <Card>
+                     <CardHeader>
+                       <CardTitle>Generated Datasets</CardTitle>
+                     </CardHeader>
+                     <CardContent>
+                        {isErrorDatasets && <div className="text-red-500 mb-4">Error loading datasets.</div>} 
+                        <DatasetsTable 
+                           data={datasetsData || []}
+                           headerActions={
+                             <HoverBorderGradient
+                               containerClassName="rounded-md"
+                               as="button"
+                               onClick={() => setIsDatasetUploadModalOpen(true)}
+                               className="dark:bg-black bg-white text-black dark:text-white flex items-center space-x-1 h-9 px-4 text-sm"
+                             >
+                               <IconUpload className="h-4 w-4 mr-1" />
+                               <span>Upload Dataset</span>
+                             </HoverBorderGradient>
+                           }
+                        />
+                     </CardContent>
+                  </Card>
+                </TabsContent>
+
+                {/* Settings Tab Content (contains inner tabs) */}
+                <TabsContent value="settings" className="space-y-6">
+                  {/* Grid for side-by-side cards on larger screens */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Team Management Card */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Team Members</CardTitle>
+                        <CardDescription>Manage who has access to this project.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <TeamManagement project={project} />
+                      </CardContent>
+                    </Card>
+
+                    {/* Project Settings Card */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Project Settings</CardTitle>
+                        <CardDescription>Modify project name, description, settings, or status.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ProjectUpdateForm project={project} />
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </div>

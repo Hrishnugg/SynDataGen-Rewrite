@@ -13,6 +13,7 @@ import (
 	"SynDataGen/backend/internal/core"
 
 	"go.uber.org/zap"
+	firestorepb "google.golang.org/genproto/googleapis/firestore/v1"
 )
 
 const (
@@ -112,14 +113,16 @@ func (r *jobRepository) ListJobsByProjectID(ctx context.Context, projectID strin
 		r.logger.Warn("Count result key 'all' not found in job count aggregation, assuming 0", zap.String("projectID", projectID))
 		totalCount = 0
 	} else {
-		countValue, castOK := countResult.(int64)
-		if !castOK {
-			r.logger.Warn("Failed to cast job count aggregation result to int64, assuming 0",
+		// Safely extract the count value from the aggregation result
+		aggValue, ok := countResult.(*firestorepb.Value)
+		if !ok { // Only warn if the type assertion fails
+			r.logger.Warn("Failed to assert type for job count aggregation result, assuming 0",
 				zap.String("projectID", projectID),
 				zap.Any("resultType", fmt.Sprintf("%T", countResult)))
 			totalCount = 0
 		} else {
-			totalCount = int(countValue)
+			// Valid result (including 0), get the integer value
+			totalCount = int(aggValue.GetIntegerValue())
 		}
 	}
 	r.logger.Info("Total jobs counted for project via aggregation", zap.String("projectID", projectID), zap.Int("totalCount", totalCount))
@@ -258,14 +261,18 @@ func (r *jobRepository) ListJobsAcrossProjects(ctx context.Context, projectIDs [
 			continue
 		}
 
-		// Attempt to cast the result to int64. If it fails, assume count is 0 for this chunk.
-		countValue, ok := countResult.(int64)
-		if !ok {
-			r.logger.Warn("Failed to assert count result type, assuming 0 for chunk", zap.Strings("projectIds", chunk), zap.Any("countResultType", fmt.Sprintf("%T", countResult)))
-			// Continue to next chunk without adding to totalCount or erroring
+		// Safely extract the count value from the aggregation result for the chunk
+		aggValue, ok := countResult.(*firestorepb.Value)
+		if !ok { // Only warn if the type assertion fails
+			r.logger.Warn("Failed to assert type for job count aggregation result in chunk, assuming 0",
+				zap.Strings("projectIds", chunk),
+				zap.Any("countResultType", fmt.Sprintf("%T", countResult)))
+			// Continue to next chunk without adding to totalCount or erroring, as count is unknown
 			continue
+		} else {
+			// Valid result (including 0), add the integer value to the total
+			totalCount += int(aggValue.GetIntegerValue())
 		}
-		totalCount += int(countValue) // Add chunk count to total
 
 		// --- Get actual jobs for this chunk (for later pagination) ---
 		// Apply ordering (e.g., by creation date descending)

@@ -143,7 +143,8 @@ func setupProjectHandlersTestRouter() (*gin.Engine, *MockProjectService) {
 
 	router := gin.New()
 	mockService := new(MockProjectService)
-	h := NewProjectHandlers(mockService)
+	mockStorageService := new(MockStorageService)
+	h := NewProjectHandlers(mockService, mockStorageService)
 
 	protectedRoutes := router.Group("/projects")
 	protectedRoutes.Use(mockAuthMiddleware)

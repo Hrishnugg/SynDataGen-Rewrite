@@ -8,6 +8,8 @@ import { Carousel } from "@/components/ui/carousel";
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRegisterMutation } from '@/features/auth/authApiSlice';
+import { FetchBaseQueryError } from '@reduxjs/toolkit/query';
+import { SerializedError } from '@reduxjs/toolkit';
 
 // Placeholder data for the carousel
 const placeholderSlides = [
@@ -27,6 +29,23 @@ const placeholderSlides = [
     src: "/placeholder-img-3.jpg", // Replace with actual image path later
   },
 ];
+
+// Helper function to extract error message
+const getErrorMessage = (error: FetchBaseQueryError | SerializedError | undefined): string => {
+  if (!error) {
+    return 'An unknown error occurred.';
+  }
+  if ('status' in error) {
+    // FetchBaseQueryError
+    // Asserting the type of 'data' assuming it might contain a 'message' property
+    const data = error.data as { message?: string };
+    // Fallback to stringifying data if message is not present
+    return data?.message || JSON.stringify(error.data) || 'Server error';
+  } else {
+    // SerializedError
+    return error.message || 'Client error';
+  }
+};
 
 export default function RegistrationFormWithImages() {
   return (
@@ -167,7 +186,7 @@ function Form() {
 
                 {isError && (
                   <div className="text-sm text-red-500 dark:text-red-400">
-                    Error: {error?.data?.message || 'Registration failed. Please try again.'}
+                    Error: {getErrorMessage(error)}
                   </div>
                 )}
 
@@ -253,13 +272,15 @@ const Logo = () => {
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
       legacyBehavior>
-      <Image
-        src="/synopticlogo3d.png"
-        alt="logo"
-        width={30}
-        height={30}
-      />
-      <span className="font-medium text-black dark:text-white">Synoptic</span>
+      <a className="flex items-center space-x-2">
+        <Image
+          src="/synopticlogo3d.png"
+          alt="logo"
+          width={30}
+          height={30}
+        />
+        <span className="font-medium text-black dark:text-white">Synoptic</span>
+      </a>
     </Link>
   );
 };

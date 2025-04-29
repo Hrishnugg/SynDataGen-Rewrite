@@ -244,8 +244,8 @@ export function DataViewerTable({ data }: DataViewerTableProps) {
                                 table.setPageSize(Number(value));
                             }}
                         >
-                            <SelectTrigger className="h-8 w-[70px]">
-                                <SelectValue placeholder={table.getState().pagination.pageSize} />
+                            <SelectTrigger className="h-8 w-[80px] flex items-center justify-center">
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent side="top">
                                 {[10, 50, 100, 250, 500].map((pageSize) => (
