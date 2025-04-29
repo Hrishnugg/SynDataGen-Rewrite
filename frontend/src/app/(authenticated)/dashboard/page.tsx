@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { usePathname } from 'next/navigation';
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChartAreaInteractive } from "@/components/chart-area-interactive"
 import { DataTable } from "@/components/data-table"
@@ -13,6 +14,7 @@ import {
 import { useListProjectsQuery } from '@/features/projects/projectApiSlice'
 import { useListAllAccessibleJobsQuery } from '@/features/jobs/jobApiSlice'
 import { IconLoader } from '@tabler/icons-react'
+import { navMain } from "@/lib/navigation"
 
 // Loading State Component
 const LoadingState = () => (
@@ -22,6 +24,10 @@ const LoadingState = () => (
 );
 
 export default function DashboardPage() {
+  const pathname = usePathname();
+  const currentPage = navMain.find(item => item.url === pathname);
+  const pageTitle = currentPage?.title || "Dashboard";
+
   // Fetch projects (e.g., recent 5 for dashboard)
   const { 
     data: projectsData, 
@@ -54,7 +60,7 @@ export default function DashboardPage() {
     >
       <AppSidebar variant="inset" />
       <SidebarInset>
-        <SiteHeader title="Dashboard" />
+        <SiteHeader title={pageTitle} />
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"errors"
+	"io"
 	"time"
 )
 
@@ -75,15 +76,37 @@ type JobRepository interface {
 	// TODO: Consider adding methods for advanced filtering or deletion if required.
 }
 
+// ObjectSummary contains basic information about a storage object.
+type ObjectSummary struct {
+	Name        string    `json:"name"`
+	Size        int64     `json:"size"`        // Size in bytes
+	LastUpdated time.Time `json:"lastUpdated"` // Last modification time
+	URI         string    `json:"uri"`         // Full gs:// URI
+}
+
 // StorageService defines the interface for interacting with object storage.
 type StorageService interface {
 	// CreateProjectBucket creates a dedicated storage bucket for a project.
 	// Returns bucket name and region, or an error.
 	CreateProjectBucket(ctx context.Context, projectID, customerID, requestedRegion string) (bucketName string, region string, err error)
 
+	// UploadFile uploads data from a reader to a specific object in a bucket.
+	// Returns the GCS URI (gs://bucket/object) of the uploaded file or an error.
+	UploadFile(ctx context.Context, bucketName, objectName string, reader io.Reader) (uri string, err error)
+
+	// ListObjects lists objects within a bucket, potentially with a prefix.
+	ListObjects(ctx context.Context, bucketName, prefix string) ([]ObjectSummary, error)
+
+	// ReadObject reads the content of a specific object from a bucket.
+	// Returns the object content as bytes or an error (e.g., ErrNotFound).
+	ReadObject(ctx context.Context, bucketName, objectName string) ([]byte, error)
+
 	// DeleteProjectBucket removes the storage bucket associated with a project.
 	// Force delete should remove contents first if necessary.
 	DeleteProjectBucket(ctx context.Context, bucketName string, force bool) error
 
-	// TODO: Add other methods as needed (e.g., SetBucketLifecycle)
+	// Close cleans up any underlying resources used by the storage service.
+	Close() error
+
+	// TODO: Add other methods as needed (e.g., SetBucketLifecycle, GetObjectMetadata)
 }

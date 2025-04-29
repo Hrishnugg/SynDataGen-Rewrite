@@ -13,6 +13,8 @@ import { Button as MagicButton } from "@/components/ui/bmagic-button";
 import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 import { Footer } from "@/components/landing/footer"; // Import Footer
 import './about-animations.css'; // Import the CSS file
+import { WaitlistModal } from "@/components/modals/WaitlistModal"; // Import the new modal
+
 
 // Define team members data
 const teamMembers = [
@@ -50,6 +52,9 @@ export default function AboutPage() {
   const heroRef = useRef<HTMLDivElement>(null); // Ref for the hero section
   const testimonialsRef = useRef<HTMLDivElement>(null); // Ref for the testimonials section
   const mapRef = useRef<HTMLDivElement>(null); // Ref for the map section
+  const [animationKey, setAnimationKey] = useState(0); // State for remounting effect
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false); // State for modal visibility
+
 
   useEffect(() => {
     const options = { threshold: 0 }; // Trigger as soon as 1px is visible
@@ -111,12 +116,10 @@ export default function AboutPage() {
                 Meet Tide
               </TealMagicButton>
             </Link>
-            {/* Add Request a Demo button with Link */}
-            <Link href="/#waitlist"> {/* Updated Link to point to waitlist section on landing page */}
-              <MagicButton> {/* Use original button component */}
-                Request A Demo
-              </MagicButton>
-            </Link>
+            {/* Change Request a Demo button to open modal */}
+            <MagicButton onClick={() => setIsWaitlistModalOpen(true)}> 
+              Request A Demo
+            </MagicButton>
           </div>
         </div>
 
@@ -149,6 +152,12 @@ export default function AboutPage() {
       </div>
       {/* Rest of the about page content can go here */}
       <Footer /> {/* Add Footer component */}
+
+      {/* Render Waitlist Modal Conditionally */}
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen} 
+        onClose={() => setIsWaitlistModalOpen(false)} 
+      />
     </>
   );
 } 
