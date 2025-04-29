@@ -216,14 +216,14 @@ func (s *authService) GetCurrentUser(c *gin.Context) (*core.User, error) {
 // For stateless JWTs, this often means no server-side action is strictly required.
 // The client is responsible for discarding the token.
 // This endpoint can exist to provide a standard logout flow point.
-func (s *authService) Logout(ctx context.Context) error {
-	// Verify user context exists (middleware should handle this)
-	userIDVal := ctx.Value(UserIDKey)
-	if userIDVal == nil {
-		logger.Logger.Warn("Logout called without user context")
+func (s *authService) Logout(c *gin.Context) error {
+	// Use helper to get user ID from Gin context
+	userID, ok := GetUserIDFromContext(c)
+	if !ok || userID == "" {
+		logger.Logger.Warn("Logout called without user context (failed GetUserIDFromContext)")
+		// Return error as logout implies an authenticated user context should exist
 		return errors.New("logout requires authenticated context")
 	}
-	userID := userIDVal.(string)
 
 	// No server-side action needed for simple JWT logout (token expiry handles invalidation)
 	// If implementing a token blocklist, add logic here.

@@ -46,6 +46,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import { z } from "zod"
+import Link from 'next/link';
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Badge } from "@/components/shadcn/badge"
@@ -122,7 +123,7 @@ function DragHandle({ id }: { id: string }) {
   )
 }
 
-const projectColumns: ColumnDef<Project>[] = [
+const defaultProjectColumns: ColumnDef<Project>[] = [
   {
     id: "drag",
     header: () => null,
@@ -250,10 +251,14 @@ function DraggableRow({ row }: { row: Row<Project> }) {
 }
 
 interface DataTableProps<TData, TValue> {
-  data: TData[]
+  data: TData[];
+  columns?: ColumnDef<TData, TValue>[];
 }
 
-export function DataTable<TData extends { id: string }, TValue>({ data: initialData }: DataTableProps<TData, TValue>) {
+export function DataTable<TData extends { id: string }, TValue>({
+  data: initialData,
+  columns
+}: DataTableProps<TData, TValue>) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -270,7 +275,7 @@ export function DataTable<TData extends { id: string }, TValue>({ data: initialD
 
   const table = useReactTable({
     data,
-    columns: projectColumns as ColumnDef<TData, unknown>[],
+    columns: columns ? columns : (defaultProjectColumns as ColumnDef<TData, unknown>[]),
     state: {
       sorting,
       columnVisibility,
@@ -400,7 +405,7 @@ export function DataTable<TData extends { id: string }, TValue>({ data: initialD
                   </SortableContext>
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={projectColumns.length} className="h-24 text-center">
+                    <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
                       No data available.
                     </TableCell>
                   </TableRow>

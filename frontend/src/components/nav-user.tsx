@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useLogoutMutation } from '@/features/auth/authApiSlice';
+import { useLogoutMutation, useGetSessionQuery } from '@/features/auth/authApiSlice';
 import { toast } from "sonner";
 import {
   IconCreditCard,
@@ -33,18 +33,11 @@ import {
   useSidebar,
 } from "@/components/shadcn/sidebar"
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
+export function NavUser() {
+  const { data: session, isLoading: isSessionLoading, isError } = useGetSessionQuery();
   const { isMobile } = useSidebar()
   const router = useRouter()
-  const [logout, { isLoading }] = useLogoutMutation()
+  const [logout, { isLoading: isLogoutLoading }] = useLogoutMutation()
 
   const handleLogout = async () => {
     try {
@@ -57,6 +50,31 @@ export function NavUser({
     }
   }
 
+  if (isSessionLoading) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg" className="animate-pulse">
+             <div className="h-8 w-8 rounded-lg bg-muted"></div>
+             <div className="flex-1 space-y-1">
+               <div className="h-3 w-20 rounded bg-muted"></div>
+               <div className="h-2 w-24 rounded bg-muted"></div>
+             </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
+
+  if (isError || !session) {
+     return null; 
+  }
+
+  const userName = session.name;
+  const userEmail = session.email;
+  const userAvatar = session.avatar || "/avatars/placeholder.jpg";
+  const avatarFallback = userName ? userName.substring(0, 2).toUpperCase() : "U";
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -67,13 +85,13 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarImage src={userAvatar} alt={userName} />
+                <AvatarFallback className="rounded-lg">{avatarFallback}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
+                <span className="truncate font-medium">{userName}</span>
                 <span className="text-muted-foreground truncate text-xs">
-                  {user.email}
+                  {userEmail}
                 </span>
               </div>
               <IconDotsVertical className="ml-auto size-4" />
@@ -88,13 +106,13 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage src={userAvatar} alt={userName} />
+                  <AvatarFallback className="rounded-lg">{avatarFallback}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
+                  <span className="truncate font-medium">{userName}</span>
                   <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
+                    {userEmail}
                   </span>
                 </div>
               </div>
@@ -115,9 +133,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} disabled={isLoading}>
+            <DropdownMenuItem onClick={handleLogout} disabled={isLogoutLoading}>
               <IconLogout className="mr-2 h-4 w-4" />
-              {isLoading ? "Logging out..." : "Log out"}
+              {isLogoutLoading ? "Logging out..." : "Log out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

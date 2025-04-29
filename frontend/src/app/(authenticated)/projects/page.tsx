@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from "react";
-import { useState } from 'react'; // Import useState
+import { useState, useRef, useEffect } from 'react'; // Add useRef and useEffect
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -13,7 +13,7 @@ import {
   CardBody,
   CardItem,
 } from "@/components/ui/3d-card"; // Assuming this is the correct path
-import { DataTable } from "@/components/data-table"; // Remove ColumnDef import
+import { DataTable, ColumnDef } from "@/components/data-table"; // Import ColumnDef here
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
 import { Badge } from "@/components/shadcn/badge"; // For status in Card view
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/shadcn/card"; // For styling within 3d-card
@@ -27,6 +27,7 @@ import {
   useDeleteProjectMutation 
 } from "@/features/projects/projectApiSlice"; // Import project hooks
 import { toast } from "sonner"; // Assuming sonner for notifications
+import Link from 'next/link'; // Add Link import
 
 // Define the Project data structure (matching projectApiSlice.ts)
 type Role = 'owner' | 'admin' | 'member' | 'viewer';
@@ -69,6 +70,100 @@ const EmptyState = ({ onOpenCreateModal }: { onOpenCreateModal: () => void }) =>
     </Button>
   </div>
 );
+
+// Define Columns for the DataTable
+const projectTableColumns: ColumnDef<Project>[] = [
+  {
+    id: "select",
+    header: ({ table }) => {
+      // Use ref and useEffect for indeterminate state
+      const headerCheckboxRef = useRef<HTMLInputElement>(null!)
+      const isIndeterminate = table.getIsSomePageRowsSelected();
+      const isChecked = table.getIsAllPageRowsSelected();
+
+      useEffect(() => {
+        if (headerCheckboxRef.current) {
+          headerCheckboxRef.current.indeterminate = isIndeterminate;
+        }
+      }, [isIndeterminate]);
+
+      return (
+        <div className="flex items-center justify-center">
+          <input 
+            ref={headerCheckboxRef}
+            type="checkbox"
+            checked={isChecked} // Only pass boolean
+            onChange={(event) => table.toggleAllPageRowsSelected(!!event.target.checked)}
+            aria-label="Select all"
+            className="form-checkbox h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+          />
+        </div>
+      );
+    },
+    cell: ({ row }) => (
+      <div className="flex items-center justify-center">
+        <input 
+           type="checkbox"
+           checked={row.getIsSelected()}
+           onChange={(value) => row.toggleSelected(!!value.target.checked)}
+           aria-label="Select row"
+           className="form-checkbox h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary"
+        />
+      </div>
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "name",
+    header: () => <div className="w-full text-left">Project Name</div>,
+    cell: ({ row }) => {
+      return (
+        <Link href={`/projects/${row.original.id}`} className="font-medium hover:underline">
+          {row.original.name}
+        </Link>
+      );
+    },
+    enableHiding: false,
+  },
+  {
+    id: "description",
+    header: () => <div className="w-full text-left">Description</div>,
+    cell: ({ row }) => <div className="truncate max-w-xs">{row.original.description}</div>,
+  },
+  {
+    accessorKey: "status",
+    header: () => <div className="w-full text-left">Status</div>,
+    cell: ({ row }) => {
+      const status = row.original.status;
+      return (
+        <Badge
+          variant="outline"
+          className={`border-transparent px-2.5 py-0.5 text-xs capitalize 
+            ${
+              status === "active"
+                ? "bg-green-100 text-green-800 dark:bg-green-900/80 dark:text-green-100"
+                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/80 dark:text-yellow-100"
+            }`}
+        >
+           {status}
+        </Badge>
+      );
+    },
+  },
+  {
+    id: "storage",
+    header: () => <div className="text-right">Bucket</div>,
+    cell: ({ row }) => <div className="text-right truncate">{row.original.storage?.bucketName ?? 'N/A'}</div>,
+  },
+  {
+    accessorKey: "createdAt",
+    header: () => <div className="text-right">Created</div>,
+    cell: ({ row }) => <div className="text-right">{new Date(row.original.createdAt).toLocaleDateString()}</div>,
+  },
+  // Note: Actions column (like delete) is omitted here for simplicity
+  // It could be added back if needed, potentially passing handleDeleteProject
+];
 
 export default function ProjectsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -159,59 +254,63 @@ export default function ProjectsPage() {
             {projects.map((project) => (
               <CardContainer key={project.id} className="inter-var">
                 <CardBody className="flex flex-col bg-gray-50 relative group/card dark:hover:shadow-2xl dark:hover:shadow-emerald-500/[0.1] dark:bg-black dark:border-white/[0.2] border-black/[0.1] w-auto sm:w-[30rem] h-auto min-h-[24rem] rounded-xl p-6 border">
-                  <CardItem
-                    translateZ="50"
-                    className="text-xl font-bold text-neutral-600 dark:text-white flex justify-between items-center"
-                  >
-                    <span>{project.name}</span>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteProject(project.id)} disabled={isDeleting}>
-                       <IconTrash className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </CardItem>
-                  <CardItem
-                    as="p"
-                    translateZ="60"
-                    className="text-neutral-500 text-sm max-w-sm mt-2 dark:text-neutral-300"
-                  >
-                    {project.description} | Created: {new Date(project.createdAt).toLocaleDateString()}
-                  </CardItem>
-                  <CardItem translateZ="100" className="w-full mt-4">
-                    <div className="h-20 w-full bg-neutral-200 dark:bg-neutral-700 rounded-md flex items-center justify-center text-xs text-neutral-500 dark:text-neutral-400">
-                       Bucket: {project.storage?.bucketName}
-                    </div>
-                  </CardItem>
-                  <div className="flex justify-between items-center mt-auto">
+                  <div className="flex justify-between items-center w-full mb-2">
                     <CardItem
-                      translateZ={20}
-                      className="px-4 py-2 rounded-xl text-xs font-normal dark:text-white"
+                      translateZ="50"
+                      className="text-xl font-bold text-neutral-600 dark:text-white"
                     >
-                       {/* Storage Usage Placeholder */}
-                       Storage: N/A
+                      {project.name}
                     </CardItem>
-                    <CardItem
-                      translateZ={20}
-                      as="div" // Use div instead of button
-                      className="text-xs font-bold"
-                    >
-                       <Badge
-                         className={`px-3 py-1 rounded-full text-xs font-medium border-transparent capitalize 
-                           ${project.status === 'active' ? 'bg-green-900/80 text-green-100' :
-                            'bg-yellow-900/80 text-yellow-100' // Assuming only active/archived now
-                           }`}
-                       >
-                        {project.status}
-                       </Badge>
+                    <CardItem translateZ="50">
+                       <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }} disabled={isDeleting}>
+                         <IconTrash className="h-4 w-4 text-destructive" />
+                       </Button>
                     </CardItem>
                   </div>
+                  <Link href={`/projects/${project.id}`} className="flex flex-col flex-grow">
+                    <CardItem
+                      as="p"
+                      translateZ="60"
+                      className="text-neutral-500 text-sm max-w-sm mt-1 dark:text-neutral-300"
+                    >
+                      {project.description} | Created: {new Date(project.createdAt).toLocaleDateString()}
+                    </CardItem>
+                    <CardItem translateZ="100" className="w-full mt-4">
+                      <div className="h-20 w-full bg-neutral-200 dark:bg-neutral-700 rounded-md flex items-center justify-center text-xs text-neutral-500 dark:text-neutral-400">
+                        Bucket: {project.storage?.bucketName}
+                      </div>
+                    </CardItem>
+                    <div className="flex justify-between items-center mt-auto pt-4">
+                      <CardItem
+                        translateZ={20}
+                        className="px-4 py-2 rounded-xl text-xs font-normal dark:text-white"
+                      >
+                        Storage: N/A
+                      </CardItem>
+                      <CardItem
+                        translateZ={20}
+                        as="div"
+                        className="text-xs font-bold"
+                      >
+                        <Badge
+                          className={`px-3 py-1 rounded-full text-xs font-medium border-transparent capitalize 
+                            ${project.status === 'active' ? 'bg-green-900/80 text-green-100' :
+                              'bg-yellow-900/80 text-yellow-100'
+                            }`}
+                        >
+                          {project.status}
+                        </Badge>
+                      </CardItem>
+                    </div>
+                  </Link>
                 </CardBody>
               </CardContainer>
             ))}
           </div>
         </TabsContent>
         <TabsContent value="table">
-           {/* TODO: Update DataTable to accept columns dynamically or handle Project type */}
-           {/* For now, just passing data - DataTable needs modification */}
-          <DataTable data={projects} /> 
+           {/* Pass the defined columns to DataTable */}
+          <DataTable columns={projectTableColumns} data={projects} /> 
         </TabsContent>
         {/* TODO: Implement Pagination Controls using totalProjects, pagination state, and setPagination */} 
       </Tabs>

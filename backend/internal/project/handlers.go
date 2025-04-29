@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url" // <-- Added for URL decoding
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -15,21 +16,22 @@ import (
 
 // ProjectHandlers holds the dependencies for project handlers.
 type ProjectHandlers struct {
-	Svc ProjectService
+	Svc            ProjectService
+	storageService core.StorageService
 }
 
 // NewProjectHandlers creates a new set of project handlers.
-func NewProjectHandlers(svc ProjectService) *ProjectHandlers {
-	return &ProjectHandlers{Svc: svc}
+func NewProjectHandlers(svc ProjectService, storageSvc core.StorageService) *ProjectHandlers {
+	return &ProjectHandlers{Svc: svc, storageService: storageSvc}
 }
 
 // RegisterProjectRoutes registers project routes with the Gin router group.
 // It applies the authentication middleware.
-func RegisterProjectRoutes(rg *gin.RouterGroup, authSvc auth.AuthService, projectSvc ProjectService) {
+func RegisterProjectRoutes(rg *gin.RouterGroup, authSvc auth.AuthService, projectSvc ProjectService, storageSvc core.StorageService) {
 	// Use the auth middleware created in the auth package
 	authMiddleware := auth.AuthMiddleware(authSvc)
 
-	h := NewProjectHandlers(projectSvc)
+	h := NewProjectHandlers(projectSvc, storageSvc)
 
 	// Group routes that require authentication
 	protectedRoutes := rg.Group("/projects")
@@ -48,6 +50,13 @@ func RegisterProjectRoutes(rg *gin.RouterGroup, authSvc auth.AuthService, projec
 			teamRoutes.PUT("/:memberId", h.UpdateTeamMemberRole) // Update a member's role
 			teamRoutes.DELETE("/:memberId", h.RemoveTeamMember)  // Remove a member (or self-leave)
 		}
+
+		// Dataset Upload Route
+		protectedRoutes.POST("/:projectId/datasets", h.UploadDataset)
+		protectedRoutes.GET("/:projectId/datasets", h.ListDatasets)
+
+		// New Route for getting dataset content
+		protectedRoutes.GET("/:projectId/datasets/:datasetId/content", h.GetDatasetContentHandler)
 	}
 }
 
@@ -333,4 +342,209 @@ func (h *ProjectHandlers) InviteMember(c *gin.Context) {
 
 	// Return the updated project with the new member
 	c.JSON(http.StatusOK, project)
+}
+
+// UploadDataset handles the dataset file upload for a specific project.
+func (h *ProjectHandlers) UploadDataset(c *gin.Context) {
+	projectID := c.Param("projectId")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Project ID is required"})
+		return
+	}
+
+	// Get User ID from context (using auth helper)
+	userID, ok := auth.GetUserIDFromContext(c)
+	if !ok {
+		// Error response already handled by GetUserIDFromContext if it logs/aborts
+		// If it just returns false, send response here:
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID not found in context"})
+		return
+	}
+
+	// --- Get Project & Check Authorization ---
+	project, err := h.Svc.GetProjectByID(c.Request.Context(), projectID, userID)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) || errors.Is(err, core.ErrNotFound) { // Check both service and core errors potentially
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		} else if errors.Is(err, ErrProjectAccessDenied) || errors.Is(err, core.ErrForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to project"})
+		} else {
+			logger.Logger.Error("Failed to retrieve project for upload", zap.Error(err), zap.String("projectID", projectID))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve project details"})
+		}
+		return
+	}
+
+	// Check if the user has at least Member role using the local helper
+	userRole, exists := project.TeamMembers[userID]
+	if !exists || !isRoleSufficient(userRole, core.RoleMember) { // Use local helper
+		logger.Logger.Warn("UploadDataset: Insufficient permissions", zap.String("projectID", projectID), zap.String("userID", userID), zap.String("userRole", string(userRole)))
+		c.JSON(http.StatusForbidden, gin.H{"error": core.ErrForbidden.Error()})
+		return
+	}
+
+	// --- Parse Multipart Form ---
+	const maxUploadSize = 500 << 20 // 500 MB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadSize)
+	file, header, err := c.Request.FormFile("datasetFile") // Key matches frontend FormData
+	if err != nil {
+		if err.Error() == "http: request body too large" {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": fmt.Sprintf("File size exceeds limit (%dMB)", maxUploadSize>>20)})
+		} else {
+			logger.Logger.Error("Failed to get file from request", zap.Error(err), zap.String("projectID", projectID))
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to get file from request: %v", err)})
+		}
+		return
+	}
+	defer file.Close()
+
+	objectName := header.Filename // Use original filename
+	// TODO: Sanitize objectName - replace invalid GCS characters
+
+	// --- Upload to GCS using the correct service ---
+	bucketName := project.Storage.BucketName
+	if bucketName == "" {
+		logger.Logger.Error("Project storage not configured", zap.String("projectID", projectID))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Project storage not configured"})
+		return
+	}
+
+	// Call storageService held by the handler
+	uri, err := h.storageService.UploadFile(c.Request.Context(), bucketName, objectName, file)
+	if err != nil {
+		logger.Logger.Error("Failed to upload file to GCS", zap.Error(err), zap.String("projectID", projectID), zap.String("bucketName", bucketName), zap.String("objectName", objectName))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload dataset file"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Dataset uploaded successfully",
+		"datasetName": objectName,
+		"uri":         uri,
+	})
+}
+
+// ListDatasets handles GET requests to list datasets (objects) in a project's bucket.
+func (h *ProjectHandlers) ListDatasets(c *gin.Context) {
+	projectID := c.Param("projectId")
+	if projectID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Project ID is required"})
+		return
+	}
+
+	userID, ok := auth.GetUserIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID not found in context"})
+		return
+	}
+
+	// --- Get Project & Check Authorization (Viewer+ required) ---
+	project, err := h.Svc.GetProjectByID(c.Request.Context(), projectID, userID)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) || errors.Is(err, core.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		} else if errors.Is(err, ErrProjectAccessDenied) || errors.Is(err, core.ErrForbidden) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to project"})
+		} else {
+			logger.Logger.Error("Failed to retrieve project for listing datasets", zap.Error(err), zap.String("projectID", projectID))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve project details"})
+		}
+		return
+	}
+
+	// Viewer role is sufficient for listing
+	if !isRoleSufficient(project.TeamMembers[userID], core.RoleViewer) {
+		logger.Logger.Warn("ListDatasets: Insufficient permissions", zap.String("projectID", projectID), zap.String("userID", userID))
+		c.JSON(http.StatusForbidden, gin.H{"error": core.ErrForbidden.Error()})
+		return
+	}
+
+	// --- List Objects from GCS ---
+	bucketName := project.Storage.BucketName
+	if bucketName == "" {
+		logger.Logger.Warn("Project storage not configured for listing datasets", zap.String("projectID", projectID))
+		// Return empty list if bucket doesn't exist?
+		c.JSON(http.StatusOK, []core.ObjectSummary{}) // Return empty list
+		// Or: c.JSON(http.StatusInternalServerError, gin.H{"error": "Project storage not configured"})
+		return
+	}
+
+	// List objects at the root of the bucket (no specific prefix for now)
+	objects, err := h.storageService.ListObjects(c.Request.Context(), bucketName, "") // Empty prefix
+	if err != nil {
+		logger.Logger.Error("Failed to list objects from GCS", zap.Error(err), zap.String("projectID", projectID), zap.String("bucketName", bucketName))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list datasets"})
+		return
+	}
+
+	// Ensure we return an empty slice, not nil, if no objects found
+	if objects == nil {
+		objects = []core.ObjectSummary{}
+	}
+
+	c.JSON(http.StatusOK, objects)
+}
+
+// GetDatasetContentHandler handles GET /projects/:projectId/datasets/:datasetId/content
+func (h *ProjectHandlers) GetDatasetContentHandler(c *gin.Context) {
+	projectID := c.Param("projectId")
+	datasetIDEncoded := c.Param("datasetId") // This might be URL-encoded
+
+	callerID, exists := auth.GetUserIDFromContext(c)
+	if !exists {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "UNAUTHORIZED", "message": "User ID not found in context"})
+		return
+	}
+
+	// URL-decode the dataset ID/name from the path parameter
+	datasetID, err := url.PathUnescape(datasetIDEncoded)
+	if err != nil {
+		logger.Logger.Warn("Failed to decode dataset ID from URL path", zap.Error(err), zap.String("encodedDatasetId", datasetIDEncoded))
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_DATASET_ID", "message": "Invalid dataset identifier in URL"})
+		return
+	}
+
+	// Call the service method
+	content, err := h.Svc.GetDatasetContent(c.Request.Context(), projectID, datasetID, callerID)
+	if err != nil {
+		log := logger.Logger.With(zap.String("projectID", projectID), zap.String("datasetID", datasetID), zap.String("callerID", callerID))
+		if errors.Is(err, ErrProjectNotFound) {
+			log.Warn("GetDatasetContentHandler: Project not found")
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "PROJECT_NOT_FOUND", "message": err.Error()})
+		} else if errors.Is(err, ErrProjectAccessDenied) {
+			log.Warn("GetDatasetContentHandler: Access denied")
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ACCESS_DENIED", "message": err.Error()})
+		} else if err.Error() == fmt.Sprintf("dataset file '%s' not found in project storage", datasetID) { // Check for specific dataset not found error from service
+			log.Warn("GetDatasetContentHandler: Dataset file not found", zap.Error(err))
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "DATASET_NOT_FOUND", "message": err.Error()})
+		} else {
+			log.Error("Failed to get dataset content", zap.Error(err))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "GET_DATASET_CONTENT_FAILED", "message": "Internal server error retrieving dataset content"})
+		}
+		return
+	}
+
+	// Ensure Data field is never nil in the JSON response
+	if content.Data == nil {
+		content.Data = []map[string]interface{}{}
+	}
+
+	c.JSON(http.StatusOK, content)
+}
+
+// --- Helper for Role Check (Local to handlers.go for now) ---
+func isRoleSufficient(userRole core.Role, requiredRole core.Role) bool {
+	// Define role hierarchy (higher value means more permissions)
+	roleHierarchy := map[core.Role]int{
+		core.RoleViewer: 1,
+		core.RoleMember: 2,
+		core.RoleAdmin:  3,
+		core.RoleOwner:  4,
+	}
+
+	userLevel, okUser := roleHierarchy[userRole]
+	requiredLevel, okRequired := roleHierarchy[requiredRole]
+
+	// Ensure both roles are valid and user's level is sufficient
+	return okUser && okRequired && userLevel >= requiredLevel
 }
