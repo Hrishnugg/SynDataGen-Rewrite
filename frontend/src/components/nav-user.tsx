@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useLogoutMutation, useGetSessionQuery } from '@/features/auth/authApiSlice';
 import { toast } from "sonner";
 import {
@@ -118,17 +119,17 @@ export function NavUser() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <IconUserCircle />
-                Account
+              <DropdownMenuItem asChild>
+                <Link href="/account">
+                  <IconUserCircle />
+                  Account
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconCreditCard />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <IconNotification />
-                Notifications
+              <DropdownMenuItem asChild>
+                <Link href="/billing">
+                  <IconCreditCard />
+                  Billing
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />

@@ -13,6 +13,7 @@ import { Button as MagicButton } from "@/components/ui/bmagic-button";
 import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
 import { BackgroundBeams } from "@/components/ui/background-beams"; // Import BackgroundBeams
 import { Footer } from "@/components/landing/footer"; // Import Footer
+import { WaitlistModal } from "@/components/modals/WaitlistModal"; // Import the new modal
 
 // Define team members data
 const teamMembers = [
@@ -48,6 +49,7 @@ const mapLocations = [
 export default function AboutPage() {
   const newSubheading = "The Synthetic Data Company- The Future of Data Generated Today";
   const [animationKey, setAnimationKey] = useState(0); // State for remounting effect
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false); // State for modal visibility
 
   useEffect(() => {
     // Set up interval to change the key every 10 seconds
@@ -94,12 +96,10 @@ export default function AboutPage() {
                 Meet Tide
               </TealMagicButton>
             </Link>
-            {/* Add Request a Demo button with Link */}
-            <Link href="/#waitlist"> {/* Updated Link to point to waitlist section on landing page */}
-              <MagicButton> {/* Use original button component */}
-                Request A Demo
-              </MagicButton>
-            </Link>
+            {/* Change Request a Demo button to open modal */}
+            <MagicButton onClick={() => setIsWaitlistModalOpen(true)}> 
+              Request A Demo
+            </MagicButton>
           </div>
         </div>
 
@@ -130,6 +130,12 @@ export default function AboutPage() {
       </div>
       {/* Rest of the about page content can go here */}
       <Footer /> {/* Add Footer component */}
+
+      {/* Render Waitlist Modal Conditionally */}
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen} 
+        onClose={() => setIsWaitlistModalOpen(false)} 
+      />
     </>
   );
 } 
