@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment # Name of the Deployment resource
+  namespace: default # Or the namespace where you deployed the ConfigMap/Secret
+  labels:
+    app: backend-api # Label for identifying resources related to this app
+spec:
+  replicas: 1 # Start with one instance, can be scaled later
+  selector:
+    matchLabels:
+      app: backend-api # Pods with this label are managed by this Deployment
+  template: # Blueprint for the Pods created by this Deployment
+    metadata:
+      labels:
+        app: backend-api # Must match the selector's matchLabels
+    spec:
+      containers:
+      - name: backend-api # Name of the container within the Pod
+        # IMPORTANT: Replace with your actual image path in your container registry
+        # Example: gcr.io/your-gcp-project-id/syndatagen-backend:latest
+        # Ensure the image tag (e.g., :latest or a specific version) is correct
+        image: us-central1-docker.pkg.dev/valid-song-450602-m7/syndatagen-docker-repo/syndatagen-backend:latest 
+        imagePullPolicy: Always # Pull image everytime, good for dev/testing. Use IfNotPresent for prod stability.
+        ports:
+        - containerPort: 8080 # Port the application listens on inside the container
+          name: http # Optional name for the port
+        env:
+          # --- Configuration from ConfigMap --- 
+          - name: CORS_ALLOWED_ORIGINS
+            valueFrom:
+              configMapKeyRef:
+                name: backend-config # Name of the ConfigMap created earlier
+                key: CORS_ALLOWED_ORIGINS # Key within the ConfigMap
+          - name: GCP_PROJECT_ID
+            valueFrom:
+              configMapKeyRef:
+                name: backend-config
+                key: GCP_PROJECT_ID
+          # --- Credentials from Secret --- 
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: "/etc/gcp-keys/key.json" # Static path where the secret volume is mounted
+          # --- Other necessary env vars ---
+          - name: PORT
+            value: "8080" # Port the Go app should listen on (matches containerPort)
+        # --- Volume Mounts for Secrets ---
+        volumeMounts:
+        - name: gcp-key-volume # Name must match a volume defined below
+          mountPath: "/etc/gcp-keys" # Directory inside the container where the volume is mounted
+          readOnly: true # Mount as read-only for security
+        # --- Liveness Probe --- 
+        # Checks if the container is running/alive. If it fails, Kubernetes restarts the container.
+        livenessProbe:
+          httpGet:
+            path: /healthz # Path defined in main.go
+            port: 8080 # Port defined in main.go and containerPort
+          initialDelaySeconds: 15 # Wait 15s after container starts before first probe
+          periodSeconds: 20 # Check every 20s
+          timeoutSeconds: 5  # Consider probe failed if no response in 5s
+          failureThreshold: 3 # Restart container after 3 consecutive failures
+        # --- Readiness Probe --- 
+        # Checks if the container is ready to serve traffic. If it fails, Kubernetes removes the Pod from service endpoints.
+        readinessProbe:
+          httpGet:
+            path: /readyz # Path defined in main.go
+            port: 8080
+          initialDelaySeconds: 20 # Wait a bit longer for readiness (e.g., allow for initial connections)
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3 # Consider Pod not ready after 3 consecutive failures
+        # --- Resource Requests/Limits (Optional but Recommended for Production) --- 
+        # resources:
+        #   requests:
+        #     cpu: "100m" # Example: Request 0.1 CPU core
+        #     memory: "128Mi" # Example: Request 128 MiB of memory
+        #   limits:
+        #     cpu: "500m"
+        #     memory: "256Mi"
+      # --- Volumes Definition ---
+      volumes:
+      - name: gcp-key-volume # Name referenced by volumeMounts
+        secret:
+          secretName: gcp-sa-key # Name of the Kubernetes Secret created earlier
+          items:
+          - key: key.json # The key (filename) within the Secret's data
+            path: key.json # The filename to use when mounting inside the container at mountPath 

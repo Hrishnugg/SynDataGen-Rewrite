@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	fs "cloud.google.com/go/firestore"
@@ -60,11 +61,19 @@ func initFirestore(ctx context.Context) (*fs.Client, error) {
 func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService, storageSvc core.StorageService) *gin.Engine {
 	router := gin.Default() // Includes logger and recovery middleware
 
+	// Configure CORS based on environment variable
+	allowedOriginsEnv := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000") // Default for safety & local dev
+	allowedOrigins := []string{}                                                 // Initialize empty slice
+	if allowedOriginsEnv != "" {
+		allowedOrigins = strings.Split(allowedOriginsEnv, ",")
+		for i := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i]) // Trim whitespace
+		}
+	}
+
 	// Add CORS middleware configuration
 	router.Use(cors.New(cors.Config{
-		// Allow origins - Use environment variable or be specific for dev
-		// AllowOrigins:     []string{"http://localhost:3000", "https://your-prod-domain.com"},
-		AllowOrigins:     []string{"http://localhost:3000"}, // For local testing
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"}, // Add Authorization if needed later
 		ExposeHeaders:    []string{"Content-Length"},
@@ -72,7 +81,18 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// Health Check
+	// --- Health & Readiness Probes ---
+	// Liveness probe
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	// Readiness probe
+	router.GET("/readyz", func(c *gin.Context) {
+		// TODO: Add more checks if needed (e.g., database connection)
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+
+	// --- Old Health Check (can be removed or kept for compatibility) ---
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP"})
 	})

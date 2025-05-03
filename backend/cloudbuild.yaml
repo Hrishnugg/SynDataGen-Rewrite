@@ -1,0 +1,17 @@
+steps:
+  # Step 1: Build the container image using the Dockerfile in the current directory (.)
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+        'build', 
+        '-t', 
+        'us-central1-docker.pkg.dev/valid-song-450602-m7/syndatagen-docker-repo/syndatagen-backend:latest',
+        '.', # Build context (current directory where Dockerfile is)
+      ]
+
+  # Step 2: Push the built image to Artifact Registry
+  # The image name is automatically inferred from the args in the previous step
+images:
+  - 'us-central1-docker.pkg.dev/valid-song-450602-m7/syndatagen-docker-repo/syndatagen-backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY # Send build logs to Google Cloud Logging 

@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 // Define the base URL for the API. Replace with your actual backend URL.
 // Consider using an environment variable for this.
 // The base URL should point to the server root, the /api/v1 prefix is added by the endpoint definitions.
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080'; // Corrected: Removed /v1
+const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'; // Use NEXT_PUBLIC_API_URL
 
 /**
  * Base RTK Query API slice. Endpoints will be injected into this slice.

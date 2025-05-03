@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backend-ingress
+  namespace: default # Or the namespace where the Service is
+  # --- Optional Annotations (Examples for GKE Ingress) ---
+  annotations:
+    # Use annotation to specify GKE Ingress class
+    kubernetes.io/ingress.class: "gce"
+    
+    # If using a reserved static external IP address:
+    # kubernetes.io/ingress.global-static-ip-name: "your-static-ip-name" 
+    
+    # Re-enable Google-managed SSL certificates
+    networking.gke.io/managed-certificates: "syndatagen-backend-api-cert" 
+    
+    # If using your own SSL certificate stored in a Kubernetes secret:
+    # ingress.gke.io/pre-shared-cert: "your-tls-secret-name" 
+    
+    # Force HTTPS redirect (Optional - uncomment when ready)
+    # kubernetes.io/ingress.allow-http: "false"
+spec:
+  # ingressClassName: gce # Remove this field, use annotation instead
+  # --- TLS Configuration (Recommended) ---
+  # Rely only on the managed-certificates annotation. Comment out the tls: block.
+  # tls:
+  # - hosts:
+  #    - api.synoptica.dev # IMPORTANT: Replace with your actual domain
+  
+  rules:
+  - host: api.synoptica.dev # IMPORTANT: Replace with your actual domain
+    http:
+      paths:
+      - path: / # Route all traffic for this host
+        pathType: Prefix # Matches all paths starting with /
+        backend:
+          service:
+            name: backend-service # Name of the Service created earlier
+            port:
+              number: 80 # Port the Service listens on (port, not targetPort) 
