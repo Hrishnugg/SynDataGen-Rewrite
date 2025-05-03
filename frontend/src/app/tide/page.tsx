@@ -157,8 +157,8 @@ export default function TidePage() {
           {/* Right Column: Image Placeholder */}
           <div className="flex justify-center md:justify-end">
             <Image
-              src="/flint and steel.jpeg"
-              alt="Flint and steel"
+              src="/synoptic-dashboard.png"
+              alt="Synoptic Dashboard"
               width={700}
               height={438}
               className="rounded-lg shadow-xl object-cover w-full h-auto max-w-2xl"
