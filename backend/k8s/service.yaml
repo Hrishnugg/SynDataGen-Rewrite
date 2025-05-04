@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service # Name of the Service resource
+  namespace: default # Or the namespace where the Deployment is
+  labels:
+    app: backend-api # Optional label for the service itself
+spec:
+  type: ClusterIP # Exposes the service on a cluster-internal IP. Default type.
+  selector:
+    app: backend-api # Selects Pods with this label (must match Deployment's pod labels)
+  ports:
+    - protocol: TCP
+      port: 80 # Port the Service will listen on (internal cluster port)
+      targetPort: 8080 # Port on the Pods (containerPort) to forward traffic to
+      name: http # Optional name for the port 

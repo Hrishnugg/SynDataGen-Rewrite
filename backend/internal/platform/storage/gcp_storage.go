@@ -2,8 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log" // Using log for simplicity, consider structured logging
+	"io"
+	"log"     // Using log for simplicity, consider structured logging
+	"strings" // <-- Import strings
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -89,8 +92,9 @@ func (s *gcpStorageService) CreateProjectBucket(ctx context.Context, projectID, 
 		},
 		// Add labels for organization/billing
 		Labels: map[string]string{
-			"project-id":  projectID,
-			"customer-id": customerID, // Be mindful of PII if customerID is sensitive
+			"project-id": projectID, // projectID is already lowercase ID part
+			// Ensure label values also conform to GCS requirements (lowercase, etc.)
+			"customer-id": strings.ToLower(customerID), // Convert customerID value to lowercase
 			"created-by":  "syndatagen-backend",
 		},
 		// TODO: Consider setting lifecycle rules (e.g., for FR-PROJ-07, FR-JOB-10)
@@ -129,6 +133,117 @@ func (s *gcpStorageService) CreateProjectBucket(ctx context.Context, projectID, 
 	s.logger.Printf("Successfully created bucket %s in region %s", bucketName, region)
 
 	return bucketName, region, nil
+}
+
+// UploadFile uploads data from a reader to a specific object in a bucket.
+func (s *gcpStorageService) UploadFile(ctx context.Context, bucketName, objectName string, reader io.Reader) (uri string, err error) {
+	s.logger.Printf("Attempting to upload object '%s' to bucket '%s'", objectName, bucketName)
+
+	// Set a timeout for the upload operation.
+	// Timeout should be appropriate for expected file sizes and network conditions.
+	uploadCtx, cancel := context.WithTimeout(ctx, time.Minute*5) // Example: 5 minute timeout
+	defer cancel()
+
+	// Get a handle to the GCS object.
+	obj := s.client.Bucket(bucketName).Object(objectName)
+
+	// Get a writer for the object.
+	wc := obj.NewWriter(uploadCtx)
+
+	// Copy data from the reader to the GCS writer.
+	if _, err := io.Copy(wc, reader); err != nil {
+		// Close the writer explicitly on error before returning
+		closeErr := wc.Close() // Important: Close even on io.Copy error
+		s.logger.Printf("Error copying data to GCS for %s/%s: %v. Writer close error: %v", bucketName, objectName, err, closeErr)
+		return "", fmt.Errorf("failed to copy data to GCS object %s/%s: %w", bucketName, objectName, err)
+	}
+
+	// Close the writer to finalize the upload.
+	// Closing is crucial! It flushes buffers and commits the object.
+	if err := wc.Close(); err != nil {
+		s.logger.Printf("Error closing GCS writer for %s/%s: %v", bucketName, objectName, err)
+		return "", fmt.Errorf("failed to close GCS writer for object %s/%s: %w", bucketName, objectName, err)
+	}
+
+	// Construct the GCS URI.
+	uri = fmt.Sprintf("gs://%s/%s", bucketName, objectName)
+	s.logger.Printf("Successfully uploaded object to %s", uri)
+
+	return uri, nil
+}
+
+// ListObjects lists objects within a GCS bucket matching a prefix.
+func (s *gcpStorageService) ListObjects(ctx context.Context, bucketName, prefix string) ([]core.ObjectSummary, error) {
+	s.logger.Printf("Listing objects in bucket '%s' with prefix '%s'", bucketName, prefix)
+
+	// Set a timeout for the listing operation.
+	listCtx, cancel := context.WithTimeout(ctx, time.Minute*1) // Example: 1 minute timeout
+	defer cancel()
+
+	var objects []core.ObjectSummary
+	query := &storage.Query{Prefix: prefix}
+
+	it := s.client.Bucket(bucketName).Objects(listCtx, query)
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			s.logger.Printf("Error iterating objects in bucket %s: %v", bucketName, err)
+			return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucketName, err)
+		}
+
+		// Skip directories/folders if represented as zero-byte objects ending in '/'
+		if strings.HasSuffix(attrs.Name, "/") && attrs.Size == 0 {
+			continue
+		}
+
+		objects = append(objects, core.ObjectSummary{
+			Name:        attrs.Name,
+			Size:        attrs.Size,
+			LastUpdated: attrs.Updated,
+			URI:         fmt.Sprintf("gs://%s/%s", bucketName, attrs.Name),
+		})
+	}
+
+	s.logger.Printf("Found %d objects in bucket '%s' with prefix '%s'", len(objects), bucketName, prefix)
+	return objects, nil
+}
+
+// ReadObject reads the content of a specific object from a bucket.
+func (s *gcpStorageService) ReadObject(ctx context.Context, bucketName, objectName string) ([]byte, error) {
+	s.logger.Printf("Attempting to read object '%s' from bucket '%s'", objectName, bucketName)
+
+	// Set a timeout for the read operation.
+	readCtx, cancel := context.WithTimeout(ctx, time.Minute*1) // Example: 1 minute timeout
+	defer cancel()
+
+	// Get object handle
+	obj := s.client.Bucket(bucketName).Object(objectName)
+
+	// Get object reader
+	r, err := obj.NewReader(readCtx)
+	if err != nil {
+		// Handle object not found specifically
+		if errors.Is(err, storage.ErrObjectNotExist) {
+			s.logger.Printf("Object %s/%s not found: %v", bucketName, objectName, err)
+			return nil, core.ErrNotFound // Map storage error to core error
+		}
+		s.logger.Printf("Error creating reader for object %s/%s: %v", bucketName, objectName, err)
+		return nil, fmt.Errorf("failed to create reader for object %s/%s: %w", bucketName, objectName, err)
+	}
+	defer r.Close() // Ensure reader is closed
+
+	// Read all data from the reader
+	data, err := io.ReadAll(r)
+	if err != nil {
+		s.logger.Printf("Error reading data from object %s/%s: %v", bucketName, objectName, err)
+		return nil, fmt.Errorf("failed to read data from object %s/%s: %w", bucketName, objectName, err)
+	}
+
+	s.logger.Printf("Successfully read %d bytes from object %s/%s", len(data), bucketName, objectName)
+	return data, nil
 }
 
 // DeleteProjectBucket removes a GCS bucket, optionally deleting its contents first.

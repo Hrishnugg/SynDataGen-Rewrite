@@ -126,19 +126,23 @@ export const NavItems = ({ items, className, onItemClick }: NavItemsProps) => {
     >
       {items.map((item, idx) => (
         <Link
-          onMouseEnter={() => setHovered(idx)}
           onClick={onItemClick}
           className="relative px-4 py-2 text-neutral-600 dark:text-neutral-300"
           key={`link-${idx}`}
           href={item.link}
         >
-          {hovered === idx && (
-            <motion.div
-              layoutId="hovered"
-              className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
-            />
-          )}
-          <span className="relative z-20">{item.name}</span>
+          <span 
+            className="relative block"
+            onMouseEnter={() => setHovered(idx)} 
+          >
+            {hovered === idx && (
+              <motion.div
+                layoutId="hovered"
+                className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
+              />
+            )}
+            <span className="relative z-20">{item.name}</span>
+          </span>
         </Link>
       ))}
     </motion.div>
@@ -236,13 +240,15 @@ export const NavbarLogo = () => {
       href="#top"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
     >
-      <Image
-        src="/synopticlogo3d.png"
-        alt="logo"
-        width={30}
-        height={30}
-      />
-      <span className="font-medium text-black dark:text-white">Synoptic</span>
+      <>
+        <Image
+          src="/synopticlogo3d.png"
+          alt="logo"
+          width={30}
+          height={30}
+        />
+        <span className="font-medium text-black dark:text-white">Synoptic</span>
+      </>
     </Link>
   );
 };

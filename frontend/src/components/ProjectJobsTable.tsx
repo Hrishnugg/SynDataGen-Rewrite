@@ -430,7 +430,6 @@ export function ProjectJobsTable({
               </DropdownMenu>
          </div>
       </div>
-
       {/* Table Container */}
       <div className="rounded-md border overflow-hidden">
           {/* Removed DndContext */}
@@ -453,9 +452,9 @@ export function ProjectJobsTable({
             <TableBody>
               {table.getRowModel().rows?.length ? (
                   // Removed SortableContext
-                  table.getRowModel().rows.map((row) => (
+                  (table.getRowModel().rows.map((row) => (
                     // Removed DraggableRow wrapper
-                    <TableRow
+                    (<TableRow
                       key={row.id}
                       data-state={row.getIsSelected() && "selected"} // Keep for potential styling
                     >
@@ -464,8 +463,8 @@ export function ProjectJobsTable({
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
-                    </TableRow>
-                  ))
+                    </TableRow>)
+                  )))
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-24 text-center">
@@ -476,7 +475,6 @@ export function ProjectJobsTable({
             </TableBody>
           </Table>
       </div>
-
       {/* Pagination Controls */}
       <div className="flex items-center justify-end space-x-2 py-4">
          {/* Removed selected row count */}
@@ -549,7 +547,6 @@ export function ProjectJobsTable({
           </div>
         </div>
       </div>
-
       {/* --- Modals --- */}
       <JobDetailsModal
         job={selectedJob}
@@ -563,5 +560,5 @@ export function ProjectJobsTable({
         onCreateJob={handleCreateJobSubmit}
       />
     </div>
-  )
+  );
 } 

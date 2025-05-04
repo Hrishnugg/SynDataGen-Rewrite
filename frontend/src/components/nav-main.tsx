@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { IconCirclePlusFilled, IconMail, type Icon } from "@tabler/icons-react"
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/shadcn/button"
 import {
@@ -51,7 +52,7 @@ export function NavMain({
             if (!item.url || item.url === '#') {
               return (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton tooltip={item.title} variant="ghost" disabled className="cursor-not-allowed opacity-50">
+                  <SidebarMenuButton tooltip={item.title} variant="default" disabled className="cursor-not-allowed opacity-50">
                     {item.icon && <item.icon />}
                     <span>{item.title}</span>
                   </SidebarMenuButton>
@@ -62,10 +63,10 @@ export function NavMain({
             const isActive = pathname === item.url;
             return (
               <SidebarMenuItem key={item.title}>
-                <Link href={item.url} passHref legacyBehavior>
+                <Link href={item.url}>
                   <SidebarMenuButton
                     tooltip={item.title}
-                    variant={isActive ? "primary" : "ghost"}
+                    variant="default"
                     aria-current={isActive ? "page" : undefined}
                   >
                     {item.icon && <item.icon />}

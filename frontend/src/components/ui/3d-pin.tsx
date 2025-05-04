@@ -37,7 +37,7 @@ export const PinContainer = ({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       href={href || "/"}
-    >
+      legacyBehavior>
       <div
         style={{
           perspective: "1000px",

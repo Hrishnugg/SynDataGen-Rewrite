@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -45,14 +46,24 @@ func (h *JobHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.Hand
 		projectJobs.GET("", h.ListJobsByProject) // GET /api/v1/projects/:projectId/jobs
 	}
 
-	// Route for getting a specific job by its ID
+	// Route for getting a specific job by its ID and performing actions
 	jobSpecific := rg.Group("/jobs")
 	jobSpecific.Use(authMiddleware) // Apply auth middleware
 	{
-		jobSpecific.GET("/:jobId", h.GetJob) // GET /api/v1/jobs/:jobId
+		jobSpecific.GET("/:jobId", h.GetJob)              // GET /api/v1/jobs/:jobId
+		jobSpecific.POST("/:jobId/submit", h.SubmitJob)   // POST /api/v1/jobs/:jobId/submit
+		jobSpecific.DELETE("/:jobId", h.CancelJob)        // DELETE /api/v1/jobs/:jobId (Assume maps to Cancel)
+		jobSpecific.POST("/:jobId/sync", h.SyncJobStatus) // POST /api/v1/jobs/:jobId/sync
 	}
 
-	// TODO: Add routes for cancelling jobs, getting results etc.
+	// Route for listing all jobs accessible by the user
+	allJobs := rg.Group("/jobs") // Reusing /jobs group, or could be separate
+	allJobs.Use(authMiddleware)
+	{
+		allJobs.GET("", h.ListAllJobs) // GET /api/v1/jobs
+	}
+
+	// TODO: Add routes for getting results etc.
 }
 
 // CreateJob handles POST /projects/:projectId/jobs requests.
@@ -167,6 +178,137 @@ func (h *JobHandler) ListJobsByProject(c *gin.Context) {
 	}
 
 	// Create the response structure (consider defining ListJobsResponse here or elsewhere)
+	resp := gin.H{
+		"jobs":   jobs,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// SubmitJob handles POST /jobs/:jobId/submit requests.
+func (h *JobHandler) SubmitJob(c *gin.Context) {
+	jobID := c.Param("jobId")
+	userID, ok := c.Get(auth.UserIDKey)
+	if !ok || userID == "" {
+		logger.Logger.Error("UserID not found in context during SubmitJob")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID missing"})
+		return
+	}
+
+	job, err := h.service.SubmitJob(c.Request.Context(), jobID, userID.(string))
+	if err != nil {
+		logger.Logger.Error("Failed to submit job via service", zap.Error(err), zap.String("userId", userID.(string)), zap.String("jobId", jobID))
+		if errors.Is(err, core.ErrNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		} else if errors.Is(err, core.ErrForbidden) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden: You do not have permission to submit this job"})
+		} else if strings.Contains(err.Error(), "cannot be submitted") { // Check for specific service error message
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_JOB_STATUS", "message": err.Error()})
+		} else if strings.Contains(err.Error(), "pipeline submission failed") { // Check for pipeline error
+			// Return the updated job status (likely Failed) and the error message
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "PIPELINE_SUBMIT_FAILED", "message": err.Error(), "job": job})
+			return // Avoid aborting here, return the JSON
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to submit job"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, job) // Return the updated job state (likely Running)
+}
+
+// CancelJob handles DELETE /jobs/:jobId requests.
+func (h *JobHandler) CancelJob(c *gin.Context) {
+	jobID := c.Param("jobId")
+	userID, ok := c.Get(auth.UserIDKey)
+	if !ok || userID == "" {
+		logger.Logger.Error("UserID not found in context during CancelJob")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID missing"})
+		return
+	}
+
+	job, err := h.service.CancelJob(c.Request.Context(), jobID, userID.(string))
+	if err != nil {
+		logger.Logger.Error("Failed to cancel job via service", zap.Error(err), zap.String("userId", userID.(string)), zap.String("jobId", jobID))
+		if errors.Is(err, core.ErrNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		} else if errors.Is(err, core.ErrForbidden) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden: You do not have permission to cancel this job"})
+		} else if strings.Contains(err.Error(), "cannot be cancelled") { // Check for specific service error
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "INVALID_JOB_STATUS", "message": err.Error()})
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel job"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, job) // Return updated job status (Cancelled)
+}
+
+// SyncJobStatus handles POST /jobs/:jobId/sync requests.
+func (h *JobHandler) SyncJobStatus(c *gin.Context) {
+	jobID := c.Param("jobId")
+	userID, ok := c.Get(auth.UserIDKey)
+	if !ok || userID == "" {
+		logger.Logger.Error("UserID not found in context during SyncJobStatus")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID missing"})
+		return
+	}
+
+	job, err := h.service.SyncJobStatus(c.Request.Context(), jobID, userID.(string))
+	if err != nil {
+		logger.Logger.Error("Failed to sync job status via service", zap.Error(err), zap.String("userId", userID.(string)), zap.String("jobId", jobID))
+		if errors.Is(err, core.ErrNotFound) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "Job not found"})
+		} else if errors.Is(err, core.ErrForbidden) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Forbidden: You do not have permission to view this job"})
+		} else if strings.Contains(err.Error(), "failed to check pipeline status") {
+			// Error checking status, but don't necessarily fail the job
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "PIPELINE_CHECK_FAILED", "message": err.Error()})
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to sync job status"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, job) // Return potentially updated job status
+}
+
+// ListAllJobs handles GET /jobs requests.
+func (h *JobHandler) ListAllJobs(c *gin.Context) {
+	userID, ok := c.Get(auth.UserIDKey)
+	if !ok || userID == "" {
+		logger.Logger.Error("UserID not found in context during ListAllJobs")
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: User ID missing"})
+		return
+	}
+
+	// Get pagination and filter parameters from query string
+	limitStr := c.DefaultQuery("limit", "20")
+	offsetStr := c.DefaultQuery("offset", "0")
+	statusFilter := c.DefaultQuery("status", "") // Optional status filter
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 0 {
+		limit = 20
+	}
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	// Call the service method
+	jobs, total, err := h.service.ListAllAccessibleJobs(c.Request.Context(), userID.(string), statusFilter, limit, offset)
+	if err != nil {
+		logger.Logger.Error("Failed to list all accessible jobs via service", zap.Error(err), zap.String("userId", userID.(string)))
+		// Check for specific errors if the service layer returns them
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to list jobs"})
+		return
+	}
+
+	// Create the response structure
 	resp := gin.H{
 		"jobs":   jobs,
 		"total":  total,

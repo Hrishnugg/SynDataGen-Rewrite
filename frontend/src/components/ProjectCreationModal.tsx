@@ -23,11 +23,17 @@ interface ProjectCreationModalProps {
     description: string;
     settings: { dataRetentionDays: number; maxStorageGB: number };
   }) => Promise<boolean>; // Returns true on success, false on error
+  isCreating?: boolean; // Add optional prop from parent
 }
 
 type CreationStatus = 'idle' | 'creating' | 'success' | 'error';
 
-export function ProjectCreationModal({ isOpen, onOpenChange, onCreateProject }: ProjectCreationModalProps) {
+export function ProjectCreationModal({
+  isOpen,
+  onOpenChange,
+  onCreateProject,
+  isCreating // Destructure the new prop
+}: ProjectCreationModalProps) {
   const [projectName, setProjectName] = React.useState('');
   const [projectDescription, setProjectDescription] = React.useState('');
   const [retentionDays, setRetentionDays] = React.useState('30'); // Default value
@@ -136,10 +142,12 @@ export function ProjectCreationModal({ isOpen, onOpenChange, onCreateProject }: 
     }
   }
 
-  const canSubmit = projectName && projectDescription && retentionDays && maxStorage && creationStatus === 'idle';
+  // Use isCreating prop from parent to determine if submission is allowed/button disabled
+  const canSubmit = projectName && projectDescription && retentionDays && maxStorage && creationStatus === 'idle' && !isCreating;
+  const isDisabled = creationStatus === 'creating' || isCreating;
 
   return (
-    <Dialog open={isOpen} onOpenChange={creationStatus !== 'creating' ? onOpenChange : undefined}>
+    <Dialog open={isOpen} onOpenChange={!isDisabled ? onOpenChange : undefined}>
       <DialogContent className="sm:max-w-[550px] min-h-[300px] flex flex-col"> {/* Slightly wider */}
         <DialogHeader>
           <DialogTitle>
@@ -255,17 +263,24 @@ export function ProjectCreationModal({ isOpen, onOpenChange, onCreateProject }: 
            {/* ... (Keep same footer logic as JobCreationModal) ... */} 
           {(creationStatus === 'idle' || creationStatus === 'creating') && (
             <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={creationStatus === 'creating'}>
+                {/* Disable cancel if externally marked as creating */}
+                <Button type="button" variant="outline" disabled={isDisabled}>
                 Cancel
                 </Button>
             </DialogClose>
           )}
           {creationStatus === 'idle' && (
-            <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
-              Create Project
-            </Button>
+            // Use combined disabled state
+            (<Button type="button" onClick={handleSubmit} disabled={!canSubmit || isDisabled}>
+              {isCreating ? (
+                 <span className="animate-pulse">Creating...</span>
+              ) : (
+                 'Create Project'
+              )}
+            </Button>)
           )}
-          {creationStatus === 'creating' && (
+          {/* Keep existing logic for showing Creating... based on internal status for terminal view */}
+          {creationStatus === 'creating' && !isCreating && (
              <Button type="button" disabled>
                 <span className="animate-pulse">Creating...</span>
              </Button>
@@ -278,5 +293,5 @@ export function ProjectCreationModal({ isOpen, onOpenChange, onCreateProject }: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 } 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"SynDataGen/backend/internal/auth"
+	"SynDataGen/backend/internal/core"
 	"SynDataGen/backend/internal/job"
 	"SynDataGen/backend/internal/platform/firestore"
 	"SynDataGen/backend/internal/platform/logger"
@@ -13,9 +14,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	fs "cloud.google.com/go/firestore"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"go.uber.org/zap"
 )
 
@@ -52,10 +57,42 @@ func initFirestore(ctx context.Context) (*fs.Client, error) {
 }
 
 // setupRouter configures the Gin router with routes and handlers.
-func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService) *gin.Engine {
+// Pass core.StorageService for type safety
+func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jobSvc job.JobService, storageSvc core.StorageService) *gin.Engine {
 	router := gin.Default() // Includes logger and recovery middleware
 
-	// Health Check
+	// Configure CORS based on environment variable
+	allowedOriginsEnv := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000") // Default for safety & local dev
+	allowedOrigins := []string{}                                                 // Initialize empty slice
+	if allowedOriginsEnv != "" {
+		allowedOrigins = strings.Split(allowedOriginsEnv, ",")
+		for i := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i]) // Trim whitespace
+		}
+	}
+
+	// Add CORS middleware configuration
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     allowedOrigins,
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Authorization"}, // Add Authorization if needed later
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	// --- Health & Readiness Probes ---
+	// Liveness probe
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	// Readiness probe
+	router.GET("/readyz", func(c *gin.Context) {
+		// TODO: Add more checks if needed (e.g., database connection)
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+
+	// --- Old Health Check (can be removed or kept for compatibility) ---
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "UP"})
 	})
@@ -63,10 +100,10 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 	// API v1 Group
 	apiV1 := router.Group("/api/v1")
 	{
-		// --- Auth Routes ---
+		// --- Auth Routes (Manual Registration) ---
+		authHandlers := auth.NewAuthHandlers(authSvc)
 		authRoutes := apiV1.Group("/auth")
 		{
-			authHandlers := auth.NewAuthHandlers(authSvc)
 			authRoutes.POST("/register", authHandlers.Register)
 			authRoutes.POST("/login", authHandlers.Login)
 
@@ -80,7 +117,7 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 		}
 
 		// --- Project Routes ---
-		project.RegisterProjectRoutes(apiV1, authSvc, projectSvc)
+		project.RegisterProjectRoutes(apiV1, authSvc, projectSvc, storageSvc)
 
 		// --- Job Routes ---
 		jobHandlers := job.NewJobHandler(jobSvc)
@@ -91,6 +128,11 @@ func setupRouter(authSvc auth.AuthService, projectSvc project.ProjectService, jo
 }
 
 func main() {
+	// Load .env file.
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+	}
+
 	// Ensure logger syncs before exit
 	defer logger.Sync()
 
@@ -110,31 +152,34 @@ func main() {
 		}
 	}()
 
-	// Initialize Repositories
+	// Create Repositories
 	userRepo := firestore.NewUserRepository(firestoreClient)
 	projectRepo := firestore.NewProjectRepository(firestoreClient)
-	jobRepo := firestore.NewJobRepository(firestoreClient, nil)
+	jobRepo := firestore.NewJobRepository(firestoreClient, logger.Logger)
 
-	// Initialize Services
+	// Storage Service Initialization
 	storageCfg := storage.Config{
 		GCPProjectID: getEnv("GCP_PROJECT_ID", ""),
-		Logger:       nil, // Allow service to use default logger for now
+		Logger:       log.Default(),
 	}
-	storageSvc, err := storage.NewGCPStorageService(ctx, storageCfg)
+	storageSvcInstance, err := storage.NewGCPStorageService(ctx, storageCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize Storage Service: %v", err)
+		logger.Logger.Fatal("Failed to initialize GCP Storage service", zap.Error(err))
 	}
+	defer storageSvcInstance.Close()
+	logger.Logger.Info("GCP Storage service initialized successfully")
+
+	// Pipeline Client (Stub for now, pass logger)
+	pipelineClient := pipeline.NewStubPipelineClient(log.Default())
+	logger.Logger.Info("Stub Pipeline client initialized")
+
+	// --- Service Initializations ---
 	authSvc := auth.NewAuthService(userRepo)
-	projectSvc := project.NewProjectService(projectRepo, userRepo, storageSvc)
-
-	// Initialize the stub pipeline client
-	pipelineClient := pipeline.NewStubPipelineClient(nil)
-
-	// Initialize Job Service - Pass the project *Service* for auth checks
+	projectSvc := project.NewProjectService(projectRepo, userRepo, storageSvcInstance)
 	jobSvc := job.NewJobService(jobRepo, projectSvc, pipelineClient)
 
 	// Setup Router
-	router := setupRouter(authSvc, projectSvc, jobSvc)
+	router := setupRouter(authSvc, projectSvc, jobSvc, storageSvcInstance)
 
 	// Start Server
 	port := getEnv("PORT", "8080")

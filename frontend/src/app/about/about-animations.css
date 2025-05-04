@@ -1,0 +1,33 @@
+/* Add these styles to your global CSS file (e.g., globals.css) */
+
+/* Default state: section content is hidden */
+.about-section > * {
+  /* Target direct children or specific component wrappers if needed */
+  /* Adjust selector based on actual structure if direct children isn't right */
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out; /* Adjust duration/easing as desired */
+}
+
+/* Ensure titles remain visible, or adjust selector above to exclude them */
+.about-section > h2 {
+    opacity: 1;
+}
+
+/* Visible state: section content fades in */
+.about-section.section-visible > * {
+  opacity: 1;
+}
+
+/* Optional: If BackgroundBeams needs specific handling */
+/* You might need to target its container specifically if targeting direct */
+/* children `>` doesn't work well with its absolute positioning. */
+/* Example: */
+/* 
+.about-section .background-beams-container { 
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+.about-section.section-visible .background-beams-container {
+  opacity: 1;
+}
+*/ 

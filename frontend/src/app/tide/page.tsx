@@ -1,6 +1,6 @@
 "use client";
 
-import * as React from "react";
+import React, { useState } from "react";
 import { ThreeDMarquee } from "@/components/ui/3d-marquee";
 import { AuroraText } from "@/components/magicui/aurora-text";
 import { TextAnimate } from "@/components/magicui/text-animate";
@@ -9,10 +9,10 @@ import Image from "next/image";
 import { PlaceholdersAndVanishInput } from "@/components/ui/placeholders-and-vanish-input";
 import { ChatSection } from "@/components/tide/chat-section";
 import { Footer } from "@/components/landing/footer";
-import Link from "next/link";
 import { Button as MagicButton } from "@/components/ui/bmagic-button";
 import { ShootingStars } from "@/components/ui/shooting-stars";
 import { StarsBackground } from "@/components/ui/stars-background";
+import { WaitlistModal } from "@/components/modals/WaitlistModal";
 
 // Define the base images provided by the user
 const baseImages = [
@@ -82,11 +82,12 @@ const pipelineContent = [
 ];
 
 export default function TidePage() {
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+
   return (
     <div className="flex flex-col min-h-screen bg-black relative">
       {/* Remove global star components */}
       {/* <StarsBackground className="absolute inset-0 z-0" /> */}
-
       {/* Hero Section based on ThreeDMarqueeDemoSecond structure */}
       <div className="relative flex h-screen w-full flex-col items-center justify-center overflow-hidden z-10">
         {/* Add opaque background layer specifically for Hero section to hide global stars */}
@@ -124,14 +125,22 @@ export default function TidePage() {
           </TextAnimate>
         </div>
       </div>
-
       {/* Use the new PipelineScroll component - Add bg-black */}
-      <div className="bg-black"> {/* Ensure solid background */}
+      <div className="bg-black relative"> {/* Ensure solid background, Added relative */}
         <PipelineScroll content={pipelineContent} />
+        {/* Added Stars specifically for this section */} 
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
       </div>
-
+      {/* Added Features Coming Soon Section */}
+      <section className="py-16 bg-black text-center relative z-10 overflow-hidden"> {/* Added overflow-hidden */}
+        {/* Add Stars Background */}
+        <StarsBackground className="absolute inset-0 z-0" />
+        <ShootingStars className="absolute inset-0 z-0" />
+        {/* Ensure heading is above stars */}
+        <h2 className="text-3xl font-bold text-neutral-300 relative z-10">Features Coming Soon</h2> {/* Added font-bold and relative z-10 */}
+        {/* Optionally add more detail or placeholder visuals later */}
+      </section>
       {/* New Data Visualizer Section - Increase padding, remove margin */}
       <section className="py-48 bg-black relative overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
@@ -167,7 +176,6 @@ export default function TidePage() {
         </div>
       </section>
       {/* End New Data Visualizer Section */}
-
       {/* Integrate the new ChatSection component within a relative container - Increase padding */}
       <div className="relative bg-black py-48 overflow-hidden"> 
         <StarsBackground className="absolute inset-0 z-0" />
@@ -180,7 +188,6 @@ export default function TidePage() {
           />
         </div>
       </div>
-
       {/* Added Request Demo Button Section */}
       {/* Added relative positioning for stars, ADDED stars background */}
       <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
@@ -188,14 +195,15 @@ export default function TidePage() {
         <StarsBackground className="absolute inset-0 z-0" />
         <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure button is above stars */} 
-        <Link href="/#waitlist" className="relative z-10"> 
-          <MagicButton>
-            Request A Demo
-          </MagicButton>
-        </Link>
+        <MagicButton onClick={() => setIsWaitlistModalOpen(true)} className="relative z-10">
+          Request A Demo
+        </MagicButton>
       </div>
-
       <Footer />
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen} 
+        onClose={() => setIsWaitlistModalOpen(false)} 
+      />
     </div>
   );
 } 

@@ -1,24 +1,12 @@
 import { apiSlice } from '@/store/apiSlice'; // Adjust path as needed
+import { User, RegisterRequest, LoginRequest, LoginResponse } from '@/types/user.types';
 
-// --- Define types based on OpenAPI Spec --- TODO: Move to a shared types file?
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  company: string;
-  createdAt: string; // ISO Date string
-  updatedAt: string; // ISO Date string
-}
-
-// Using Omit to create types for request bodies
-type RegisterRequest = Omit<User, 'id' | 'createdAt' | 'updatedAt'> & { password: string };
-type LoginRequest = Pick<User, 'email'> & { password: string };
-
-interface LoginResponse {
-  user: User;
-  // token?: string; // Assuming cookie-based, so no token expected here
-}
+// --- Types (Based on OpenAPI Spec) ---
+// Moved to @/types/user.types.ts
+// interface User {...}
+// type RegisterRequest = ...;
+// type LoginRequest = ...;
+// interface LoginResponse {...}
 
 // --- Inject Endpoints --- 
 

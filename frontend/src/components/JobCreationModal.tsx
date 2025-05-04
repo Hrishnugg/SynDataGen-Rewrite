@@ -1,43 +1,46 @@
 'use client'
 
 import * as React from 'react'
-
+import { useState, useEffect } from 'react'; // Ensure useEffect is imported
 import { Button } from "@/components/shadcn/button"
 import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from "@/components/shadcn/dialog"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/components/ui/input" // Assuming shadcn input
 import { Label } from "@/components/shadcn/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/shadcn/select"
 import { Textarea } from "@/components/shadcn/textarea"
 import { Terminal, AnimatedSpan } from "@/components/magicui/terminal"
-import { IconCircleCheckFilled, IconAlertCircleFilled } from '@tabler/icons-react';
+import { IconCircleCheckFilled, IconAlertCircleFilled, IconLoader } from '@tabler/icons-react'; // Added IconLoader
+import { useCreateJobMutation } from '@/features/jobs/jobApiSlice'; // Import the hook
+import { toast } from "sonner"; // Import toast
 
 // Define expected props
 interface JobCreationModalProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   projectId: string
-  // Make onCreateJob async to simulate progress reporting
-  onCreateJob: (details: { name: string; type: string; config: string; projectId: string }) => Promise<boolean>; // Returns true on success, false on error
+  // Removed onCreateJob prop - will use mutation directly
 }
 
-const JOB_TYPES = ['csv', 'json', 'sql', 'parquet'];
+const JOB_TYPES = ['csv', 'json', 'sql', 'parquet']; // Keep or fetch dynamically?
 
 type CreationStatus = 'idle' | 'creating' | 'success' | 'error';
 
-export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob }: JobCreationModalProps) {
-  const [jobName, setJobName] = React.useState('');
+export function JobCreationModal({ isOpen, onOpenChange, projectId }: JobCreationModalProps) {
+  const [jobName, setJobName] = React.useState(''); // Keep optional name if desired
   const [jobType, setJobType] = React.useState('');
   const [jobConfig, setJobConfig] = React.useState('');
   const [formError, setFormError] = React.useState('');
   const [creationStatus, setCreationStatus] = React.useState<CreationStatus>('idle');
   const [creationLogs, setCreationLogs] = React.useState<string[]>([]);
 
+  // --- RTK Query Hook ---
+  const [createJob, { isLoading, isError, error: apiError }] = useCreateJobMutation();
+
   // Reset form and status when modal opens/closes
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) {
-      // Delay reset to allow closing animation
       setTimeout(() => {
         setJobName('');
         setJobType('');
@@ -45,7 +48,12 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
         setFormError('');
         setCreationStatus('idle');
         setCreationLogs([]);
-      }, 300);
+      }, 300); 
+    } else {
+       // Reset status immediately when opened
+       setCreationStatus('idle');
+       setCreationLogs([]);
+       setFormError('');
     }
   }, [isOpen]);
 
@@ -54,80 +62,59 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
   };
 
   const handleSubmit = async () => {
-    // Basic validation
-    if (!jobType) {
-        setFormError('Job Type is required.');
-        return;
-    }
-    if (!jobConfig) {
-        setFormError('Job Configuration is required.');
+    if (!jobType || !jobConfig) {
+        setFormError('Job Type and Configuration are required.');
         return;
     }
     setFormError('');
     setCreationStatus('creating');
-    setCreationLogs([]); // Clear logs
+    setCreationLogs(['[1/3] Validating configuration...']);
 
-    addLog(`[1/5] Initializing job creation...`);
+    // Simple JSON validation client-side
+    try {
+      JSON.parse(jobConfig);
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate check
+      addLog('      -> Configuration syntax OK.');
+    } catch (jsonError) {
+      addLog(`      -> Error: Invalid JSON format.`);
+      setCreationStatus('error');
+      return;
+    }
+
+    addLog('[2/3] Submitting job to backend...');
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
 
     try {
-        await new Promise(resolve => setTimeout(resolve, 400));
-        addLog(`[2/5] Validating configuration locally...`);
-        // TODO: Add actual config validation logic if possible client-side
-        // Simulate validation success/failure (e.g., check if config is valid JSON)
-        try {
-            JSON.parse(jobConfig); // Basic JSON validation
-            await new Promise(resolve => setTimeout(resolve, 600));
-            addLog(`      -> Configuration syntax OK.`);
-        } catch (jsonError) {
-             addLog(`      -> Error: Invalid JSON format in configuration.`);
-             throw new Error("Invalid JSON format in configuration."); // Stop process
-        }
+      // Call the actual mutation
+      await createJob({
+        projectId,
+        // Pass jobName if backend supports it, otherwise derive/omit
+        newJob: { jobType, jobConfig /*, name: jobName */ }, 
+      }).unwrap();
 
-        addLog(`[3/5] Preparing job record...`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        addLog(`      -> Job details prepared.`);
-
-        addLog(`[4/5] Submitting job to backend service...`);
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        // Simulate potential backend/API error (e.g., 10% chance of failure)
-        const shouldSimulateError = Math.random() < 0.1; // 10% chance
-        if (shouldSimulateError) {
-             addLog(`      -> Error: Backend service unavailable (Simulated).`);
-             throw new Error("Backend service unavailable (Simulated).");
-        }
-
-        // Call the actual creation function passed as prop
-        addLog(`      -> Calling onCreateJob function...`);
-        const success = await onCreateJob({ name: jobName, type: jobType, config: jobConfig, projectId });
-        await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call duration
-
-        if (success) {
-            addLog(`      -> Backend accepted job submission.`);
-            addLog(`[5/5] Finalizing job creation...`);
-            await new Promise(resolve => setTimeout(resolve, 300));
-            addLog(`      -> Job creation process completed successfully!`);
-            setCreationStatus('success');
-        } else {
-             addLog(`      -> Error: Backend reported failure during job creation.`);
-             throw new Error('Job creation failed on the backend.');
-        }
-    } catch (error) {
-        console.error("Job creation failed:", error);
-        // Ensure the specific error is logged
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        addLog(`      -> Error: ${errorMessage}`);
-        setCreationStatus('error');
-        // No need to add the generic "Job Creation Failed" message here,
-        // it will be added by the conditional rendering logic based on the status.
+      addLog('      -> Backend accepted job submission.');
+      addLog('[3/3] Finalizing job creation...');
+      await new Promise(resolve => setTimeout(resolve, 300));
+      addLog('      -> Job creation process initiated successfully!');
+      setCreationStatus('success');
+      toast.success("Job creation initiated!");
+      // Optionally close modal after a short delay on success
+      // setTimeout(() => onOpenChange(false), 1500);
+    } catch (err: any) {
+      const errorMessage = err?.data?.message || 'Unknown error occurred';
+      console.error("Job creation failed:", err);
+      addLog(`      -> Error: ${errorMessage}`);
+      setCreationStatus('error');
+      toast.error(errorMessage);
     }
-  }
+  };
 
-  const canSubmit = jobType && jobConfig && creationStatus === 'idle';
+  // Disable form fields/submit button when not idle
+  const isSubmittingOrDone = creationStatus !== 'idle';
+  const canSubmit = jobType && jobConfig && !isSubmittingOrDone;
 
   return (
-    // Prevent closing via overlay click during creation
-    <Dialog open={isOpen} onOpenChange={creationStatus !== 'creating' ? onOpenChange : undefined}>
+    <Dialog open={isOpen} onOpenChange={creationStatus === 'creating' ? undefined : onOpenChange}>
       <DialogContent className="sm:max-w-[500px] min-h-[300px] flex flex-col">
         <DialogHeader>
           <DialogTitle>
@@ -163,7 +150,7 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
             </div>
         ) : (
           <div className="space-y-4 py-4">
-            {/* Job Name */}
+            {/* Job Name (Optional) */}
             <div>
               <Label htmlFor="jobName" className="text-sm font-medium">
                 Job Name <span className="text-xs text-muted-foreground">(Optional)</span>
@@ -174,7 +161,7 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
                 onChange={(e) => setJobName(e.target.value)}
                 placeholder="e.g., User Profile Generation Q3"
                 className="mt-1"
-                disabled={creationStatus !== 'idle'}
+                disabled={isSubmittingOrDone}
               />
             </div>
 
@@ -183,7 +170,7 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
               <Label htmlFor="jobType" className="text-sm font-medium">
                 Job Type <span className="text-destructive">*</span>
               </Label>
-              <Select value={jobType} onValueChange={setJobType} disabled={creationStatus !== 'idle'}>
+              <Select value={jobType} onValueChange={setJobType} disabled={isSubmittingOrDone}>
                   <SelectTrigger id="jobType" className="w-full mt-1">
                       <SelectValue placeholder="Select job type..." />
                   </SelectTrigger>
@@ -211,12 +198,12 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
                 onChange={(e) => setJobConfig(e.target.value)}
                 placeholder='Enter job configuration (e.g., JSON format)&#10;{\n  "rows": 10000,\n  "schema": [ { "name": "id", "type": "uuid" } ]\n}'
                 className="mt-1 min-h-[150px] font-mono text-xs"
-                disabled={creationStatus !== 'idle'}
+                disabled={isSubmittingOrDone}
               />
               <p className="text-xs text-muted-foreground mt-1">Enter the job configuration, typically in JSON format.</p>
             </div>
 
-            {/* Form Error Message */}
+            {/* Form Error Message (for frontend validation) */}
             {formError && (
               <p className="text-center text-sm text-destructive">
                   {formError}
@@ -235,17 +222,19 @@ export function JobCreationModal({ isOpen, onOpenChange, projectId, onCreateJob 
             </DialogClose>
           )}
           {creationStatus === 'idle' && (
-            <Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+            <Button type="button" onClick={handleSubmit} disabled={!canSubmit || isLoading}>
+              {isLoading ? <IconLoader className="mr-2 h-4 w-4 animate-spin" /> : null}
               Create Job
             </Button>
           )}
           {creationStatus === 'creating' && (
              <Button type="button" disabled>
+                 <IconLoader className="mr-2 h-4 w-4 animate-spin" />
                 <span className="animate-pulse">Creating...</span>
              </Button>
           )}
           {(creationStatus === 'success' || creationStatus === 'error') && (
-            <Button type="button" onClick={() => onOpenChange(false)}> {/* Allow closing */} 
+            <Button type="button" onClick={() => onOpenChange(false)}> 
               Close
             </Button>
           )}

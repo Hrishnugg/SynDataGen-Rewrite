@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from "react"
+import { useRouter, useParams } from 'next/navigation';
 // ... (Keep existing imports, add/remove as needed for Job columns)
 import {
   DndContext,
@@ -76,43 +77,27 @@ import { Label } from "@/components/shadcn/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/shadcn/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/shadcn/table"
 import { Tabs, TabsContent } from "@/components/shadcn/tabs" // Removed TabsList, TabsTrigger unless needed internally
+import { formatBytes } from "@/lib/utils"
 
-// Define Dataset Schema
-export const datasetSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  type: z.string(),
-  rowCount: z.number(),
-  size: z.string(),
-  createdDate: z.string(),
-  // projectId is assumed available in the parent context if needed, not passed to table
-})
+// Define DatasetSummary Type (matching projectApiSlice)
+interface DatasetSummary {
+  name: string;
+  size: number; // bytes
+  lastUpdated: string; // ISO string
+  uri: string;
+}
 
-// Define Dataset Type
-type Dataset = z.infer<typeof datasetSchema>;
+// Remove schema and old type
+// export const datasetSchema = z.object({ ... });
+// type Dataset = z.infer<typeof datasetSchema>;
 
 export type { ColumnDef } from "@tanstack/react-table";
 
-// Drag Handle (Keep as is)
-function DragHandle({ id }: { id: number }) {
-  const { attributes, listeners } = useSortable({
-    id,
-  })
-  return (
-    <Button {...attributes} {...listeners} variant="ghost" size="icon" className="text-muted-foreground size-7 cursor-grab active:cursor-grabbing hover:bg-transparent">
-      <IconGripVertical className="text-muted-foreground size-3" />
-      <span className="sr-only">Drag to reorder</span>
-    </Button>
-  )
-}
+// Remove DragHandle if not needed for datasets
 
-// Define Dataset Columns
-const datasetColumns: ColumnDef<Dataset>[] = [
-  {
-    id: "drag",
-    header: () => null,
-    cell: ({ row }) => <DragHandle id={row.original.id} />,
-  },
+// Define Dataset Columns based on DatasetSummary
+const datasetColumns: ColumnDef<DatasetSummary>[] = [
+  // Remove drag column if not needed
   {
     id: "select",
     header: ({ table }) => (
@@ -139,33 +124,48 @@ const datasetColumns: ColumnDef<Dataset>[] = [
   {
     accessorKey: "name",
     header: () => <div className="w-full text-left">Dataset Name</div>,
-    cell: ({ row }) => <div className="text-left font-medium">{row.original.name}</div>,
+    // Add link to download? Or just display name?
+    cell: ({ row }) => <div className="text-left font-medium truncate">{row.original.name}</div>,
     enableHiding: false,
   },
-  {
-    accessorKey: "type",
-    header: () => <div className="text-center">Type</div>,
-    cell: ({ row }) => <div className="text-center"><Badge variant="secondary">{row.original.type}</Badge></div>,
-  },
-  {
-    accessorKey: "rowCount",
-    header: () => <div className="text-right">Rows</div>,
-    cell: ({ row }) => <div className="text-right font-medium">{row.original.rowCount.toLocaleString()}</div>,
-  },
+  // Add/remove columns as needed
+  // { 
+  //   accessorKey: "type", // Not available in ObjectSummary
+  //   header: () => <div className="text-center">Type</div>,
+  //   cell: ({ row }) => <div className="text-center"><Badge variant="secondary">{row.original.type}</Badge></div>,
+  // },
+  // { 
+  //   accessorKey: "rowCount", // Not available in ObjectSummary
+  //   header: () => <div className="text-right">Rows</div>,
+  //   cell: ({ row }) => <div className="text-right font-medium">{row.original.rowCount.toLocaleString()}</div>,
+  // },
   {
     accessorKey: "size",
     header: () => <div className="text-right">Size</div>,
-    cell: ({ row }) => <div className="text-right font-medium">{row.original.size}</div>,
+    // Format size from bytes
+    cell: ({ row }) => <div className="text-right font-medium">{formatBytes(row.original.size)}</div>,
   },
   {
-    accessorKey: "createdDate",
-    header: () => <div className="text-right pr-4">Created Date</div>,
-    cell: ({ row }) => <div className="text-right pr-4">{row.original.createdDate}</div>,
+    accessorKey: "lastUpdated",
+    header: () => <div className="text-right pr-4">Last Updated</div>,
+    // Format date
+    cell: ({ row }) => <div className="text-right pr-4">{new Date(row.original.lastUpdated).toLocaleString()}</div>,
   },
   {
     id: "actions",
     cell: ({ row }) => {
         const dataset = row.original;
+        // Function to handle download (replace alert)
+        const handleDownload = () => {
+            // TODO: Implement actual download logic
+            // Maybe requires a signed URL from backend?
+            alert(`Download ${dataset.name} from ${dataset.uri}`);
+        };
+        const handleDelete = () => {
+             // TODO: Implement actual delete logic (needs backend endpoint & GCS deletion)
+             alert(`Delete ${dataset.name}`);
+        };
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -175,14 +175,15 @@ const datasetColumns: ColumnDef<Dataset>[] = [
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem onClick={() => alert(`Download ${dataset.name}`)}>
+              <DropdownMenuItem onClick={handleDownload}>
                  <IconDownload className="mr-2 h-4 w-4" /> Download
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => alert(`View schema for ${dataset.name}`)}>
+              {/* Remove schema view for now */}
+              {/* <DropdownMenuItem onClick={() => alert(`View schema for ${dataset.name}`)}> 
                  <IconFileDescription className="mr-2 h-4 w-4" /> View Schema
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => alert(`Delete ${dataset.name}`)}>
+              <DropdownMenuItem variant="destructive" onClick={handleDelete}>
                  <IconTrash className="mr-2 h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -192,40 +193,19 @@ const datasetColumns: ColumnDef<Dataset>[] = [
   },
 ]
 
-// Draggable Row (Update type)
-function DraggableRow({ row }: { row: Row<Dataset> }) {
-  const { transform, transition, setNodeRef, isDragging } = useSortable({
-    id: row.original.id,
-  })
+// Remove DraggableRow if not using drag-and-drop for datasets
 
-  return (
-    <TableRow
-      data-state={row.getIsSelected() && "selected"}
-      data-dragging={isDragging}
-      ref={setNodeRef}
-      className="relative z-0 data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition: transition,
-      }}
-    >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-      ))}
-    </TableRow>
-  )
-}
-
-// Add actionButton prop
+// Update props to accept DatasetSummary[]
 interface DatasetsTableProps {
-  data: Dataset[];
-  actionButton?: React.ReactNode;
+  data: DatasetSummary[]; 
+  headerActions?: React.ReactNode;
 }
 
-export function DatasetsTable({
-  data: initialData,
-  actionButton // Destructure new prop
-}: DatasetsTableProps) {
+export function DatasetsTable({ data: initialData, headerActions }: DatasetsTableProps) {
+  const router = useRouter();
+  const params = useParams();
+  const projectId = params?.projectId as string;
+
   const [data, setData] = React.useState(() => initialData)
   React.useEffect(() => {
     setData(initialData);
@@ -242,10 +222,11 @@ export function DatasetsTable({
   const sortableId = React.useId()
   const sensors = useSensors(useSensor(MouseSensor, {}), useSensor(TouchSensor, {}), useSensor(KeyboardSensor, {}))
 
-  const dataIds = React.useMemo<UniqueIdentifier[]>(() => data?.map(({ id }) => id) || [], [data])
+  // Update dataIds type if needed (use dataset name or URI as unique ID if no persistent ID)
+  const dataIds = React.useMemo<UniqueIdentifier[]>(() => initialData?.map(({ name }) => name) || [], [initialData]);
 
   const table = useReactTable({
-    data,
+    data: initialData, // Use initialData directly
     columns: datasetColumns,
     state: {
       sorting,
@@ -254,7 +235,7 @@ export function DatasetsTable({
       columnFilters,
       pagination,
     },
-    getRowId: (row) => row.id.toString(),
+    getRowId: (row) => row.name, // Use name as row ID for now
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
@@ -269,25 +250,14 @@ export function DatasetsTable({
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (active && over && active.id !== over.id) {
-      setData((currentData) => {
-        const oldIndex = currentData.findIndex(item => item.id === active.id);
-        const newIndex = currentData.findIndex(item => item.id === over.id);
-        if (oldIndex === -1 || newIndex === -1) return currentData;
-        return arrayMove(currentData, oldIndex, newIndex);
-      })
-    }
-  }
+  // ... handleDragEnd (remove if not used) ...
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-2"></div>
         <div className="flex items-center gap-2">
-        </div>
-        <div className="flex items-center gap-2">
-          {actionButton && actionButton}
+          {headerActions}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8">
@@ -309,20 +279,14 @@ export function DatasetsTable({
                     >
                       {column.id.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').trim()}
                     </DropdownMenuCheckboxItem>
-                  )
+                  );
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
       <div className="overflow-hidden rounded-md border">
-        <DndContext
-          collisionDetection={closestCenter}
-          modifiers={[restrictToVerticalAxis]}
-          onDragEnd={handleDragEnd}
-          sensors={sensors}
-          id={sortableId}
-        >
+        {/* Remove DndContext if not using drag-and-drop */}
           <Table>
             <TableHeader className="bg-muted">
               {table.getHeaderGroups().map((headerGroup) => (
@@ -341,11 +305,23 @@ export function DatasetsTable({
             </TableHeader>
             <TableBody>
               {table.getRowModel().rows?.length ? (
-                <SortableContext items={dataIds} strategy={verticalListSortingStrategy}>
-                  {table.getRowModel().rows.map((row) => (
-                    <DraggableRow key={row.id} row={row} />
-                  ))}
-                </SortableContext>
+                 // Remove SortableContext if not used
+                 table.getRowModel().rows.map((row) => {
+                   const datasetName = row.original.name;
+                   return (
+                     // Render simple TableRow if DraggableRow removed
+                     <TableRow 
+                       key={row.id} 
+                       data-state={row.getIsSelected() && "selected"}
+                       onClick={() => router.push(`/projects/${projectId}/datasets/${datasetName}`)} 
+                       className="cursor-pointer hover:bg-muted/50"
+                     >
+                       {row.getVisibleCells().map((cell) => (
+                         <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                       ))}
+                     </TableRow>
+                   );
+                 })
               ) : (
                 <TableRow>
                   <TableCell colSpan={datasetColumns.length} className="h-24 text-center">
@@ -355,7 +331,7 @@ export function DatasetsTable({
               )}
             </TableBody>
           </Table>
-        </DndContext>
+        {/* Remove /DndContext */}
       </div>
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
@@ -428,5 +404,5 @@ export function DatasetsTable({
         </div>
       </div>
     </div>
-  )
+  );
 }

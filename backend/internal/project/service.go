@@ -3,9 +3,15 @@ package project
 import (
 	"SynDataGen/backend/internal/core"
 	"SynDataGen/backend/internal/platform/logger" // Using platform logger
+	"bufio"
+	"bytes" // For CSV parsing example
 	"context"
+	"encoding/csv"  // For CSV parsing example
+	"encoding/json" // <-- Added for JSON parsing
 	"errors"
 	"fmt"
+	"io" // For CSV parsing example
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -50,6 +56,12 @@ type InviteMemberRequest struct {
 	Role   core.Role `json:"role" binding:"required,oneof=admin member viewer"` // Can only invite as admin, member, or viewer
 }
 
+// DatasetContent defines the structure for returning dataset data.
+type DatasetContent struct {
+	Data []map[string]interface{} `json:"data"`
+	// Could add metadata like row count, headers etc.
+}
+
 // --- Service Interface ---
 
 // ProjectService defines the interface for project-related business logic.
@@ -83,6 +95,10 @@ type ProjectService interface {
 	// InviteMember adds a registered user to the project team with a specified role.
 	// Requires caller to be Admin or Owner.
 	InviteMember(ctx context.Context, projectID string, callerID string, req InviteMemberRequest) (*core.Project, error)
+
+	// GetDatasetContent retrieves the parsed content of a specific dataset file.
+	// Requires projectID, datasetID (likely name), and callerID for authorization.
+	GetDatasetContent(ctx context.Context, projectID string, datasetID string, callerID string) (*DatasetContent, error)
 
 	// TODO: Add methods for managing team members (Invite, Remove, UpdateRole)
 }
@@ -153,10 +169,11 @@ func (s *projectService) CreateProject(ctx context.Context, creatorID string, re
 	newProject.ID = projectID // Assign the generated ID
 	logger.Logger.Info("Initial project document created", zap.String("projectID", projectID))
 
-	// 3. Create the storage bucket using the generated project ID
+	// 3. Create the storage bucket using the generated project ID (converted to lowercase)
 	// Pass creatorID as the identifier for bucket labeling/ownership if needed by storage service
-	requestedRegion := "" // Let storage service use default
-	bucketName, region, err := s.storageSvc.CreateProjectBucket(ctx, newProject.ID, creatorID, requestedRegion)
+	requestedRegion := ""                              // Let storage service use default
+	bucketNameIDPart := strings.ToLower(newProject.ID) // <-- Convert ID to lowercase for bucket name
+	bucketName, region, err := s.storageSvc.CreateProjectBucket(ctx, bucketNameIDPart, creatorID, requestedRegion)
 	if err != nil {
 		logger.Logger.Error("Failed to create project bucket after initial save", zap.Error(err), zap.String("projectID", newProject.ID))
 		// Attempt compensation: Delete the project document
@@ -166,7 +183,7 @@ func (s *projectService) CreateProject(ctx context.Context, creatorID string, re
 	}
 	logger.Logger.Info("GCS bucket created", zap.String("bucketName", bucketName), zap.String("projectID", projectID))
 
-	// 4. Update project struct with storage details
+	// 4. Update project struct with storage details (using the CORRECT bucketName)
 	newProject.Storage = core.ProjectStorage{
 		BucketName: bucketName,
 		Region:     region,
@@ -601,4 +618,215 @@ func (s *projectService) InviteMember(ctx context.Context, projectID string, cal
 		zap.String("callerID", callerID),
 	)
 	return project, nil
+}
+
+// GetDatasetContent retrieves the parsed content of a specific dataset file.
+func (s *projectService) GetDatasetContent(ctx context.Context, projectID string, datasetID string, callerID string) (*DatasetContent, error) {
+	log := logger.Logger.With(zap.String("projectID", projectID), zap.String("datasetID", datasetID), zap.String("callerID", callerID))
+
+	// 1. Get the project and perform authorization check
+	project, err := s.projectRepo.GetProjectByID(ctx, projectID)
+	if err != nil {
+		if project == nil && err == nil {
+			log.Warn("Project not found")
+			return nil, ErrProjectNotFound
+		}
+		log.Error("Failed to get project", zap.Error(err))
+		return nil, fmt.Errorf("failed to retrieve project: %w", err)
+	}
+	if project == nil {
+		log.Warn("Project not found (explicit check)")
+		return nil, ErrProjectNotFound
+	}
+
+	if !s.checkProjectAccess(project, callerID, core.RoleViewer) {
+		log.Warn("Access denied")
+		return nil, ErrProjectAccessDenied
+	}
+
+	// 2. Determine the dataset's location (assuming datasetID is filename)
+	if project.Storage.BucketName == "" {
+		log.Error("Project storage bucket name is missing")
+		return nil, fmt.Errorf("project %s storage is not configured", projectID)
+	}
+	bucketName := project.Storage.BucketName
+	objectPath := datasetID // Assuming datasetID is the filename, e.g., "my_data.csv" or "my_data.json"
+	log = log.With(zap.String("bucket", bucketName), zap.String("objectPath", objectPath))
+	log.Info("Attempting to read dataset from storage")
+
+	// 3. Read the dataset content using the StorageService
+	datasetBytes, err := s.storageSvc.ReadObject(ctx, bucketName, objectPath) // <-- Use the new method
+	if err != nil {
+		// Handle specific ErrNotFound from StorageService
+		if errors.Is(err, core.ErrNotFound) {
+			log.Warn("Dataset file not found in storage", zap.Error(err))
+			// Return a more specific error message to the handler
+			return nil, fmt.Errorf("dataset file '%s' not found in project storage", datasetID)
+		}
+		// Handle other storage errors
+		log.Error("Failed to read object from storage", zap.Error(err))
+		return nil, fmt.Errorf("failed to read dataset content: %w", err)
+	}
+	if len(datasetBytes) == 0 {
+		log.Warn("Dataset file is empty")
+		return &DatasetContent{Data: []map[string]interface{}{}}, nil
+	}
+
+	log.Info("Successfully read dataset bytes from storage", zap.Int("bytesRead", len(datasetBytes)))
+
+	// 4. Parse the content based on file extension (simple detection)
+	var parsedData []map[string]interface{}
+	fileExt := strings.ToLower(getExtension(objectPath)) // Helper to get extension
+
+	log.Info("Parsing dataset content", zap.String("detectedExtension", fileExt))
+
+	switch fileExt {
+	case ".csv":
+		parsedData, err = parseCSVContent(datasetBytes)
+	case ".json":
+		parsedData, err = parseJSONContent(datasetBytes)
+	// case ".jsonl":
+	// 	 parsedData, err = parseJSONLContent(datasetBytes)
+	// case ".parquet":
+	// 	 // Requires external library like github.com/xitongsys/parquet-go
+	// 	 // parsedData, err = parseParquetContent(datasetBytes)
+	// 	 err = fmt.Errorf("parsing for .parquet files is not yet implemented")
+	default:
+		err = fmt.Errorf("unsupported dataset file type: %s", fileExt)
+	}
+
+	if err != nil {
+		log.Error("Failed to parse dataset content", zap.Error(err), zap.String("fileExtension", fileExt))
+		// Return a user-friendly parsing error
+		return nil, fmt.Errorf("failed to parse dataset content (type: %s): %w", fileExt, err)
+	}
+
+	log.Info("Successfully parsed dataset content", zap.Int("rowCount", len(parsedData)))
+
+	// 5. Return the parsed data
+	content := &DatasetContent{
+		Data: parsedData,
+	}
+	return content, nil
+}
+
+// getExtension extracts the file extension (including the dot) in lowercase.
+func getExtension(filename string) string {
+	for i := len(filename) - 1; i >= 0; i-- {
+		if filename[i] == '.' {
+			return strings.ToLower(filename[i:])
+		}
+		if filename[i] == '/' || filename[i] == '\\' { // Stop if path separator found
+			break
+		}
+	}
+	return "" // No extension found
+}
+
+// parseCSVContent parses CSV bytes into a slice of maps.
+func parseCSVContent(data []byte) ([]map[string]interface{}, error) {
+	reader := csv.NewReader(bytes.NewReader(data))
+
+	// Read header row
+	headers, err := reader.Read()
+	if err == io.EOF {
+		return []map[string]interface{}{}, nil // Empty file is valid
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV header: %w", err)
+	}
+	// Trim whitespace from headers
+	for i := range headers {
+		headers[i] = strings.TrimSpace(headers[i])
+	}
+
+	var results []map[string]interface{}
+
+	// Read data rows
+	lineNum := 1 // Start counting lines after header
+	for {
+		lineNum++
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		// Handle parsing errors within a row (e.g., incorrect number of fields if LazyQuotes is false)
+		if err != nil {
+			// Log the specific error and line number
+			logger.Logger.Error("Error reading CSV row", zap.Error(err), zap.Int("lineNumber", lineNum))
+			// Return an error indicating the problematic line
+			return nil, fmt.Errorf("error reading CSV data on line %d: %w", lineNum, err)
+		}
+
+		// Handle rows with incorrect number of columns
+		if len(record) != len(headers) {
+			logger.Logger.Warn("CSV row length mismatch", zap.Int("headerLength", len(headers)), zap.Int("rowLength", len(record)), zap.Strings("row", record), zap.Int("lineNumber", lineNum))
+			// Skip row or return error? Returning error for stricter validation.
+			return nil, fmt.Errorf("CSV row length mismatch on line %d: expected %d columns, got %d", lineNum, len(headers), len(record))
+		}
+
+		rowMap := make(map[string]interface{})
+		for i, header := range headers {
+			// Store as string, frontend can attempt further parsing/display
+			rowMap[header] = record[i]
+		}
+		results = append(results, rowMap)
+	}
+
+	return results, nil
+}
+
+// parseJSONContent parses JSON bytes (expected as a JSON array of objects) into a slice of maps.
+func parseJSONContent(data []byte) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+
+	err := json.Unmarshal(data, &results)
+	if err != nil {
+		// Check if it might be JSON Lines instead of a single array
+		// A simple check: does it NOT start with '[' and contain '}'?
+		trimmedData := bytes.TrimSpace(data)
+		if len(trimmedData) > 0 && trimmedData[0] != '[' && bytes.Contains(trimmedData, []byte("\n")) {
+			// Attempt to parse as JSON Lines if initial array parse failed
+			log := logger.Logger // Assuming logger is accessible or passed in
+			log.Info("JSON array parsing failed, attempting JSON Lines parsing")
+			results, err = parseJSONLContent(data)
+			if err == nil {
+				return results, nil // Successfully parsed as JSONL
+			}
+			// If JSONL also fails, return the original Unmarshal error
+			return nil, fmt.Errorf("failed to parse content as JSON array or JSON Lines: %w", err)
+		}
+		// Return the original JSON array unmarshal error
+		return nil, fmt.Errorf("failed to unmarshal JSON array: %w", err)
+	}
+	return results, nil
+}
+
+// parseJSONLContent parses JSON Lines bytes into a slice of maps.
+func parseJSONLContent(data []byte) ([]map[string]interface{}, error) {
+	var results []map[string]interface{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		lineBytes := scanner.Bytes()
+		// Skip empty lines
+		if len(bytes.TrimSpace(lineBytes)) == 0 {
+			continue
+		}
+
+		var rowMap map[string]interface{}
+		if err := json.Unmarshal(lineBytes, &rowMap); err != nil {
+			logger.Logger.Error("Failed to unmarshal JSON line", zap.Error(err), zap.Int("lineNumber", lineNum))
+			return nil, fmt.Errorf("failed to parse JSON on line %d: %w", lineNum, err)
+		}
+		results = append(results, rowMap)
+	}
+
+	if err := scanner.Err(); err != nil {
+		logger.Logger.Error("Error scanning JSON Lines data", zap.Error(err))
+		return nil, fmt.Errorf("error scanning JSON Lines data: %w", err)
+	}
+
+	return results, nil
 }

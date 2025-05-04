@@ -54,8 +54,8 @@ export function Footer() {
                 <li key={"pages" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    href={page.href} // Use actual href
-                  >
+                    href={page.href}
+                    >
                     {page.title}
                   </Link>
                 </li>
@@ -71,10 +71,10 @@ export function Footer() {
                 <li key={"social" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    href={social.href} // Use actual href
-                    target="_blank" // Open socials in new tab
+                    href={social.href}
+                    target="_blank"
                     rel="noopener noreferrer"
-                  >
+                    >
                     {social.title}
                   </Link>
                 </li>
@@ -90,8 +90,8 @@ export function Footer() {
                 <li key={"legal" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    href={legal.href} // Use actual href
-                  >
+                    href={legal.href}
+                    >
                     {legal.title}
                   </Link>
                 </li>
@@ -107,8 +107,8 @@ export function Footer() {
                 <li key={"auth" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
-                    href={auth.href} // Use actual href
-                  >
+                    href={auth.href}
+                    >
                     {auth.title}
                   </Link>
                 </li>

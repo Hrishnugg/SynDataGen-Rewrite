@@ -124,13 +124,22 @@ const MobileNav = ({ navItems }: any) => {
               className="absolute inset-x-0 top-16 z-20 flex w-full flex-col items-start justify-start gap-4 rounded-lg bg-white px-4 py-8 dark:bg-neutral-950"
             >
               {/* Simplified Mobile Nav Items */}
-              <Link href="#features" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="#features"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Features</motion.span>
               </Link>
-              <Link href="#pricing" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="#pricing"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Pricing</motion.span>
               </Link>
-              <Link href="/docs" className="relative text-neutral-600 dark:text-neutral-300 w-full">
+              <Link
+                href="/docs"
+                className="relative text-neutral-600 dark:text-neutral-300 w-full"
+                legacyBehavior>
                  <motion.span className="block">Docs</motion.span>
               </Link>
               <Link href="/auth/login" className="w-full">
@@ -154,13 +163,15 @@ const Logo = () => {
       href="/"
       className="relative z-20 mr-4 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-black"
     >
-      <Image
-        src="/synopticlogo3d.png" // TODO: Confirm logo path
-        alt="Synoptic Logo"
-        width={30}
-        height={30}
-      />
-      <span className="font-medium text-black dark:text-white">Synoptic</span>
+      <>
+        <Image
+          src="/synopticlogo3d.png" // TODO: Confirm logo path
+          alt="Synoptic Logo"
+          width={30}
+          height={30}
+        />
+        <span className="font-medium text-black dark:text-white">Synoptic</span>
+      </>
     </Link>
   );
 };
@@ -253,21 +264,23 @@ const ProductItem = ({ // Changed export to const
 }) => {
   return (
     <Link href={href} className="flex gap-4">
-      <Image
-        src={src}
-        width={140}
-        height={70}
-        alt={title}
-        className="flex-shrink-0 rounded-md shadow-2xl"
-      />
-      <div>
-        <h4 className="mb-1 text-base font-normal text-black dark:text-white">
-          {title}
-        </h4>
-        <p className="max-w-[10rem] text-sm text-neutral-700 dark:text-neutral-300">
-          {description}
-        </p>
-      </div>
+      <>
+        <Image
+          src={src}
+          width={140}
+          height={70}
+          alt={title}
+          className="flex-shrink-0 rounded-md shadow-2xl"
+        />
+        <div>
+          <h4 className="mb-1 text-base font-normal text-black dark:text-white">
+            {title}
+          </h4>
+          <p className="max-w-[10rem] text-sm text-neutral-700 dark:text-neutral-300">
+            {description}
+          </p>
+        </div>
+      </>
     </Link>
   );
 };
@@ -277,7 +290,7 @@ const HoveredLink = ({ children, ...rest }: any) => { // Changed export to const
     <Link
       {...rest}
       className="text-neutral-700 hover:text-black dark:text-neutral-200"
-    >
+      legacyBehavior>
       {children}
     </Link>
   );

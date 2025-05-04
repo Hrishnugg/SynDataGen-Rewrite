@@ -1,7 +1,7 @@
 "use client"; // Add the directive
 
-import React from 'react';
-import Link from 'next/link'; // Import Link
+import React, { useState } from 'react';
+import Link from 'next/link'; // Re-added Link import for other buttons
 import { TextGenerateEffect } from "@/components/ui/text-generate-effect"; // Import the effect component
 // import { BackgroundBeams } from "@/components/ui/background-beams"; // Removed BackgroundBeams import
 import { Footer } from "@/components/landing/footer"; // Import Footer
@@ -9,10 +9,12 @@ import { GlowingEffect } from "@/components/ui/glowing-effect"; // Import Glowin
 import { Button as MagicButton } from "@/components/ui/bmagic-button"; // Import the magic button
 import { ShootingStars } from "@/components/ui/shooting-stars"; // Import ShootingStars
 import { StarsBackground } from "@/components/ui/stars-background"; // Import StarsBackground
+import { WaitlistModal } from "@/components/modals/WaitlistModal"; // Import the modal
 
 export default function PricingPage() {
   const pageTitle = "Pricing Plans";
   const pageSubtitle = "Choose the plan that fits your needs.";
+  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false); // State for modal
 
   return (
     // Main wrapper for relative positioning context and full height/bg
@@ -21,7 +23,6 @@ export default function PricingPage() {
       <StarsBackground className="absolute inset-0 z-0" />
       <ShootingStars className="absolute inset-0 z-0" />
       {/* <BackgroundBeams className="absolute inset-0 z-0" /> Removed BackgroundBeams */}
-
       {/* Wrapper for content, layered above beams */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Hero Section - Removed relative and h-[20rem] */}
@@ -55,7 +56,7 @@ export default function PricingPage() {
                  target="_blank" 
                  rel="noopener noreferrer"
                >
-                 <MagicButton>
+                 <MagicButton className="mt-auto">
                    Get Started
                  </MagicButton>
                </Link>
@@ -75,7 +76,7 @@ export default function PricingPage() {
                  target="_blank" 
                  rel="noopener noreferrer"
                >
-                 <MagicButton>
+                 <MagicButton className="mt-auto">
                    Choose Pro
                  </MagicButton>
                </Link>
@@ -95,7 +96,7 @@ export default function PricingPage() {
                  target="_blank" 
                  rel="noopener noreferrer"
                >
-                 <MagicButton>
+                 <MagicButton className="mt-auto">
                    Go Ultra
                  </MagicButton>
                </Link>
@@ -118,11 +119,36 @@ export default function PricingPage() {
                  </MagicButton>
                </Link>
              </div>
-           </div>
+             {/* Enterprise Plan Card - Updated Button */}
+            <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8 md:col-span-3">
+              <GlowingEffect disabled={false} glow={true} className="rounded-2xl" />
+              <h3 className="text-2xl font-bold mb-4 text-white">Enterprise</h3>
+              <p className="text-gray-400 mb-6">Custom solutions, dedicated infrastructure, and premium support for large-scale deployments.</p>
+              <p className="text-4xl font-bold text-white mb-6">Contact Us</p>
+              <ul className="text-gray-400 space-y-2 mb-8 text-center flex-grow">
+                <li>White Glove Services</li>
+                <li>Custom Integrations</li>
+                <li>Volume Discounts</li>
+                <li>Advanced Security Options</li>
+              </ul>
+              {/* Wrap button in a div for width control and centering */}
+              <div className="mt-auto mx-auto w-full max-w-xs"> {/* Added wrapper div */}
+                <MagicButton onClick={() => setIsWaitlistModalOpen(true)} className="w-full"> {/* Added w-full to button */}
+                  Contact Sales
+                </MagicButton>
+              </div>
+            </div>
+          </div>
         </div>
 
         <Footer /> {/* Footer pushed to bottom by flex-grow */}
       </div>
+
+      {/* Render Waitlist Modal Conditionally */}
+      <WaitlistModal 
+        isOpen={isWaitlistModalOpen} 
+        onClose={() => setIsWaitlistModalOpen(false)} 
+      />
     </div>
   );
 } 
