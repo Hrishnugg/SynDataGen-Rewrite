@@ -126,23 +126,19 @@ export const NavItems = ({ items, className, onItemClick }: NavItemsProps) => {
     >
       {items.map((item, idx) => (
         <Link
+          onMouseEnter={() => setHovered(idx)}
           onClick={onItemClick}
           className="relative px-4 py-2 text-neutral-600 dark:text-neutral-300"
           key={`link-${idx}`}
           href={item.link}
         >
-          <span 
-            className="relative block"
-            onMouseEnter={() => setHovered(idx)} 
-          >
-            {hovered === idx && (
-              <motion.div
-                layoutId="hovered"
-                className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
-              />
-            )}
-            <span className="relative z-20">{item.name}</span>
-          </span>
+          {hovered === idx && (
+            <motion.div
+              layoutId="hovered"
+              className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
+            />
+          )}
+          <span className="relative z-20">{item.name}</span>
         </Link>
       ))}
     </motion.div>

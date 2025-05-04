@@ -101,24 +101,6 @@ export default function PricingPage() {
                  </MagicButton>
                </Link>
              </div>
-             {/* Enterprise Plan */}
-             <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8 md:col-span-3">
-               <GlowingEffect disabled={false} glow={true} className="rounded-2xl" />
-               <h3 className="text-2xl font-bold mb-4 text-white">Enterprise</h3>
-               <p className="text-gray-400 mb-6">Custom solutions, dedicated infrastructure, and premium support for large-scale deployments.</p>
-               <p className="text-4xl font-bold text-white mb-6">Contact Us</p>
-               <ul className="text-gray-400 space-y-2 mb-8 text-center flex-grow">
-                 <li>White Glove Services</li>
-                 <li>Custom Integrations</li>
-                 <li>Volume Discounts</li>
-                 <li>Advanced Security Options</li>
-               </ul>
-               <Link href="/#waitlist" className="mt-auto">
-                 <MagicButton>
-                   Contact Sales
-                 </MagicButton>
-               </Link>
-             </div>
              {/* Enterprise Plan Card - Updated Button */}
             <div className="relative group isolate flex flex-col rounded-2xl bg-gradient-to-br from-black to-[#060e25] shadow-[0_1px_1px_rgba(0,0,0,0.05),0_4px_6px_rgba(34,42,53,0.04),0_24px_68px_rgba(47,48,55,0.05),0_2px_3px_rgba(0,0,0,0.04)] p-8 md:col-span-3">
               <GlowingEffect disabled={false} glow={true} className="rounded-2xl" />

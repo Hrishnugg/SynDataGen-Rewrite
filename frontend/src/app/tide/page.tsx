@@ -128,23 +128,15 @@ export default function TidePage() {
       {/* Use the new PipelineScroll component - Add bg-black */}
       <div className="bg-black relative"> {/* Ensure solid background, Added relative */}
         <PipelineScroll content={pipelineContent} />
-        {/* Added Stars specifically for this section */} 
-        <StarsBackground className="absolute inset-0 z-0" />
-        <ShootingStars className="absolute inset-0 z-0" />
       </div>
       {/* Added Features Coming Soon Section */}
       <section className="py-16 bg-black text-center relative z-10 overflow-hidden"> {/* Added overflow-hidden */}
-        {/* Add Stars Background */}
-        <StarsBackground className="absolute inset-0 z-0" />
-        <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure heading is above stars */}
         <h2 className="text-3xl font-bold text-neutral-300 relative z-10">Features Coming Soon</h2> {/* Added font-bold and relative z-10 */}
         {/* Optionally add more detail or placeholder visuals later */}
       </section>
       {/* New Data Visualizer Section - Increase padding, remove margin */}
       <section className="py-48 bg-black relative overflow-hidden"> 
-        <StarsBackground className="absolute inset-0 z-0" />
-        <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure content is above stars with relative z-10 */} 
         <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center px-4 relative z-10">
           {/* Left Column: Text */}
@@ -178,8 +170,6 @@ export default function TidePage() {
       {/* End New Data Visualizer Section */}
       {/* Integrate the new ChatSection component within a relative container - Increase padding */}
       <div className="relative bg-black py-48 overflow-hidden"> 
-        <StarsBackground className="absolute inset-0 z-0" />
-        <ShootingStars className="absolute inset-0 z-0" />
         <div className="relative z-10"> {/* Ensure content is above stars */}
           <ChatSection
             placeholders={chatPlaceholders}
@@ -191,9 +181,6 @@ export default function TidePage() {
       {/* Added Request Demo Button Section */}
       {/* Added relative positioning for stars, ADDED stars background */}
       <div className="flex justify-center py-16 bg-black relative z-10 overflow-hidden"> 
-        {/* Add stars to this section */}
-        <StarsBackground className="absolute inset-0 z-0" />
-        <ShootingStars className="absolute inset-0 z-0" />
         {/* Ensure button is above stars */} 
         <MagicButton onClick={() => setIsWaitlistModalOpen(true)} className="relative z-10">
           Request A Demo

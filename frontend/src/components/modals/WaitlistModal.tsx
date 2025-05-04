@@ -29,22 +29,27 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      {/* Removed 'relative' and other custom styles to restore default positioning */}
-      <DialogContent className="p-0 overflow-hidden border-none shadow-none bg-transparent"> {/* Keep p-0, remove relative */}
-        {/* Add the close button */}
-        <DialogClose asChild> 
-          {/* Keep absolute positioning - should now be relative to dialog content area */}
+      <DialogContent className="p-0 overflow-hidden border-none shadow-none bg-transparent">
+        {/* Add DialogHeader and DialogTitle for accessibility */}
+        <DialogHeader className="sr-only"> {/* Use sr-only to hide visually but keep for screen readers */}
+          <DialogTitle>Request Demo or Join Waitlist</DialogTitle>
+          {/* Optional: Add a description if needed, also sr-only */}
+          {/* <DialogDescription>Submit the form below.</DialogDescription> */}
+        </DialogHeader>
+
+        {/* Close button */}
+        <DialogClose asChild>
           <Button 
             variant="ghost" 
             size="icon" 
             aria-label="Close" 
             className="absolute top-4 right-4 z-50 text-white opacity-70 hover:opacity-100 focus-visible:ring-0 focus-visible:ring-offset-0" 
           >
-            <IconX className="h-6 w-6" /> {/* Icon color inherits */} 
+            <IconX className="h-6 w-6" />
           </Button>
         </DialogClose>
         
-        {/* Render the waitlist form directly */}
+        {/* Waitlist form */}
         <WaitlistForm onSubmitted={handleFormSubmitted} />
       </DialogContent>
     </Dialog>

@@ -29,7 +29,7 @@ export function NavbarWrapper() {
 
   const navItems = [
     { 
-      name: <AuroraText colors={tideColors}>Tide</AuroraText>, 
+      name: <AuroraText colors={tideColors}>Tide</AuroraText>,
       link: "/tide" 
     },
     { name: "Features", link: "/#features" },
