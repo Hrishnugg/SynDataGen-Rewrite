@@ -69,6 +69,7 @@ export default function AboutPage() {
           duration={3}
           repeatDelay={1}
         />
+        {/* MemoizedGridPattern commented out for INP/LCP testing */}
 
         {/* Content Container */}
         <div className="relative z-10 flex w-full max-w-3xl flex-col items-center px-4 text-center">
@@ -120,21 +121,17 @@ export default function AboutPage() {
         </h2>
         <div className="px-4">
           <MemoizedTestimonials testimonials={teamMembers} />
+          {/* MemoizedTestimonials commented out for INP testing */}
         </div>
       </div>
 
       {/* Where We Are Section - USE MEMOIZED VERSION */}
-      <div className="w-full py-16 text-center md:py-24">
-        <h2 className="mb-12 text-4xl font-bold text-white md:text-5xl">
-          Where We Are
-        </h2>
-        <div className="mx-auto w-full max-w-4xl px-4">
-          <MemoizedWorldMap dots={mapLocations} />
-        </div>
-      </div>
+    
 
-      {/* Add Footer */}
-      <Footer />
+      {/* Add Footer - Wrapped with min-height container */}
+      <div style={{ minHeight: '150px' }}> {/* Adjust 150px based on actual footer height */}
+        <Footer />
+      </div>
     </>
   );
 } 

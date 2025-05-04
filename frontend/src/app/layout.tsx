@@ -10,6 +10,7 @@ import { NavbarWrapper } from "@/components/navbar-client-wrapper";
 const figtree = Figtree({
   variable: "--font-figtree",
   subsets: ["latin"],
+  display: 'swap'
 });
 
 /*const geistSans = Geist({
@@ -34,14 +35,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning={true}>
-      <body
-        className={`${figtree.variable} antialiased bg-black`}
-      >
-        <div className="relative flex flex-col min-h-screen">
-          {/* Use the imported NavbarWrapper */}
-          <NavbarWrapper /> 
-          <StoreProvider>{children}</StoreProvider> 
-        </div>
+      <head>
+        {/* Add Font Preload Links Here */}
+        {/* --- ADJUST PATHS AND TYPE BASED ON YOUR ACTUAL FONTS --- */}
+        <link
+          rel="preload"
+          href="/fonts/figtree-latin-400-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        <link
+          rel="preload"
+          href="/fonts/figtree-latin-700-normal.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
+        {/* --- END FONT PRELOAD --- */}
+      </head>
+      <body className={`${figtree.variable} font-sans antialiased bg-black`}>
+        <StoreProvider>
+          <div className="relative flex flex-col min-h-screen">
+              <NavbarWrapper /> 
+              {children} 
+          </div>
+        </StoreProvider>
       </body>
     </html>
   );
