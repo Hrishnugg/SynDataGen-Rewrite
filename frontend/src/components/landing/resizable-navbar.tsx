@@ -24,7 +24,7 @@ interface NavBodyProps {
 
 interface NavItemsProps {
   items: {
-    name: string;
+    name: React.ReactNode;
     link: string;
   }[];
   className?: string;
