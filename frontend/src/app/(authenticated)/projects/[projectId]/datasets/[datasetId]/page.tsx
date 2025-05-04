@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/shadcn/card";
 import { IconLoader, IconAlertTriangle } from "@tabler/icons-react";
 import { useGetDatasetContentQuery } from '@/features/projects/projectApiSlice';
-import { DataViewerTable } from "@/components/data-viewer-table"; 
+import { DataViewerTable } from "@/components/data-viewer-table";
 import { ChatSidebar } from '@/components/chat-sidebar';
 
 // Placeholder for loading state
@@ -94,7 +94,7 @@ export default function DatasetViewerPage() {
             </CardContent>
           </Card>
 
-          <ChatSidebar />
+          <ChatSidebar projectId={projectId} datasetId={datasetId} />
         </div>
       </SidebarInset>
     </SidebarProvider>
