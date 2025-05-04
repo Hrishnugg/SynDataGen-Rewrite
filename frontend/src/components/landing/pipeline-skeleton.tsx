@@ -151,11 +151,17 @@ export const PipelineSkeleton = () => {
       isAnimating.current = false;
     };
 
-    sequence(); // Start the main animation sequence
+    // Defer the initial call to sequence slightly using setTimeout
+    const timeoutId = setTimeout(() => {
+      if (isMounted) { // Check if still mounted before running
+        sequence(); 
+      }
+    }, 0);
 
     return () => {
       isMounted = false;
       isAnimating.current = false;
+      clearTimeout(timeoutId); // Clear the timeout on cleanup
       // Stop controls on unmount
       containerControls.stop(); lineGlowControls.stop();
       stageControls.forEach(s => { s.icon.stop(); s.dot.stop(); s.label.stop(); });

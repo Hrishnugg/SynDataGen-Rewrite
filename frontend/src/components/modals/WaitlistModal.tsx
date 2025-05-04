@@ -9,10 +9,9 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/shadcn/dialog";
-// import WaitlistSection from "@/components/waitlist-section"; // Removed old import
-import { WaitlistForm } from "@/components/forms/WaitlistForm"; // Import the new form component
-import { Button } from "@/components/shadcn/button"; // Import Button for styling the close trigger
-import { IconX } from "@tabler/icons-react"; // Import X icon
+import { WaitlistForm } from "@/components/forms/WaitlistForm";
+import { Button } from "@/components/shadcn/button";
+import { IconX } from "@tabler/icons-react";
 
 interface WaitlistModalProps {
   isOpen: boolean;
@@ -22,22 +21,20 @@ interface WaitlistModalProps {
 export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
   if (!isOpen) return null;
 
-  // Handler to be called when the form is submitted successfully
   const handleFormSubmitted = () => {
-    onClose(); // Call the original onClose passed from the parent page
+    onClose();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-0 overflow-hidden border-none shadow-none bg-transparent">
-        {/* Add DialogHeader and DialogTitle for accessibility */}
-        <DialogHeader className="sr-only"> {/* Use sr-only to hide visually but keep for screen readers */}
-          <DialogTitle>Request Demo or Join Waitlist</DialogTitle>
-          {/* Optional: Add a description if needed, also sr-only */}
-          {/* <DialogDescription>Submit the form below.</DialogDescription> */}
+        <DialogHeader className="absolute left-4 top-4 text-left text-white opacity-0 pointer-events-none">
+          <DialogTitle>Join the Waitlist</DialogTitle>
+          <DialogDescription>
+            Fill out the form below to join the waitlist for early access.
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Close button */}
         <DialogClose asChild>
           <Button 
             variant="ghost" 
@@ -49,7 +46,6 @@ export function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
           </Button>
         </DialogClose>
         
-        {/* Waitlist form */}
         <WaitlistForm onSubmitted={handleFormSubmitted} />
       </DialogContent>
     </Dialog>

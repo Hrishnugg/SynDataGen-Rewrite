@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Figtree } from "next/font/google";
 import "./globals.css";
 import StoreProvider from "./StoreProvider";
-import { Analytics } from '@vercel/analytics/next';
 
 // --- IMPORT NEW WRAPPER --- //
 import { NavbarWrapper } from "@/components/navbar-client-wrapper";
@@ -38,12 +37,11 @@ export default function RootLayout({
       <body
         className={`${figtree.variable} antialiased bg-black`}
       >
-        <div className="flex flex-col min-h-screen">
+        <div className="relative flex flex-col min-h-screen">
           {/* Use the imported NavbarWrapper */}
           <NavbarWrapper /> 
           <StoreProvider>{children}</StoreProvider> 
         </div>
-        <Analytics />
       </body>
     </html>
   );

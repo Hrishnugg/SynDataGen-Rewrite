@@ -25,7 +25,8 @@ interface NavBodyProps {
 interface NavItemsProps {
   items: {
     name: React.ReactNode;
-    link: string;
+    link?: string;
+    onClick?: () => void;
   }[];
   className?: string;
   onItemClick?: () => void;
@@ -124,23 +125,64 @@ export const NavItems = ({ items, className, onItemClick }: NavItemsProps) => {
         className,
       )}
     >
-      {items.map((item, idx) => (
-        <Link
-          onMouseEnter={() => setHovered(idx)}
-          onClick={onItemClick}
-          className="relative px-4 py-2 text-neutral-600 dark:text-neutral-300"
-          key={`link-${idx}`}
-          href={item.link}
-        >
-          {hovered === idx && (
-            <motion.div
-              layoutId="hovered"
-              className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
-            />
-          )}
-          <span className="relative z-20">{item.name}</span>
-        </Link>
-      ))}
+      {items.map((item, idx) => {
+        const key = `navItem-${idx}`;
+        const commonProps = {
+          className: "relative px-4 py-2 text-neutral-600 dark:text-neutral-300 cursor-pointer",
+          onMouseEnter: () => setHovered(idx),
+        };
+
+        const content = (
+          <>
+            {hovered === idx && (
+              <motion.div
+                layoutId="hovered"
+                className="absolute inset-0 h-full w-full rounded-full bg-gray-100 dark:bg-neutral-800"
+              />
+            )}
+            <span className="relative z-20">{item.name}</span>
+          </>
+        );
+
+        if (item.onClick) {
+          return (
+            <div 
+              key={key}
+              {...commonProps} 
+              onClick={() => {
+                item.onClick?.();
+                if (onItemClick) {
+                  setTimeout(() => onItemClick(), 100);
+                }
+              }}
+            >
+              {content}
+            </div>
+          );
+        } else if (item.link) {
+          return (
+            <Link 
+              key={key}
+              href={item.link!}
+              {...commonProps} 
+              onClick={onItemClick}
+              className={cn(commonProps.className, "cursor-pointer")}
+            >
+              {content}
+            </Link>
+          );
+        } else {
+          return (
+            <span 
+              key={key}
+              {...commonProps} 
+              className={cn(commonProps.className, "cursor-default")}
+            >
+              {content}
+            </span>
+          );
+        }
+      })}
     </motion.div>
   );
 };

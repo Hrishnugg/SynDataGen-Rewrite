@@ -15,10 +15,12 @@ import {
 } from "@/components/landing/resizable-navbar";
 import { HoverBorderGradient } from "@/components/ui/hover-border-gradient";
 import { AuroraText } from "@/components/magicui/aurora-text";
+import { ContactModal } from "@/components/modals/ContactModal";
 
 // Define and export the NavbarWrapper component
 export function NavbarWrapper() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -35,14 +37,21 @@ export function NavbarWrapper() {
     { name: "Features", link: "/#features" },
     { name: "Pricing", link: "/pricing" },
     { name: "About", link: "/about" },
-    { name: "Contact", link: "/#waitlist" },
+    { 
+      name: "Contact", 
+      onClick: () => {
+        console.log("Setting isContactModalOpen = true");
+        setIsContactModalOpen(true);
+      }
+    },
   ];
 
   return (
+    <>
       <ResizableNavbar>
         <NavBody>
           <NavbarLogo />
-          <NavItems items={navItems} />
+          <NavItems items={navItems} onItemClick={() => setIsMobileMenuOpen(false)} />
           <div className="flex gap-2 items-center">
             {isMounted ? (
               <HoverBorderGradient
@@ -92,7 +101,9 @@ export function NavbarWrapper() {
             <NavItems
               items={navItems}
               className="flex flex-col items-start gap-4"
-              onItemClick={() => setIsMobileMenuOpen(false)} // Close mobile menu on item click
+              onItemClick={() => {
+                setIsMobileMenuOpen(false); 
+              }}
             />
             <div className="flex flex-col gap-2 w-full mt-4">
               {isMounted ? (
@@ -129,5 +140,10 @@ export function NavbarWrapper() {
           </MobileNavMenu>
         </MobileNav>
       </ResizableNavbar>
+      <ContactModal 
+        isOpen={isContactModalOpen} 
+        onClose={() => setIsContactModalOpen(false)} 
+      />
+    </>
   );
 } 
