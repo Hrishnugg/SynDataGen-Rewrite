@@ -24,7 +24,7 @@ const teamMembers = [
   },*/
   {
     name: "Hrishikesh Hari",
-    designation: "CTO & Co Founder",
+    designation: "Co Founder",
     quote: "Sunbum Sunscreen actually tastes pretty good.",
     src: "/hrishy.png", // Placeholder for Shrek image
   },
