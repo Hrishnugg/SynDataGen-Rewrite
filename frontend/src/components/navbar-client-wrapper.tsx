@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from 'next/navigation';
 import {
   Navbar as ResizableNavbar,
   NavBody,
@@ -19,6 +20,7 @@ import { ContactModal } from "@/components/modals/ContactModal";
 
 // Define and export the NavbarWrapper component
 export function NavbarWrapper() {
+  const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -26,6 +28,12 @@ export function NavbarWrapper() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const authRoutes = ['/auth/login', '/auth/signup'];
+
+  if (authRoutes.includes(pathname)) {
+    return null;
+  }
 
   const tideColors = ["#BBFAF5", "#69BECC", "#5CB9BF", "#2D98A0"];
 

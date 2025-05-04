@@ -10,23 +10,25 @@ import { useRouter } from 'next/navigation';
 import { useRegisterMutation } from '@/features/auth/authApiSlice';
 import { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import { SerializedError } from '@reduxjs/toolkit';
+import { StarsBackground } from '@/components/animate-ui/backgrounds/stars';
+import { Ripple } from "@/components/magicui/ripple";
 
 // Placeholder data for the carousel
 const placeholderSlides = [
   {
     title: "Generate Realistic Data",
     button: "Learn More",
-    src: "/placeholder-img-1.jpg", // Replace with actual image path later
+    src: "/carousel2.png", // Replace with actual image path later
   },
   {
     title: "Test Your Models",
     button: "Get Started",
-    src: "/placeholder-img-2.jpg", // Replace with actual image path later
+    src: "/synoptic-dashboard.png", // Replace with actual image path later
   },
   {
     title: "Ensure Data Privacy",
     button: "Explore Features",
-    src: "/placeholder-img-3.jpg", // Replace with actual image path later
+    src: "/synoptic-dashboard.png", // Replace with actual image path later
   },
 ];
 
@@ -50,11 +52,14 @@ const getErrorMessage = (error: FetchBaseQueryError | SerializedError | undefine
 export default function RegistrationFormWithImages() {
   return (
     <div className="grid min-h-screen w-full grid-cols-1 md:grid-cols-2">
-      <Form />
-      <div className="relative z-20 hidden w-full items-center justify-center overflow-hidden border-l border-neutral-100 bg-white md:flex dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mx-auto flex h-full w-full items-center justify-center p-4">
-          <Carousel slides={placeholderSlides} />
-        </div>
+      <StarsBackground className="relative z-10">
+        <Form />
+      </StarsBackground>
+      <div className="relative z-20 hidden w-full items-center justify-center overflow-hidden border-l border-neutral-100 bg-neutral-900 md:flex dark:border-neutral-800">
+        <Ripple />
+        <span className="z-10 text-4xl font-bold text-white">
+          Synoptic
+        </span>
       </div>
     </div>
   );
@@ -82,8 +87,8 @@ function Form() {
   };
 
   return (
-    <form className="bg-gray-50 dark:bg-neutral-950" onSubmit={handleSubmit}>
-      <div className="flex w-full items-center justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
+    <form className="h-full" onSubmit={handleSubmit}>
+      <div className="relative z-20 flex h-full w-full items-center justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <div>
             <div className="flex">
