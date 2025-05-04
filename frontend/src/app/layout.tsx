@@ -4,6 +4,9 @@ import { Figtree } from "next/font/google";
 import "./globals.css";
 import StoreProvider from "./StoreProvider";
 
+// --- IMPORT NEW WRAPPER --- //
+import { NavbarWrapper } from "@/components/navbar-client-wrapper";
+
 const figtree = Figtree({
   variable: "--font-figtree",
   subsets: ["latin"],
@@ -35,7 +38,9 @@ export default function RootLayout({
         className={`${figtree.variable} antialiased bg-black`}
       >
         <div className="flex flex-col min-h-screen">
-         <StoreProvider>{children}</StoreProvider>
+          {/* Use the imported NavbarWrapper */}
+          <NavbarWrapper /> 
+          <StoreProvider>{children}</StoreProvider> 
         </div>
       </body>
     </html>
