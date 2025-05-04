@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Figtree } from "next/font/google";
 import "./globals.css";
 import StoreProvider from "./StoreProvider";
+import { Analytics } from '@vercel/analytics/next';
 
 // --- IMPORT NEW WRAPPER --- //
 import { NavbarWrapper } from "@/components/navbar-client-wrapper";
@@ -42,6 +43,7 @@ export default function RootLayout({
           <NavbarWrapper /> 
           <StoreProvider>{children}</StoreProvider> 
         </div>
+        <Analytics />
       </body>
     </html>
   );
