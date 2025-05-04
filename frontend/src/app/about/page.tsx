@@ -18,15 +18,15 @@ import { WaitlistModal } from "@/components/modals/WaitlistModal"; // Import the
 
 // Define team members data
 const teamMembers = [
-  {
+  /*{
     name: "Joey Zeng",
     designation: "CEO & Co Founder",
     quote: "I think I might be allergic to grass.",
     src: "/joey.png", // Placeholder image path
-  },
+  },*/
   {
     name: "Hrishikesh Hari",
-    designation: "CTO & Co Founder",
+    designation: "Co Founder",
     quote: "Sunbum Sunscreen actually tastes pretty good.",
     src: "/hrishy.png", // Placeholder for Shrek image
   },
