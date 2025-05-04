@@ -64,37 +64,24 @@ export const PipelineSkeleton = () => {
   // --- Main Animation Loop Effect ---
   useEffect(() => {
     let isMounted = true;
-    isAnimating.current = false; // Ensure reset on mount/dependency change
+    isAnimating.current = false;
 
     const sequence = async () => {
-      if (isAnimating.current) return; // Prevent multiple concurrent loops
+      if (isAnimating.current) return;
       isAnimating.current = true;
 
-      // Initial reset (good place for it)
-      containerControls.set({ opacity: 0 });
-      lineGlowControls.set({ width: '0%', opacity: 0 });
-      stageControls.forEach((ctrl) => {
-        ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
-        ctrl.dot.set({ scale: 1, opacity: 0.5 });
-        ctrl.label.set({ opacity: 0.5 });
-      });
-
       while (isMounted) {
-        // Wait until visible to start/resume the cycle
+        // Wait until visible
         while (isMounted && !isVisible.current) {
-            // If hidden, pause and wait
             await new Promise(resolve => setTimeout(resolve, 200)); 
         }
-        // If component unmounted while waiting, exit loop
         if (!isMounted) break;
 
-        // --- Start Cycle --- 
-        // Ensure container is visible before starting stage animations
+        // Start animations FROM the initial prop state
         containerControls.start({
             opacity: 1,
             transition: { duration: fadeDuration },
         });
-        // Make line glow element visible before animating width
         lineGlowControls.start({ opacity: 1, transition: { duration: 0.1 } });
 
         // --- Animate Through Stages --- 
@@ -117,8 +104,12 @@ export const PipelineSkeleton = () => {
 
             await new Promise((resolve) => setTimeout(resolve, nodePauseDuration));
         }
-        // If loop broke due to visibility/unmount, skip fade out and reset immediately
-        if (!isMounted || !isVisible.current) {
+        
+        // Refined check for visibility/unmount
+        if (!isMounted) { // Priority check: If unmounted, exit loop immediately
+          break;
+        }
+        if (!isVisible.current) { // If still mounted but not visible, reset visuals and wait
              lineGlowControls.set({ width: '0%', opacity: 0 });
              containerControls.set({ opacity: 0 });
              stageControls.forEach((ctrl) => {
@@ -126,7 +117,7 @@ export const PipelineSkeleton = () => {
                  ctrl.dot.set({ scale: 1, opacity: 0.5 }); 
                  ctrl.label.set({ opacity: 0.5 });
              });
-            continue; // Go back to waiting for visibility
+            continue; 
         }
 
         // --- End Cycle --- 
@@ -134,10 +125,13 @@ export const PipelineSkeleton = () => {
             opacity: 0,
             transition: { duration: fadeDuration, delay: 0.5 },
         });
-        // Check mount state again before resetting
-        if (!isMounted) break;
-
-        // Reset children
+        
+        // Refined check before final reset
+        if (!isMounted) { // If unmounted during fade-out, exit loop
+             break;
+        }
+        
+        // Reset using .set() - Safe because we know component is still mounted here
         lineGlowControls.set({ width: '0%', opacity: 0 });
         stageControls.forEach((ctrl) => {
             ctrl.icon.set({ opacity: 0.4, scale: 0.9 });
@@ -147,27 +141,20 @@ export const PipelineSkeleton = () => {
             
         await new Promise((resolve) => setTimeout(resolve, loopBuffer));
       }
-      // Exited loop
       isAnimating.current = false;
     };
 
-    // Defer the initial call to sequence slightly using setTimeout
-    const timeoutId = setTimeout(() => {
-      if (isMounted) { // Check if still mounted before running
-        sequence(); 
-      }
-    }, 0);
+    sequence(); // Call sequence directly
 
     return () => {
       isMounted = false;
       isAnimating.current = false;
-      clearTimeout(timeoutId); // Clear the timeout on cleanup
       // Stop controls on unmount
       containerControls.stop(); lineGlowControls.stop();
       stageControls.forEach(s => { s.icon.stop(); s.dot.stop(); s.label.stop(); });
     };
 
-  }, [containerControls, lineGlowControls, stageControls]); // Dependencies are the stable controls
+  }, [containerControls, lineGlowControls, stageControls]); // REMOVED hasMounted from deps
 
    // --- Intersection Observer Effect (Only updates visibility) ---
    useEffect(() => {
@@ -200,7 +187,7 @@ export const PipelineSkeleton = () => {
       ref={observerRef} // Attach observer ref
       className="flex h-full w-full flex-col items-center justify-center space-y-6"
       animate={containerControls}
-      initial={{ opacity: 0 }} // Start hidden, main effect controls fade-in
+      initial={{ opacity: 0 }} // <-- SET INITIAL STATE HERE
     >
       {/* Icons Row - Use relative positioning for children */}
       <div className="relative w-4/5 mx-auto h-8"> 
@@ -213,7 +200,7 @@ export const PipelineSkeleton = () => {
             )}
             style={{ left: stage.position }}
             animate={stageControls[index].icon}
-            // initial removed, handled by reset in effect
+            initial={{ opacity: 0.4, scale: 0.9 }} // <-- SET INITIAL STATE HERE
           >
             <stage.Icon size={32} />
           </motion.div>
@@ -228,7 +215,7 @@ export const PipelineSkeleton = () => {
         <motion.div 
            className="absolute left-0 top-1/2 h-1 w-0 -translate-y-1/2 rounded-full bg-white shadow-[0_0_8px_theme(colors.white)]" 
            animate={lineGlowControls}
-           // initial removed, handled by reset in effect
+           initial={{ width: '0%', opacity: 0 }} // <-- SET INITIAL STATE HERE
         />
 
         {/* Dots Container - Already absolute */}
@@ -242,7 +229,7 @@ export const PipelineSkeleton = () => {
               )}
               style={{ left: stage.position }}
               animate={stageControls[index].dot}
-              // initial removed, handled by reset in effect
+              initial={{ scale: 1, opacity: 0.5 }} // <-- SET INITIAL STATE HERE
             />
           ))}
         </div>
@@ -260,7 +247,7 @@ export const PipelineSkeleton = () => {
             )}
             style={{ left: stage.position }}
             animate={stageControls[index].label}
-            // initial removed, handled by reset in effect
+            initial={{ opacity: 0.5 }} // <-- SET INITIAL STATE HERE
           >
             {stage.name}
           </motion.div>

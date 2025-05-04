@@ -36,22 +36,25 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning={true}>
       <head>
-        {/* Add Font Preload Links Here */}
-        {/* --- ADJUST PATHS AND TYPE BASED ON YOUR ACTUAL FONTS --- */}
+        {/* Add Font Preload Links - Using found TTF files */}
+        {/* --- ADJUST IF OTHER WEIGHTS/STYLES ARE CRITICAL FOR LCP/CLS --- */}
         <link
           rel="preload"
-          href="/fonts/figtree-latin-400-normal.woff2"
+          href="/fonts/Figtree-VariableFont_wght.ttf"
           as="font"
-          type="font/woff2"
+          type="font/ttf"
           crossOrigin="anonymous"
         />
+        {/* Removed second preload for bold, as variable font contains weights */}
+        {/* Add preload for italic if needed:
         <link
           rel="preload"
-          href="/fonts/figtree-latin-700-normal.woff2"
+          href="/fonts/Figtree-Italic-VariableFont_wght.ttf" 
           as="font"
-          type="font/woff2"
+          type="font/ttf"                           
           crossOrigin="anonymous"
         />
+        */}
         {/* --- END FONT PRELOAD --- */}
       </head>
       <body className={`${figtree.variable} font-sans antialiased bg-black`}>

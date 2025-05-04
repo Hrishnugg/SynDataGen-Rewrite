@@ -5,7 +5,7 @@ import { TextHoverEffect } from "../ui/text-hover-effect";
 
 // Renamed component for clarity
 export function Footer() {
-  const pages = [
+  const company = [
     { title: "About", href: "/about" },
     { title: "Tide", href: "/tide" },
     { title: "Pricing", href: "/pricing" },
@@ -48,10 +48,10 @@ export function Footer() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-10 items-start mt-10 sm:mt-0 md:mt-0">
           {/* Pages Grid */}
           <div className="flex justify-start space-y-4 flex-col w-full">
-            <p className="text-white font-bold">Pages</p>
+            <p className="text-white font-bold">Company</p>
             <ul className="text-neutral-400 list-none space-y-4">
-              {pages.map((page, idx) => (
-                <li key={"pages" + idx} className="list-none">
+              {company.map((page, idx) => (
+                <li key={"company" + idx} className="list-none">
                   <Link
                     className="transition-colors hover:text-white"
                     href={page.href}
