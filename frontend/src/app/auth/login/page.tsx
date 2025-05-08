@@ -1,47 +1,30 @@
 "use client";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { IconBrandGithub } from "@tabler/icons-react";
+import { IconBrandGithub, IconX } from "@tabler/icons-react";
 import Image from "next/image";
 import { motion } from "motion/react";
-import { Carousel } from "@/components/ui/carousel";
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLoginMutation } from '@/features/auth/authApiSlice';
 import { StarsBackground } from '@/components/animate-ui/backgrounds/stars';
-import { Ripple } from "@/components/magicui/ripple";
-
-// Placeholder data for the carousel
-const placeholderSlides = [
-  {
-    title: "Generate Realistic Data",
-    button: "Learn More",
-    src: "/carousel2.png", // Replace with actual image path later
-  },
-  {
-    title: "Test Your Models",
-    button: "Get Started",
-    src: "/synoptic-dashboard.png", // Replace with actual image path later
-  },
-  {
-    title: "Ensure Data Privacy",
-    button: "Explore Features",
-    src: "/synoptic-dashboard.png", // Replace with actual image path later
-  },
-];
 
 export default function SignInPage() {
+  const router = useRouter();
+
   return (
-    <div className="grid min-h-screen w-full grid-cols-1 md:grid-cols-2">
-      <StarsBackground className="relative z-10">
+    <div className="grid min-h-screen w-full grid-cols-1">
+      <StarsBackground className="relative z-10 flex items-center justify-center">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="absolute left-4 top-4 z-30 rounded-full p-2 text-neutral-700 transition hover:bg-neutral-200 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          aria-label="Close"
+        >
+          <IconX className="h-5 w-5" />
+        </button>
         <LoginForm />
       </StarsBackground>
-      <div className="relative z-20 hidden w-full items-center justify-center overflow-hidden border-l border-neutral-100 bg-neutral-900 md:flex dark:border-neutral-800">
-        <Ripple />
-        <span className="z-10 text-4xl font-bold text-white">
-          Synoptic
-        </span>
-      </div>
     </div>
   );
 }
@@ -59,7 +42,6 @@ function LoginForm() {
       console.log('Attempting login with:', { email }); // Basic log
       const result = await login({ email, password }).unwrap();
       console.log('Login successful:', result); // Log success
-      // TODO: Dispatch action to set user state in authSlice if needed
       router.push('/dashboard'); // Redirect to dashboard on success
     } catch (err) {
       console.error('Login failed:', err);
@@ -69,7 +51,7 @@ function LoginForm() {
   };
 
   return (
-    <form className="h-full" onSubmit={handleSubmit}>
+    <form className="relative h-full" onSubmit={handleSubmit}>
       <div className="relative z-20 flex h-full w-full items-center justify-center px-4 py-12 sm:px-6 lg:flex-none lg:px-20 xl:px-24">
         <div className="mx-auto w-full max-w-md">
           <div>

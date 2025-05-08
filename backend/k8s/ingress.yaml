@@ -23,9 +23,9 @@ spec:
   # ingressClassName: gce # Remove this field, use annotation instead
   # --- TLS Configuration (Recommended) ---
   # Rely only on the managed-certificates annotation. Comment out the tls: block.
-  # tls:
-  # - hosts:
-  #    - api.synoptica.dev # IMPORTANT: Replace with your actual domain
+  tls:
+  - hosts:
+    - api.synoptica.dev # IMPORTANT: Replace with your actual domain
   
   rules:
   - host: api.synoptica.dev # IMPORTANT: Replace with your actual domain
